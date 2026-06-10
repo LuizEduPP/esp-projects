@@ -90,4 +90,4 @@ Issues and pull requests are welcome on [GitHub](https://github.com/LuizEduPP/es
 
 ## License
 
-No `LICENSE` file yet. Until one is added, all rights reserved by the author.
+[MIT](LICENSE) — Copyright (c) 2026 Luiz Eduardo
