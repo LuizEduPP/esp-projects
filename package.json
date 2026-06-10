@@ -1,0 +1,10 @@
+{
+  "name": "esp-projects",
+  "private": true,
+  "scripts": {
+    "mini-games:setup": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:setup",
+    "mini-games:build": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:build",
+    "mini-games:flash": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:flash",
+    "mini-games:monitor": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:monitor"
+  }
+}
