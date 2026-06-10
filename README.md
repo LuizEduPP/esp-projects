@@ -1,6 +1,13 @@
 # esp-projects
 
-Firmware monorepo for **ESP32** boards. Each board has its own folder; each app inside a board is a self-contained [PlatformIO](https://platformio.org/) project with Yarn scripts for build and flash.
+Public firmware monorepo for **ESP32** boards: [github.com/LuizEduPP/esp-projects](https://github.com/LuizEduPP/esp-projects)
+
+Each board has its own folder; each app inside a board is a self-contained [PlatformIO](https://platformio.org/) project with Yarn scripts for build and flash.
+
+```bash
+git clone https://github.com/LuizEduPP/esp-projects.git
+cd esp-projects
+```
 
 ## Projects
 
@@ -77,6 +84,10 @@ esp-projects/
 "my-project:flash": "yarn --cwd <board-id>/<project-name> fw:flash"
 ```
 
+## Contributing
+
+Issues and pull requests are welcome on [GitHub](https://github.com/LuizEduPP/esp-projects/issues).
+
 ## License
 
-Private repository — no license file yet.
+No `LICENSE` file yet. Until one is added, all rights reserved by the author.
