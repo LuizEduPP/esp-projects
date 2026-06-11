@@ -4,6 +4,4 @@ Placa **2.8″** com **ILI9341**, touch XPT2046.
 
 | Project | Description |
 |---------|-------------|
-| [uart-peer/](uart-peer/) | Edge-cyd: stream TFT via pc-server + UART peer |
-
-Edge pair docs: [edge-pair/](../edge-pair/)
+| [cyd-gb/](cyd-gb/) | Game Boy emulator with SD card ROM launcher + touch controls |
