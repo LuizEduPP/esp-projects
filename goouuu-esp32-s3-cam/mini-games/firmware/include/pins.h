@@ -1,6 +1,6 @@
 #pragma once
 
-// GOOUUU ESP32-S3-CAM — see HARDWARE.md
+// GOOUUU ESP32-S3-CAM — see README.md
 // Avoid GPIO 4-18 (camera), 35-42/45 (SD/PSRAM), 3/46 (strapping)
 
 #define PIN_OLED_SDA  43  // ESP TX0 — OLED SDA

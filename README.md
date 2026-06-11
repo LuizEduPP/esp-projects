@@ -13,8 +13,8 @@ cd esp-projects
 
 | Board | Project | Description | Docs |
 |-------|---------|-------------|------|
-| GOOUUU ESP32-S3-CAM | [**mini-games**](goouuu-esp32-s3-cam/mini-games/) | 12 arcade games on a 128×64 OLED + 5 buttons | [README](goouuu-esp32-s3-cam/mini-games/README.md) · [Hardware](goouuu-esp32-s3-cam/mini-games/HARDWARE.md) |
-| ESP32-2432S028 (CYD) | [**cyd-gb**](esp32-cyd/cyd-gb/) | Game Boy emulator with SD card ROM launcher + touch controls | [package.json](esp32-cyd/cyd-gb/package.json) |
+| GOOUUU ESP32-S3-CAM | [**mini-games**](goouuu-esp32-s3-cam/mini-games/) | 12 arcade games on a 128×64 OLED + 5 buttons | [README](goouuu-esp32-s3-cam/mini-games/README.md) |
+| ESP32-2432S028 (CYD) | [**cyd-gb**](esp32-cyd/cyd-gb/) | Game Boy / GBC emulator — touch controls, SD ROMs, saves ([upstream](https://github.com/artanergin44-collab/cyd-gb)) | [README](esp32-cyd/cyd-gb/README.md) |
 
 Board index: [goouuu-esp32-s3-cam/](goouuu-esp32-s3-cam/) · [esp32-cyd/](esp32-cyd/)
 
@@ -39,13 +39,15 @@ yarn mini-games:flash
 yarn mini-games:monitor
 ```
 
-CYD Game Boy emulator:
+CYD Game Boy emulator (based on [artanergin44-collab/cyd-gb](https://github.com/artanergin44-collab/cyd-gb)):
 
 ```bash
 yarn cyd-gb:build
 yarn cyd-gb:flash
 yarn cyd-gb:monitor
 ```
+
+Prepare a **FAT32** SD card with `roms/gb/` and `roms/gbc/` — see [cyd-gb/README.md](esp32-cyd/cyd-gb/README.md).
 
 Or work inside the project directory:
 
@@ -81,7 +83,6 @@ esp-projects/
     ├── README.md             # board overview
     └── <project-name>/       # e.g. mini-games, cyd-gb
         ├── README.md         # project docs
-        ├── HARDWARE.md       # wiring (optional)
         ├── package.json      # fw:* scripts
         ├── scripts/          # pio wrapper, udev setup
         └── firmware/         # PlatformIO project
@@ -100,6 +101,10 @@ esp-projects/
 ## Contributing
 
 Issues and pull requests are welcome on [GitHub](https://github.com/LuizEduPP/esp-projects/issues).
+
+## Credits
+
+- **cyd-gb** — derived from [artanergin44-collab/cyd-gb](https://github.com/artanergin44-collab/cyd-gb) (MIT). Emulator core: [Peanut-GB](https://github.com/deltabeard/Peanut-GB).
 
 ## License
 
