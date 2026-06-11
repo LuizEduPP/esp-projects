@@ -1,58 +1,58 @@
 # CYD-GB
 
-Emulador de **Game Boy / Game Boy Color** para o **ESP32-2432S028R** (Cheap Yellow Display). Controles 100% por touchscreen — sem botões físicos extras.
+**Game Boy / Game Boy Color** emulator for the [**ESP32-2432S028R**](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display) (Cheap Yellow Display). Fully touchscreen controlled — no extra physical buttons.
 
-> **Créditos:** este projeto é baseado em [**cyd-gb**](https://github.com/artanergin44-collab/cyd-gb) de [artanergin44-collab](https://github.com/artanergin44-collab/cyd-gb). O firmware original foi adaptado para o layout deste monorepo e recebeu suporte a áudio via **minigb_apu** (DAC interno, GPIO 26).
+> **Credits:** CYD hardware and docs at [witnessmenow/ESP32-Cheap-Yellow-Display](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display). Firmware based on [**cyd-gb**](https://github.com/artanergin44-collab/cyd-gb) by [artanergin44-collab](https://github.com/artanergin44-collab/cyd-gb), adapted for this monorepo with **minigb_apu** audio (internal DAC, GPIO 26).
 
-## O que você precisa
+## What you need
 
-| Item | Notas |
+| Item | Notes |
 |------|-------|
-| ESP32-2432S028R (CYD 2.8″) | ILI9341 + touch XPT2046 |
-| Cartão microSD | **FAT32** |
-| Cabo USB | Dados + alimentação para flash/monitor |
+| ESP32-2432S028R (CYD 2.8″) | ILI9341 + XPT2046 touch |
+| microSD card | **FAT32** |
+| USB cable | Data + power for flash/monitor |
 
-Nenhum hardware adicional é necessário — a placa CYD já traz display, touch e slot SD.
+No extra hardware required — the CYD board already includes display, touch, and SD slot.
 
-## Estrutura do cartão SD
+## SD card layout
 
-Formate em **FAT32** e crie:
+Format as **FAT32** and create:
 
 ```
 SD/
 ├── roms/
-│   ├── gb/          ← arquivos .gb
-│   └── gbc/         ← arquivos .gbc
-├── saves/           ← saves de bateria (criado automaticamente)
-└── config/          ← calibração e preferências (criado automaticamente)
+│   ├── gb/          ← .gb files
+│   └── gbc/         ← .gbc files
+├── saves/           ← battery saves (created automatically)
+└── config/          ← calibration and preferences (created automatically)
 ```
 
-## Recursos
+## Features
 
-- **Controles na tela** — D-pad, A, B, Start, Select e menu de pausa
-- **Browser de ROMs** — toque para escolher `.gb` / `.gbc`
-- **20 paletas de cores** — Classic Green, DMG, Neon, Sepia e outras
-- **Saves no SD** — estado de bateria persiste entre sessões
-- **Calibração touch** — 5 pontos, salva em `/config/cyd-gb.cfg`
-- **Cache SPIFFS** — ROM copiada do SD para flash interna (leituras mais rápidas)
-- **Áudio** — saída pelo amplificador onboard (GPIO 26, ~22 kHz)
+- **On-screen controls** — D-pad, A, B, Start, Select, and pause menu
+- **ROM browser** — tap to pick `.gb` / `.gbc` files
+- **20 color palettes** — Classic Green, DMG, Neon, Sepia, and more
+- **SD saves** — battery-backed RAM persists between sessions
+- **Touch calibration** — 5-point, saved to `/config/cyd-gb.cfg`
+- **SPIFFS cache** — ROM copied from SD to internal flash (faster reads)
+- **Audio** — onboard amplifier output (GPIO 26, ~22 kHz)
 
-## Controles
+## Controls
 
-| Botão | Posição |
-|-------|---------|
-| D-pad | Canto inferior esquerdo |
-| A / B | Canto inferior direito |
-| Select / Start | Centro inferior |
-| Menu (pausa) | Ícone **II** no topo |
+| Button | Location |
+|--------|----------|
+| D-pad | Bottom-left |
+| A / B | Bottom-right |
+| Select / Start | Bottom-center |
+| Menu (pause) | **II** icon at top |
 
-**Menu de pausa:** continuar, salvar, carregar, configurações, calibrar, sair.
+**Pause menu:** resume, save, load, settings, calibrate, quit.
 
-**Configurações:** paleta, frame skip (0–4), brilho.
+**Settings:** palette, frame skip (0–4), brightness.
 
-## Build e flash
+## Build and flash
 
-Na raiz do monorepo:
+From the monorepo root:
 
 ```bash
 yarn cyd-gb:build
@@ -60,13 +60,13 @@ yarn cyd-gb:flash      # build + upload
 yarn cyd-gb:monitor    # serial @ 115200
 ```
 
-Primeira instalação (apaga flash e recria partição SPIFFS):
+First install (erases flash and recreates SPIFFS partition):
 
 ```bash
 yarn cyd-gb:install
 ```
 
-Dentro deste diretório:
+Inside this directory:
 
 ```bash
 yarn fw:build
@@ -74,25 +74,25 @@ yarn fw:flash
 yarn fw:monitor
 ```
 
-Ajuste a porta serial em `firmware/platformio.ini` (`upload_port` / `monitor_port`) se necessário. No Linux, use `/dev/ttyUSB0`; no Windows, `COM3`; no macOS, `/dev/tty.usbserial-*`.
+Adjust the serial port in `firmware/platformio.ini` (`upload_port` / `monitor_port`) if needed. On Linux use `/dev/ttyUSB0`; on Windows `COM3`; on macOS `/dev/tty.usbserial-*`.
 
-## Solução de problemas
+## Troubleshooting
 
-| Problema | O que fazer |
-|----------|-------------|
-| Tela preta | Troque `-DILI9341_2_DRIVER` por `-DILI9341_DRIVER` em `firmware/platformio.ini` |
-| Touch impreciso | Menu de pausa → **Calibrar** |
-| Erro de SPIFFS | `yarn cyd-gb:install` (erase + flash) |
-| SD Card Error | Cartão FAT32 inserido; reinicie |
-| Sem áudio | Verifique jumper/speaker onboard; GPIO 26 não pode conflitar com touch CLK (25) |
+| Problem | Fix |
+|---------|-----|
+| Black screen | Switch `-DILI9341_2_DRIVER` to `-DILI9341_DRIVER` in `firmware/platformio.ini` |
+| Imprecise touch | Pause menu → **Calibrate** |
+| SPIFFS mount failed | Run `yarn cyd-gb:install` (erase + flash) |
+| SD Card Error | Insert FAT32 card; reset |
+| No audio | Check onboard jumper/speaker; GPIO 26 must not conflict with touch CLK (25) |
 
-## Layout do projeto
+## Project layout
 
 ```
 cyd-gb/
 ├── README.md
-├── package.json          # scripts fw:*
-├── scripts/pio.sh        # wrapper PlatformIO
+├── package.json          # fw:* scripts
+├── scripts/pio.sh        # PlatformIO wrapper
 └── firmware/
     ├── platformio.ini
     ├── partitions.csv
@@ -101,18 +101,19 @@ cyd-gb/
     └── src/
 ```
 
-## Créditos e licenças
+## Credits and licenses
 
-| Projeto | Autor | Licença |
-|---------|-------|---------|
+| Project | Author | License |
+|---------|--------|---------|
+| [**ESP32-Cheap-Yellow-Display**](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display) | [witnessmenow](https://github.com/witnessmenow) | MIT |
 | [**cyd-gb**](https://github.com/artanergin44-collab/cyd-gb) | [artanergin44-collab](https://github.com/artanergin44-collab) | MIT |
 | [Peanut-GB](https://github.com/deltabeard/Peanut-GB) | Mahyar Koshkouei | MIT |
 | [minigb_apu](https://github.com/minigb/minigb_apu) | — | MIT |
 | [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) | Bodmer | — |
 | [XPT2046 Bitbang](https://github.com/TheNitek/XPT2046_Bitbang_Arduino_Library) | TheNitek | — |
 
-Adaptações neste repositório: estrutura `firmware/` + scripts Yarn, áudio APU, `peanut_gb.h` incluído no tree.
+Adaptations in this repo: `firmware/` layout + Yarn scripts, APU audio, `peanut_gb.h` included in tree.
 
-## Licença
+## License
 
-[MIT](../../../LICENSE) — Copyright (c) 2026 Luiz Eduardo. O projeto upstream [cyd-gb](https://github.com/artanergin44-collab/cyd-gb) também é MIT.
+[MIT](../../../LICENSE) — Copyright (c) 2026 Luiz Eduardo. Upstream [cyd-gb](https://github.com/artanergin44-collab/cyd-gb) is also MIT.

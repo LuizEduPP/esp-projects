@@ -1,31 +1,31 @@
 # GOOUUU ESP32-S3-CAM
 
-Firmware para a placa **GOOUUU ESP32-S3-CAM** (ESP32-S3 + câmera OV2640 no módulo).
+Firmware for the **GOOUUU ESP32-S3-CAM** board (ESP32-S3 + OV2640 camera on module).
 
-## Projetos
+## Projects
 
-| Projeto | Descrição | Docs |
-|---------|-----------|------|
-| [**mini-games/**](mini-games/) | 12 jogos arcade nativos — OLED 128×64 + 5 botões (sem câmera, SD, Wi-Fi ou áudio) | [README](mini-games/README.md) |
+| Project | Description | Docs |
+|---------|-------------|------|
+| [**mini-games/**](mini-games/) | 12 native arcade games — 128×64 OLED + 5 buttons (no camera, SD, Wi-Fi, or audio) | [README](mini-games/README.md) |
 
-## Requisitos
+## Requirements
 
 - [PlatformIO](https://platformio.org/)
 - [Yarn](https://yarnpkg.com/) 1.x
-- OLED SSD1306 I2C (3.3 V) + 5 botões táteis
+- SSD1306 I2C OLED (3.3 V) + 5 tactile buttons
 
 ## Quick start
 
-Na raiz do monorepo:
+From the monorepo root:
 
 ```bash
-yarn mini-games:setup    # Linux, uma vez — udev
+yarn mini-games:setup    # Linux, once — udev
 yarn mini-games:build
 yarn mini-games:flash
 yarn mini-games:monitor
 ```
 
-Ou dentro do projeto:
+Or inside the project:
 
 ```bash
 cd mini-games
@@ -34,4 +34,4 @@ yarn fw:flash
 yarn fw:monitor
 ```
 
-Serial via USB CDC nativo (GPIO 19/20). Ver [mini-games/README.md](mini-games/README.md) para fiação e alimentação.
+Native USB CDC serial (GPIO 19/20). See [mini-games/README.md](mini-games/README.md) for wiring and power.

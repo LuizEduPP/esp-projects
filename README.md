@@ -16,7 +16,7 @@ cd esp-projects
 | GOOUUU ESP32-S3-CAM | [**mini-games**](goouuu-esp32-s3-cam/mini-games/) | 12 arcade games on a 128×64 OLED + 5 buttons | [README](goouuu-esp32-s3-cam/mini-games/README.md) |
 | ESP32-2432S028 (CYD) | [**cyd-gb**](esp32-cyd/cyd-gb/) | Game Boy / GBC emulator — touch controls, SD ROMs, saves ([upstream](https://github.com/artanergin44-collab/cyd-gb)) | [README](esp32-cyd/cyd-gb/README.md) |
 
-Board index: [goouuu-esp32-s3-cam/](goouuu-esp32-s3-cam/) · [esp32-cyd/](esp32-cyd/)
+Board index: [goouuu-esp32-s3-cam/](goouuu-esp32-s3-cam/) · [esp32-cyd/](esp32-cyd/) ([CYD docs](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display))
 
 ## Requirements
 
@@ -104,7 +104,8 @@ Issues and pull requests are welcome on [GitHub](https://github.com/LuizEduPP/es
 
 ## Credits
 
-- **cyd-gb** — derived from [artanergin44-collab/cyd-gb](https://github.com/artanergin44-collab/cyd-gb) (MIT). Emulator core: [Peanut-GB](https://github.com/deltabeard/Peanut-GB).
+- **CYD hardware** — witnessmenow/ESP32-Cheap-Yellow-Display (MIT). Pin map, setup, and community docs for the Cheap Yellow Display.
+- **cyd-gb** — derived from artanergin44-collab/cyd-gb (MIT). Emulator core: Peanut-GB.
 
 ## License
 
