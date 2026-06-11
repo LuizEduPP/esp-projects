@@ -13,6 +13,10 @@
     "uart-peer-s3:monitor": "yarn --cwd goouuu-esp32-s3-cam/uart-peer fw:monitor",
     "uart-peer-cyd:flash": "yarn --cwd esp32-cyd/uart-peer fw:flash",
     "uart-peer-cyd:monitor": "yarn --cwd esp32-cyd/uart-peer fw:monitor",
+    "cyd-gb:build": "yarn --cwd esp32-cyd/cyd-gb fw:build",
+    "cyd-gb:flash": "yarn --cwd esp32-cyd/cyd-gb fw:flash",
+    "cyd-gb:install": "yarn --cwd esp32-cyd/cyd-gb fw:install",
+    "cyd-gb:monitor": "yarn --cwd esp32-cyd/cyd-gb fw:monitor",
     "pc-server:setup": "yarn --cwd pc-server setup",
     "pc-server:dev": "yarn --cwd pc-server dev",
     "pc-server:start": "yarn --cwd pc-server start"
