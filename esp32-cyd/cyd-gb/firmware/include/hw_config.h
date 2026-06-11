@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-// ─── Display (portrait 240×320 — USB na base da CYD) ───────────────────────
+
 #define TFT_ROTATION   0
 #define TFT_PIN_BL     21
 #define SCREEN_W       240
@@ -23,7 +23,7 @@
 #define LED_G_PIN 16
 #define LED_B_PIN 17
 
-// ─── GameBoy ────────────────────────────────────────────────────────────────
+
 #define GB_SCREEN_W 160
 #define GB_SCREEN_H 144
 
@@ -31,12 +31,12 @@
 #define CTRL_Y 200
 #define CTRL_H (SCREEN_H - CTRL_Y)
 
-// ─── Barra de controles (2 faixas) ──────────────────────────────────────────
-// Faixa 1: utilitários (MENU / SELECT / START)
+
+
 #define CTRL_ROW1_Y  (CTRL_Y + 16)
 #define CTRL_DIV_Y   (CTRL_Y + 38)
 
-// Faixa 2: D-pad + A/B
+
 #define BTN_MENU_X   36
 #define BTN_MENU_Y   CTRL_ROW1_Y
 #define BTN_MENU_W   56
@@ -52,7 +52,7 @@
 #define BTN_ST_W     50
 #define BTN_ST_H     24
 
-// Faixa 2: D-pad + A/B
+
 #define DPAD_CX       52
 #define DPAD_CY      (CTRL_Y + 78)
 #define DPAD_ARM       36
@@ -68,6 +68,6 @@
 #define BTN_B_R        19
 #define BTN_TOUCH_PAD   3
 
-// Limites das zonas multitouch (touch_input.cpp)
+
 #define ZONE_DPAD_X_MAX   106
 #define ZONE_ACTION_X_MIN 118

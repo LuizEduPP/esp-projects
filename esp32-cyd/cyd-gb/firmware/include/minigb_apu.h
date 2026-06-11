@@ -1,9 +1,4 @@
-/**
- * minigb_apu is released under the terms listed within the LICENSE file.
- *
- * minigb_apu emulates the audio processing unit (APU) of the Game Boy. This
- * project is based on MiniGBS by Alex Baines: https://github.com/baines/MiniGBS
- */
+
 
 #pragma once
 
@@ -17,7 +12,7 @@ extern "C" {
 # define AUDIO_SAMPLE_RATE	32768
 #endif
 
-/* The audio output format is in platform native endian. */
+
 #if defined(MINIGB_APU_AUDIO_FORMAT_S16SYS)
 typedef int16_t audio_sample_t;
 # define AUDIO_SAMPLE_MAX INT16_MAX
@@ -38,11 +33,11 @@ typedef int32_t audio_sample_t;
 #define SCREEN_REFRESH_CYCLES	70224.0
 #define VERTICAL_SYNC		(DMG_CLOCK_FREQ/SCREEN_REFRESH_CYCLES)
 
-/* Number of audio samples in each channel. */
+
 #define AUDIO_SAMPLES		((unsigned)(AUDIO_SAMPLE_RATE / VERTICAL_SYNC))
-/* Number of audio channels. The audio output is in interleaved stereo format.*/
+
 #define AUDIO_CHANNELS		2
-/* Number of audio samples output in each audio_callback call. */
+
 #define AUDIO_SAMPLES_TOTAL	(AUDIO_SAMPLES * 2)
 
 #define AUDIO_MEM_SIZE		(0xFF3F - 0xFF10 + 1)
@@ -110,46 +105,22 @@ struct minigb_apu_ctx {
 	struct chan chans[4];
 	int32_t vol_l, vol_r;
 
-	/**
-	 * Memory holding audio registers between 0xFF10 and 0xFF3F inclusive.
-	 */
+
 	uint8_t audio_mem[AUDIO_MEM_SIZE];
 };
 
-/**
- * Fill allocated buffer "stream" with AUDIO_SAMPLES_TOTAL number of 16-bit
- * signed samples (native endian order) in stereo interleaved format.
- * Each call corresponds to the time taken for each VSYNC in the Game Boy.
- *
- * \param ctx Library context. Must be initialised with audio_init().
- * \param stream Allocated pointer to store audio samples. Must be at least
- *		AUDIO_SAMPLES_TOTAL in size.
- */
+
 void minigb_apu_audio_callback(struct minigb_apu_ctx *ctx,
 		audio_sample_t *stream);
 
-/**
- * Read audio register at given address "addr".
- * \param ctx Library context. Must be initialised with audio_init().
- * \param addr Address of registers to read. Must be within 0xFF10 and 0xFF3F,
- *	inclusive.
- */
+
 uint8_t minigb_apu_audio_read(struct minigb_apu_ctx *ctx, const uint16_t addr);
 
-/**
- * Write "val" to audio register at given address "addr".
- * \param ctx Library context. Must be initialised with audio_init().
- * \param addr Address of registers to read. Must be within 0xFF10 and 0xFF3F,
- *	inclusive.
- * \param val Value to write to address.
- */
+
 void minigb_apu_audio_write(struct minigb_apu_ctx *ctx,
 		const uint16_t addr, const uint8_t val);
 
-/**
- * Initialise audio driver.
- * \param ctx Library context.
- */
+
 void minigb_apu_audio_init(struct minigb_apu_ctx *ctx);
 
 #ifdef __cplusplus

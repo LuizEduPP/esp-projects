@@ -56,7 +56,7 @@ static void load_ram() {
         if(t){if(sd_load_state(cur_path,t,sz))emu_set_cart_ram(t,sz);free(t);} }
 }
 
-// ─── Emulation loop ─────────────────────────────────────────────────────────
+
 void run_emu() {
     emu_on = true; menu_req = false; menu_btn_prev = false;
     display_clear(TFT_BLACK);
@@ -71,33 +71,33 @@ void run_emu() {
 
             int c = launcher_ingame_menu();
             switch(c) {
-                case 0: break;  // resume
-                case 1:  // save
+                case 0: break;
+                case 1:
                     save_ram();
                     tft.fillRect(SCREEN_CX-80,80,160,40,TFT_BLACK);
                     tft.setTextDatum(MC_DATUM); tft.setTextColor(TFT_GREEN);
                     tft.drawString("SAVED!",SCREEN_CX,100,4);
                     delay(700);
                     break;
-                case 2:  // load
+                case 2:
                     load_ram(); emu_reset(); load_ram();
                     tft.fillRect(SCREEN_CX-80,80,160,40,TFT_BLACK);
                     tft.setTextDatum(MC_DATUM); tft.setTextColor(0x07FF);
                     tft.drawString("LOADED!",SCREEN_CX,100,4);
                     delay(700);
                     break;
-                case 3:  // quit
+                case 3:
                     emu_on=false; save_ram(); return;
-                case 4:  // calibrate
+                case 4:
                     touch_run_calibration(); break;
-                case 5:  // settings
+                case 5:
                     launcher_settings_menu(); break;
             }
             display_clear(TFT_BLACK);
             display_draw_controls();
         }
 
-        // FPS log
+
         uint32_t n=millis();
         if(n-ft>3000){
             ft=n;
@@ -109,7 +109,7 @@ void run_emu() {
     }
 }
 
-// ─── Setup ──────────────────────────────────────────────────────────────────
+
 void setup() {
     Serial.begin(115200); delay(200);
     Serial.println("\n=== CYD-GB ===");
@@ -127,7 +127,7 @@ void setup() {
         while(true) delay(1000);
     }
 
-    // Splash
+
     tft.fillScreen(TFT_BLACK); tft.setTextDatum(MC_DATUM);
     tft.setTextColor(0x07E0); tft.drawString("CYD-GB",SCREEN_CX,120,4);
     tft.setTextColor(0x7BEF); tft.drawString("Game Boy Emulator",SCREEN_CX,160,2);
@@ -146,7 +146,7 @@ void setup() {
     Serial.printf("[INIT] Heap: %u\n",ESP.getFreeHeap());
 }
 
-// ─── Loop ───────────────────────────────────────────────────────────────────
+
 void loop() {
     rcnt = sd_scan_roms(roms, 64);
     int sel = launcher_show(roms, rcnt);
@@ -156,7 +156,7 @@ void loop() {
 
     strncpy(cur_path,roms[sel].full_path,79);
 
-    // Loading screen
+
     tft.fillScreen(TFT_BLACK); tft.setTextDatum(MC_DATUM);
     tft.setTextColor(0x07E0); tft.drawString("Loading...",SCREEN_CX,120,4);
     char nm[30]; strncpy(nm,roms[sel].filename,28); nm[28]=0;

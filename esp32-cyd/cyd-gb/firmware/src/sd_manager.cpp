@@ -114,14 +114,14 @@ int sd_scan_roms(RomEntry* l, int mx) {
     if(!ready) return 0;
     int c=scan_dir(ROM_PATH_GB,false,l,0,mx);
     c=scan_dir(ROM_PATH_GBC,true,l,c,mx);
-    // Sort
+
     for(int i=0;i<c-1;i++) for(int j=i+1;j<c;j++)
         if(strcasecmp(l[i].filename,l[j].filename)>0){RomEntry t=l[i];l[i]=l[j];l[j]=t;}
     Serial.printf("[SD] Found %d ROMs\n",c);
     return c;
 }
 
-bool sd_load_rom(const char* p, uint8_t** buf, uint32_t* sz) { return false; /* unused now */ }
+bool sd_load_rom(const char* p, uint8_t** buf, uint32_t* sz) { return false;  }
 void sd_free_rom(uint8_t* b) { if(b) free(b); }
 
 void sd_get_save_path(const char* rp, char* sp, int mx) {

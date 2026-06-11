@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Amplificador PAM8002A onboard — GPIO 26 (JST P4)
+
 #define SPEAKER_PIN 26
 
 void audio_output_init();

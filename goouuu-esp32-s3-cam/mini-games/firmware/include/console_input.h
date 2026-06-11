@@ -24,6 +24,6 @@ bool consoleInputBegin();
 void consoleInputPoll();
 const ConsoleInput &consoleInputState();
 
-// Exit game: LEFT + RIGHT held together for ~1.2 s
+
 bool consoleInputWantExit();
 bool consoleInputTakeA();

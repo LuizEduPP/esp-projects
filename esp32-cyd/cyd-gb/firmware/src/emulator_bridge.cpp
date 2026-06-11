@@ -27,7 +27,7 @@ static void audio_write(const uint16_t addr, const uint8_t val) {
 #include "audio_output.h"
 #include "touch_input.h"
 
-// ─── Page cache ─────────────────────────────────────────────────────────────
+
 #define PG_SZ 4096
 #define PG_N  16
 #define PG_MASK (PG_SZ-1)
@@ -61,7 +61,7 @@ static inline uint8_t* IRAM_ATTR cget(uint32_t a) {
     return &pg[lru].d[a&PG_MASK];
 }
 
-// ─── State ──────────────────────────────────────────────────────────────────
+
 static struct gb_s* gb = nullptr;
 #define MAXRAM (32*1024)
 static uint8_t* cram = nullptr;
@@ -70,30 +70,30 @@ static uint8_t fskip = 0, fcnt = 0;
 static uint32_t fpsc = 0, fpst = 0, cfps = 0;
 static volatile uint8_t jpad = 0;
 
-// ─── 20 Palettes (byte-swapped for pushImage) ──────────────────────────────
+
 #define SW(c) (uint16_t)(((c)>>8)|((c)<<8))
 
 static const uint16_t pals[NUM_PALETTES][4] = {
-    {SW(0x9FE5),SW(0x4F64),SW(0x2542),SW(0x0261)}, //  0 Classic Green
-    {SW(0xFFFF),SW(0xAD55),SW(0x52AA),SW(0x0000)}, //  1 Original DMG
-    {SW(0xFFFF),SW(0xB596),SW(0x6B4D),SW(0x0000)}, //  2 Pocket Gray
-    {SW(0xFFDF),SW(0xD68F),SW(0x7A4B),SW(0x1082)}, //  3 Warm Sepia
-    {SW(0xBF5F),SW(0x6CDF),SW(0x339F),SW(0x0019)}, //  4 Cool Blue
-    {SW(0xFFF0),SW(0xFC00),SW(0x8800),SW(0x2000)}, //  5 Autumn
-    {SW(0xE71C),SW(0x9CD3),SW(0x4228),SW(0x0000)}, //  6 Grayscale
-    {SW(0xFFFF),SW(0xFE20),SW(0xC800),SW(0x4000)}, //  7 Lava
-    {SW(0xAFFF),SW(0x5F5F),SW(0x2D1F),SW(0x0019)}, //  8 Ocean
-    {SW(0xFFF0),SW(0xBDE0),SW(0x5AE0),SW(0x0120)}, //  9 Forest
-    {SW(0xFFFF),SW(0xFD20),SW(0xAB00),SW(0x4000)}, // 10 Sunset
-    {SW(0xFFDF),SW(0xF71C),SW(0xAA13),SW(0x3808)}, // 11 Cherry
-    {SW(0xCFFF),SW(0x867F),SW(0x433F),SW(0x0019)}, // 12 Ice
-    {SW(0xFFB6),SW(0xD52A),SW(0x8A08),SW(0x3000)}, // 13 Chocolate
-    {SW(0xFFFF),SW(0xBF5F),SW(0x5F1F),SW(0x0019)}, // 14 Mint
-    {SW(0xFFF8),SW(0xFCC0),SW(0xC880),SW(0x6000)}, // 15 Peach
-    {SW(0xEF3C),SW(0x867F),SW(0x4179),SW(0x0000)}, // 16 Lavender
-    {SW(0xFFFF),SW(0x07FF),SW(0x001F),SW(0x0000)}, // 17 Neon
-    {SW(0x0000),SW(0x4228),SW(0xAD55),SW(0xFFFF)}, // 18 Inverted
-    {SW(0xFE60),SW(0xAB00),SW(0x5000),SW(0x0000)}, // 19 Gold
+    {SW(0x9FE5),SW(0x4F64),SW(0x2542),SW(0x0261)},
+    {SW(0xFFFF),SW(0xAD55),SW(0x52AA),SW(0x0000)},
+    {SW(0xFFFF),SW(0xB596),SW(0x6B4D),SW(0x0000)},
+    {SW(0xFFDF),SW(0xD68F),SW(0x7A4B),SW(0x1082)},
+    {SW(0xBF5F),SW(0x6CDF),SW(0x339F),SW(0x0019)},
+    {SW(0xFFF0),SW(0xFC00),SW(0x8800),SW(0x2000)},
+    {SW(0xE71C),SW(0x9CD3),SW(0x4228),SW(0x0000)},
+    {SW(0xFFFF),SW(0xFE20),SW(0xC800),SW(0x4000)},
+    {SW(0xAFFF),SW(0x5F5F),SW(0x2D1F),SW(0x0019)},
+    {SW(0xFFF0),SW(0xBDE0),SW(0x5AE0),SW(0x0120)},
+    {SW(0xFFFF),SW(0xFD20),SW(0xAB00),SW(0x4000)},
+    {SW(0xFFDF),SW(0xF71C),SW(0xAA13),SW(0x3808)},
+    {SW(0xCFFF),SW(0x867F),SW(0x433F),SW(0x0019)},
+    {SW(0xFFB6),SW(0xD52A),SW(0x8A08),SW(0x3000)},
+    {SW(0xFFFF),SW(0xBF5F),SW(0x5F1F),SW(0x0019)},
+    {SW(0xFFF8),SW(0xFCC0),SW(0xC880),SW(0x6000)},
+    {SW(0xEF3C),SW(0x867F),SW(0x4179),SW(0x0000)},
+    {SW(0xFFFF),SW(0x07FF),SW(0x001F),SW(0x0000)},
+    {SW(0x0000),SW(0x4228),SW(0xAD55),SW(0xFFFF)},
+    {SW(0xFE60),SW(0xAB00),SW(0x5000),SW(0x0000)},
 };
 static const char* palnames[NUM_PALETTES] = {
     "Classic Green","Original DMG","Pocket Gray","Warm Sepia","Cool Blue",
@@ -107,7 +107,7 @@ void emu_set_palette(uint8_t i) { if (i<NUM_PALETTES) curpal=i; }
 uint8_t emu_get_palette() { return curpal; }
 const char* emu_get_palette_name(uint8_t i) { return (i<NUM_PALETTES)?palnames[i]:"?"; }
 
-// ─── Callbacks ──────────────────────────────────────────────────────────────
+
 static uint8_t IRAM_ATTR gb_rom_read(struct gb_s* g, const uint_fast32_t a) {
     (void)g; if(a>=romlen) return 0xFF; if(a<B0SZ) return b0[a]; return *cget(a);
 }
@@ -128,7 +128,7 @@ static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint
     display_push_gb_line(ln, lbuf);
 }
 
-// ─── SPIFFS copy ────────────────────────────────────────────────────────────
+
 static bool cp2spiffs(const char* sp, const char* dp) {
     File s=SD.open(sp,FILE_READ); if(!s) return false;
     File d=SPIFFS.open(dp,FILE_WRITE); if(!d){s.close();return false;}
@@ -139,7 +139,7 @@ static bool cp2spiffs(const char* sp, const char* dp) {
     Serial.printf("[SPIFFS] Done %u bytes\n",tot); return true;
 }
 
-// ─── API ────────────────────────────────────────────────────────────────────
+
 bool emu_open_rom(const char* path) {
     if(!SPIFFS.begin(true)) Serial.println("[SPIFFS] format");
     String sn="/rom.gb";

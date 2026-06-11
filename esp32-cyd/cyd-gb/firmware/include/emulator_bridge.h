@@ -15,7 +15,7 @@ uint32_t emu_get_fps();
 void emu_reset();
 uint16_t* emu_get_line_buffer();
 
-// Palette
+
 #define NUM_PALETTES 20
 void emu_set_palette(uint8_t idx);
 uint8_t emu_get_palette();

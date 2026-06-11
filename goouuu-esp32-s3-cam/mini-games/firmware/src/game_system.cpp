@@ -61,7 +61,7 @@ static bool dirRight(const ConsoleInput &in) {
   return in.rightPressed || in.rightRepeat;
 }
 
-// --- Snake ---
+
 static void runSnake() {
   constexpr uint8_t GW = 32;
   constexpr uint8_t GH = 11;
@@ -166,7 +166,7 @@ static void runSnake() {
   }
 }
 
-// --- Tetris ---
+
 static const uint8_t TETRA[][4][4] = {
     {{0, 0, 0, 0}, {1, 1, 1, 1}, {0, 0, 0, 0}, {0, 0, 0, 0}},
     {{1, 1, 0, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
@@ -333,7 +333,7 @@ static void runTetris() {
   }
 }
 
-// --- Memory ---
+
 static void runMemory() {
   uint8_t deck[8] = {0, 0, 1, 1, 2, 2, 3, 3};
   bool open[8] = {};
@@ -458,7 +458,7 @@ static void runMemory() {
   }
 }
 
-// --- Pong ---
+
 static void runPong() {
   constexpr int16_t kPaddleH = 20;
   constexpr int16_t kBallSz = 4;
@@ -554,7 +554,7 @@ static void runPong() {
   }
 }
 
-// --- Breakout ---
+
 static void runBreakout() {
   bool bricks[6][10] = {};
   for (uint8_t y = 0; y < 6; y++) {
@@ -682,7 +682,7 @@ static void runBreakout() {
   }
 }
 
-// --- Space Impact ---
+
 struct SpaceEnemy {
   int16_t x;
   int16_t y;
@@ -833,7 +833,7 @@ static void runSpace() {
   }
 }
 
-// --- Flappy ---
+
 static void runFlappy() {
   float birdY = GAME_UI_PLAY_Y + GAME_UI_PLAY_H / 2.0f;
   float birdVy = 0;
@@ -908,7 +908,7 @@ static void runFlappy() {
   }
 }
 
-// --- Dodge (corrida) ---
+
 static void runDodge() {
   static constexpr int16_t LANES[3] = {8, 40, 72};
   uint8_t lane = 1;
@@ -1014,7 +1014,7 @@ static void runDodge() {
   }
 }
 
-// --- 2048 ---
+
 static void slide2048Line(uint16_t line[4], uint16_t &sc) {
   uint16_t out[4] = {0};
   uint8_t o = 0;
@@ -1184,7 +1184,7 @@ static void run2048() {
   }
 }
 
-// --- Frogger ---
+
 static void runFrogger() {
   static constexpr int16_t kCols[5] = {12, 36, 60, 84, 108};
   static constexpr uint8_t kLanes = 5;
@@ -1291,7 +1291,7 @@ static void runFrogger() {
   }
 }
 
-// --- Minesweeper ---
+
 static uint8_t minesCountAdj(const bool mine[][9], uint8_t kW, uint8_t kH, uint8_t x,
                              uint8_t y) {
   uint8_t n = 0;
@@ -1458,7 +1458,7 @@ static void runMinesweeper() {
   }
 }
 
-// --- Asteroids ---
+
 struct AstroRock {
   float x;
   float y;

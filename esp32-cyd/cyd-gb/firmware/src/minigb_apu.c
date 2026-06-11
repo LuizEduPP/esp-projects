@@ -1,12 +1,4 @@
-/**
- * Game Boy APU emulator.
- * Copyright (c) 2019 Mahyar Koshkouei <mk@deltabeard.com>
- * Copyright (c) 2017 Alex Baines <alex@abaines.me.uk>
- * minigb_apu is released under the terms of the MIT license.
- *
- * minigb_apu emulates the audio processing unit (APU) of the Game Boy. This
- * project is based on MiniGBS by Alex Baines: https://github.com/baines/MiniGBS
- */
+
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,22 +12,18 @@
 #define MAX(a, b)		( a > b ? a : b )
 #define MIN(a, b)		( a <= b ? a : b )
 
-/* Factor in which values are multiplied to compensate for fixed-point
- * arithmetic. Some hard-coded values in this project must be recreated. */
+
 #ifndef FREQ_INC_MULT
 # define FREQ_INC_MULT		105
 #endif
-/* Handles time keeping for sound generation.
- * FREQ_INC_REF must be equal to, or larger than AUDIO_SAMPLE_RATE in order
- * to avoid a division by zero error.
- * Using a square of 2 simplifies calculations. */
+
 #define FREQ_INC_REF		(AUDIO_SAMPLE_RATE * FREQ_INC_MULT)
 
 #define MAX_CHAN_VOLUME		15
 
 static void set_note_freq(struct chan *c)
 {
-	/* Lowest expected value of freq is 64. */
+
 	uint32_t freq = (DMG_CLOCK_FREQ_U / 4) / (2048 - c->freq);
 	c->freq_inc = freq * (uint32_t)(FREQ_INC_REF / AUDIO_SAMPLE_RATE);
 }
@@ -213,7 +201,7 @@ static void update_wave(struct minigb_apu_ctx *ctx, audio_sample_t *samples)
 		sample += ((audio_sample_t)c->wave.sample) *
 				(audio_sample_t)(AUDIO_SAMPLE_MAX/32);
 		{
-			/* First element is unused. */
+
 			audio_sample_t div[] = { AUDIO_SAMPLE_MAX, 1, 2, 4 };
 			sample = sample / (div[c->volume]);
 		}
@@ -286,9 +274,7 @@ static void update_noise(struct minigb_apu_ctx *ctx, audio_sample_t *samples)
 	}
 }
 
-/**
- * SDL2 style audio callback function.
- */
+
 void minigb_apu_audio_callback(struct minigb_apu_ctx *ctx,
 		audio_sample_t *stream)
 {
@@ -306,12 +292,9 @@ static void chan_trigger(struct minigb_apu_ctx *ctx, uint_fast8_t i)
 	chan_enable(ctx, i, 1);
 	c->volume = c->volume_init;
 
-	// volume envelope
+
 	{
-		/* LUT created in Julia with:
-		 * `(FREQ_INC_MULT * 64)./vcat(8, 1:7)`
-		 * Must be recreated when FREQ_INC_MULT modified.
-		 */
+
 		const uint32_t inc_lut[8] = {
 #if FREQ_INC_MULT == 16
 			128, 1024, 512, 341,
@@ -320,7 +303,7 @@ static void chan_trigger(struct minigb_apu_ctx *ctx, uint_fast8_t i)
             512,  4096, 2048, 1365,
             1024,  819,  683,  585
 #elif FREQ_INC_MULT == 105
-            /* Multiples of 105 provide integer values. */
+
             840,  6720, 3360, 2240,
             1680, 1344, 1120,  960
 #else
@@ -337,7 +320,7 @@ static void chan_trigger(struct minigb_apu_ctx *ctx, uint_fast8_t i)
 		c->env.counter = 0;
 	}
 
-	// freq sweep
+
 	if (i == 0) {
 		uint8_t val = ctx->audio_mem[0xFF10 - AUDIO_ADDR_COMPENSATION];
 
@@ -352,10 +335,10 @@ static void chan_trigger(struct minigb_apu_ctx *ctx, uint_fast8_t i)
 
 	int len_max = 64;
 
-	if (i == 2) { // wave
+	if (i == 2) {
 		len_max = 256;
 		c->val = 0;
-	} else if (i == 3) { // noise
+	} else if (i == 3) {
 		c->noise.lfsr_reg = 0xFFFF;
 		c->val = VOL_INIT_MIN / MAX_CHAN_VOLUME;
 	}
@@ -364,12 +347,7 @@ static void chan_trigger(struct minigb_apu_ctx *ctx, uint_fast8_t i)
 	c->len.counter = 0;
 }
 
-/**
- * Read audio register.
- * \param addr	Address of audio register. Must be 0xFF10 <= addr <= 0xFF3F.
- *				This is not checked in this function.
- * \return	Byte at address.
- */
+
 uint8_t minigb_apu_audio_read(struct minigb_apu_ctx *ctx, const uint16_t addr)
 {
 	static const uint8_t ortab[] = {
@@ -387,23 +365,17 @@ uint8_t minigb_apu_audio_read(struct minigb_apu_ctx *ctx, const uint16_t addr)
 		ortab[addr - AUDIO_ADDR_COMPENSATION];
 }
 
-/**
- * Write audio register.
- * \param addr	Address of audio register. Must be 0xFF10 <= addr <= 0xFF3F.
- *				This is not checked in this function.
- * \param val	Byte to write at address.
- */
+
 void minigb_apu_audio_write(struct minigb_apu_ctx *ctx,
 		const uint16_t addr, const uint8_t val)
 {
-	/* Find sound channel corresponding to register address. */
+
 	uint_fast8_t i;
 
 	if(addr == 0xFF26)
 	{
 		ctx->audio_mem[addr - AUDIO_ADDR_COMPENSATION] = val & 0x80;
-		/* On APU power off, clear all registers apart from wave
-		 * RAM. */
+
 		if((val & 0x80) == 0)
 		{
 			memset(ctx->audio_mem,
@@ -417,7 +389,7 @@ void minigb_apu_audio_write(struct minigb_apu_ctx *ctx,
 		return;
 	}
 
-	/* Ignore register writes if APU powered off. */
+
 	if(ctx->audio_mem[0xFF26 - AUDIO_ADDR_COMPENSATION] == 0x00)
 		return;
 
@@ -431,8 +403,8 @@ void minigb_apu_audio_write(struct minigb_apu_ctx *ctx,
 		ctx->chans[i].volume_init = val >> 4;
 		ctx->chans[i].powered     = (val >> 3) != 0;
 
-		// "zombie mode" stuff, needed for Prehistorik Man and probably
-		// others
+
+
 		if (ctx->chans[i].powered && ctx->chans[i].enabled) {
 			if ((ctx->chans[i].env.step == 0 && ctx->chans[i].env.inc != 0)) {
 				if (val & 0x08) {
@@ -483,7 +455,7 @@ void minigb_apu_audio_write(struct minigb_apu_ctx *ctx,
 	case 0xFF1E:
 		ctx->chans[i].freq &= 0x00FF;
 		ctx->chans[i].freq |= ((val & 0x07) << 8);
-		/* Intentional fall-through. */
+
 	case 0xFF23:
 		ctx->chans[i].len.enabled = val & 0x40;
 		if (val & 0x80)
@@ -515,11 +487,11 @@ void minigb_apu_audio_write(struct minigb_apu_ctx *ctx,
 
 void minigb_apu_audio_init(struct minigb_apu_ctx *ctx)
 {
-	/* Initialise channels and samples. */
+
 	memset(ctx->chans, 0, sizeof(ctx->chans));
 	ctx->chans[0].val = ctx->chans[1].val = -1;
 
-	/* Initialise IO registers. */
+
 	{
 		const uint8_t regs_init[] = { 0x80, 0xBF, 0xF3, 0xFF, 0x3F,
 					      0xFF, 0x3F, 0x00, 0xFF, 0x3F,
@@ -531,7 +503,7 @@ void minigb_apu_audio_init(struct minigb_apu_ctx *ctx)
 			minigb_apu_audio_write(ctx, 0xFF10 + i, regs_init[i]);
 	}
 
-	/* Initialise Wave Pattern RAM. */
+
 	{
 		const uint8_t wave_init[] = { 0xac, 0xdd, 0xda, 0x48,
 					      0x36, 0x02, 0xcf, 0x16,

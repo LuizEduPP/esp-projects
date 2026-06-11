@@ -1,6 +1,6 @@
-// Touch via software SPI (CYD: display=HSPI, SD=VSPI, touch=bitbang)
-// Ref: https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display/blob/main/TROUBLESHOOTING.md
-// Example: https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display/tree/main/Examples/Basics/8-Buttons
+
+
+
 
 #include "touch_input.h"
 #include "hw_config.h"
@@ -10,7 +10,7 @@
 #include <string.h>
 #include <XPT2046_Bitbang.h>
 
-// Igual ao exemplo oficial 8-Buttons — sem dimensões (mapeamos manualmente em portrait)
+
 static XPT2046_Bitbang ts(TOUCH_PIN_MOSI, TOUCH_PIN_MISO, TOUCH_PIN_CLK, TOUCH_PIN_CS);
 
 static CydTouchCal cal;
@@ -39,7 +39,7 @@ struct TouchZone {
 
 static TouchZone zone_util, zone_dpad, zone_action;
 
-// LovyanGFX / CYD defaults (display_cyd.hpp)
+
 #define RAW_X_LO  300
 #define RAW_X_HI  3900
 #define RAW_Y_LO  3700
@@ -53,7 +53,7 @@ static bool read_point(int16_t* rx, int16_t* ry, int16_t* rz) {
     TouchPoint p = ts.getTouch();
     xSemaphoreGive(touch_mtx);
 
-    // Mesmo critério do exemplo 8-Buttons: zRaw > 0 (lib já rejeita z < 100)
+
     if (p.zRaw <= 0) return false;
 
     *rx = (int16_t)p.xRaw;
@@ -181,7 +181,7 @@ static void map_screen(int16_t rx, int16_t ry, int16_t* ox, int16_t* oy) {
         y_lo = RAW_X_LO;
         y_hi = RAW_X_HI;
     }
-    // Portrait rot=0: eixo da tela X <- raw Y, Y <- raw X
+
     *ox = (int16_t)map(ry, x_hi, x_lo, 0, SCREEN_W - 1);
     *oy = (int16_t)map(rx, y_lo, y_hi, 0, SCREEN_H - 1);
     *ox = constrain(*ox, 0, SCREEN_W - 1);

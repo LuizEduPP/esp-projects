@@ -6,7 +6,7 @@ TFT_eSPI tft = TFT_eSPI();
 static uint16_t scaled[SCREEN_W];
 static uint8_t backlight_level = 255;
 
-// Paleta da barra (inspirada no Game Boy / SNES cinza)
+
 static const uint16_t COL_BAR      = 0x2945;
 static const uint16_t COL_BAR_EDGE = 0x528A;
 static const uint16_t COL_RECESS  = 0x18C3;

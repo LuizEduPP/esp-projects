@@ -31,7 +31,7 @@ void audio_output_init() {
         return;
     }
     i2s_set_pin(I2S_NUM_0, nullptr);
-    // Só GPIO 26 (direita) — GPIO 25 é touch CLK na CYD
+
     i2s_set_dac_mode(I2S_DAC_CHANNEL_RIGHT_EN);
     i2s_zero_dma_buffer(I2S_NUM_0);
     i2s_ready = true;
