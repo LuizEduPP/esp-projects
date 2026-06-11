@@ -14,6 +14,12 @@ cd esp-projects
 | Board | Project | Description | Docs |
 |-------|---------|-------------|------|
 | GOOUUU ESP32-S3-CAM | [**mini-games**](goouuu-esp32-s3-cam/mini-games/) | 12 arcade games on a 128×64 OLED + 5 buttons | [README](goouuu-esp32-s3-cam/mini-games/README.md) · [Hardware](goouuu-esp32-s3-cam/mini-games/HARDWARE.md) |
+| GOOUUU ESP32-S3-CAM | [**uart-peer**](goouuu-esp32-s3-cam/uart-peer/) | S3 edge-pair: câmera + upload HTTP | [README](goouuu-esp32-s3-cam/uart-peer/README.md) · [edge-pair](edge-pair/HARDWARE.md) |
+| ESP32-2432S028 (CYD) | [**uart-peer**](esp32-cyd/uart-peer/) | CYD edge-pair: TFT stream + UART | [README](esp32-cyd/uart-peer/README.md) · [edge-pair](edge-pair/HARDWARE.md) |
+
+### Edge pair (S3-CAM + CYD + PC)
+
+Cross-board architecture: S3-CAM + CYD + **pc-server** — stream de câmera via HTTP, UART só coordenação. Ver [**edge-pair/**](edge-pair/README.md).
 
 Board index: [goouuu-esp32-s3-cam/](goouuu-esp32-s3-cam/)
 
@@ -64,6 +70,7 @@ Shortcuts that delegate to project `package.json` files:
 esp-projects/
 ├── README.md
 ├── package.json              # root shortcuts
+├── edge-pair/                # S3-CAM + CYD + PC architecture
 └── <board-id>/               # e.g. goouuu-esp32-s3-cam
     ├── README.md             # board overview
     └── <project-name>/       # e.g. mini-games

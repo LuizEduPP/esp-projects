@@ -5,6 +5,16 @@
     "mini-games:setup": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:setup",
     "mini-games:build": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:build",
     "mini-games:flash": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:flash",
-    "mini-games:monitor": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:monitor"
+    "mini-games:monitor": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:monitor",
+    "uart-peer:build-all": "yarn --cwd esp32-cyd/uart-peer fw:build && yarn --cwd goouuu-esp32-s3-cam/uart-peer fw:build",
+    "uart-peer:ota-sync": "bash scripts/sync-firmware.sh --build",
+    "uart-peer:ota-publish": "bash scripts/sync-firmware.sh",
+    "uart-peer-s3:flash": "yarn --cwd goouuu-esp32-s3-cam/uart-peer fw:flash",
+    "uart-peer-s3:monitor": "yarn --cwd goouuu-esp32-s3-cam/uart-peer fw:monitor",
+    "uart-peer-cyd:flash": "yarn --cwd esp32-cyd/uart-peer fw:flash",
+    "uart-peer-cyd:monitor": "yarn --cwd esp32-cyd/uart-peer fw:monitor",
+    "pc-server:setup": "yarn --cwd pc-server setup",
+    "pc-server:dev": "yarn --cwd pc-server dev",
+    "pc-server:start": "yarn --cwd pc-server start"
   }
 }
