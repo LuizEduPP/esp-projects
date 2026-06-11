@@ -4,7 +4,7 @@
 
 #include "game_scores.h"
 
-// Inverted HUD y 0-14 | gap y 15 | playfield border y 16..63 | inner y 17..62
+
 constexpr int16_t GAME_UI_HUD_H = 15;
 constexpr int16_t GAME_UI_SEP_H = 1;
 constexpr int16_t GAME_UI_TOP = 16;

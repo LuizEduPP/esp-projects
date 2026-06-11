@@ -11,7 +11,7 @@ Twelve native arcade games on a **128×64 SSD1306 OLED** and **5 buttons**. Runs
 | 5× tactile buttons | Input (Down, Up, Left, Right, A) |
 | Jumpers + breadboard (optional) | Wiring |
 
-Full pinout and wiring: [HARDWARE.md](HARDWARE.md).
+The on-board camera, microSD slot, Wi-Fi, and audio are not used.
 
 ## Pin summary
 
@@ -24,6 +24,20 @@ Full pinout and wiring: [HARDWARE.md](HARDWARE.md).
 | Btn Left | 14 |
 | Btn Right | 47 |
 | Btn A | 1 |
+
+Native USB CDC: D+ **19**, D− **20**.
+
+## Hardware
+
+**Power:** feed the ESP from USB-C. Connect OLED **VDD → 3.3 V** and **GND → GND**. Do not power the OLED from 5 V.
+
+**OLED (I2C):** SDA → GPIO 43, SCL → GPIO 44. Address is usually **0x3C** (firmware probes 0x3D too).
+
+**Buttons:** firmware uses `INPUT_PULLUP`. Wire each GPIO to GND through a tactile button (released = HIGH, pressed = LOW). Suggested order: Down · Up · Left · Right · A.
+
+**GPIO to avoid:** 4–18, 8–13, 15, 16 (camera); 35–42, 45 (SD/PSRAM); 48 (RGB LED); 0, 3, 46 (strapping).
+
+**Bench supply:** if the ESP is powered from the **5 V** header, do not connect USB VBUS at the same time — use a data-only USB-C cable for flash/monitor.
 
 ## Controls
 
@@ -41,6 +55,17 @@ Best scores are saved in NVS flash.
 
 ## Build and flash
 
+From the monorepo root:
+
+```bash
+yarn mini-games:setup    # Linux once — udev rules
+yarn mini-games:build
+yarn mini-games:flash
+yarn mini-games:monitor
+```
+
+Or inside this directory:
+
 ```bash
 yarn fw:setup    # Linux once — udev rules
 yarn fw:build
@@ -48,4 +73,4 @@ yarn fw:flash
 yarn fw:monitor
 ```
 
-Serial uses native USB CDC (GPIO 19/20). See [HARDWARE.md](HARDWARE.md) for power and cable notes.
+Default serial port in `firmware/platformio.ini`: `/dev/ttyACM0` (native USB CDC @ 115200).

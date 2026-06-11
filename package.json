@@ -5,6 +5,10 @@
     "mini-games:setup": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:setup",
     "mini-games:build": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:build",
     "mini-games:flash": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:flash",
-    "mini-games:monitor": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:monitor"
+    "mini-games:monitor": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:monitor",
+    "cyd-gb:build": "yarn --cwd esp32-cyd/cyd-gb fw:build",
+    "cyd-gb:flash": "yarn --cwd esp32-cyd/cyd-gb fw:flash",
+    "cyd-gb:install": "yarn --cwd esp32-cyd/cyd-gb fw:install",
+    "cyd-gb:monitor": "yarn --cwd esp32-cyd/cyd-gb fw:monitor"
   }
 }
