@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Rasteriza icones de mock/ui-icons-sheet.svg -> PNG + mascara alpha."""
 from __future__ import annotations
 
 import io
@@ -17,7 +16,6 @@ RASTER = 128
 OUT_SIZE = 32
 ALPHA_CUT = 28
 
-# Ordem = UiIcon enum em ui_icons.h
 ICON_IDS = [
     "ico-gb", "ico-sd", "ico-cart", "ico-folder", "ico-gear", "ico-grid",
     "ico-chev-l", "ico-chev-r", "ico-pause", "ico-play", "ico-save", "ico-load",
@@ -34,7 +32,6 @@ def load_defs(text: str) -> str:
 
 
 def symbol_svg(defs: str, icon_id: str) -> str:
-    # <use> herda stroke/fill do <symbol> — igual ao preview no sheet
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">\n'
@@ -72,7 +69,6 @@ def main() -> None:
     lines = [
         "#pragma once",
         "#include <stdint.h>",
-        f"// Gerado de {os.path.relpath(SHEET, ROOT)} via cairosvg + use href",
         f"#define UI_ICON_SIZE {OUT_SIZE}",
         "",
     ]

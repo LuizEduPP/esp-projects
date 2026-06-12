@@ -1,7 +1,6 @@
 #pragma once
 #include <stdint.h>
 
-/* Wireframe palette — mock/ui-wireframe.svg */
 typedef struct {
     uint16_t bg;
     uint16_t surface;

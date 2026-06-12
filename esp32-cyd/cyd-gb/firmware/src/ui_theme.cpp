@@ -68,7 +68,6 @@ void ui_theme_apply(uint8_t palette_idx) {
     uint16_t dark, mid, bright, light;
     sort_shades(p0, p1, p2, p3, &dark, &mid, &bright, &light);
 
-    /* Paleta escura (ex. Inverted): UI continua legivel, mas colorida */
     bool dim_palette = luma565(light) < 14;
     uint16_t lite = dim_palette ? blend565(light, 0xFFFF, 200) : lift(light, 14);
     uint16_t med  = dim_palette ? blend565(bright, 0xFFFF, 170) : lift(bright, 10);

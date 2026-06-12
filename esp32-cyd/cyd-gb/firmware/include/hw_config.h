@@ -27,12 +27,6 @@
 #define GB_SCREEN_W 160
 #define GB_SCREEN_H 144
 
-/*
- * Layout 240x320 — mock/ui-wireframe.svg (fonte da verdade)
- *   status   0..24
- *   jogo    25..238
- *   deck   239..320 (81px)
- */
 #define STATUS_H       24
 #define CTRL_Y         239
 #define CTRL_H         81
@@ -85,7 +79,6 @@
 #define STICK_HIT_EXTRA 8
 #define STICK_RANGE     (STICK_BASE_R - STICK_KNOB_R - 2)
 
-/* Status template (telas 1-4, 10-11) */
 #define UI_STATUS_ICON_X   96
 #define UI_STATUS_ICON_Y   92
 #define UI_STATUS_ICON_SZ  48
@@ -103,7 +96,6 @@
 #define UI_SPLASH_PANEL_W  72
 #define UI_SPLASH_PANEL_H  72
 
-/* Launcher — tela 5 */
 #define UI_HDR_H           40
 #define UI_HDR_ICON_X      8
 #define UI_HDR_TEXT_X      36
@@ -128,13 +120,11 @@
 #define UI_GRID_LABEL_MAX_W (UI_GRID_COL_W - 8)
 #define UI_GRID_LABEL_Y    (4 + UI_GRID_COVER_H + 20)
 
-/* Pause — tela 7 */
 #define UI_PAUSE_HDR       32
 #define UI_PAUSE_ROW_H     48
 #define UI_PAUSE_ICON_X    20
 #define UI_PAUSE_TEXT_X    130
 
-/* Settings — tela 8 */
 #define UI_SET_HDR         32
 #define UI_SET_PAL_Y       32
 #define UI_SET_PAL_H       60
@@ -148,13 +138,11 @@
 #define UI_SET_ICON_X      8
 #define UI_SET_LABEL_X     32
 
-/* Toast — tela 12 */
 #define UI_TOAST_X         20
 #define UI_TOAST_Y         118
 #define UI_TOAST_W         200
 #define UI_TOAST_H         44
 
-/* Calibracao — tela 9 */
 #define UI_CAL_HDR         32
 #define UI_CAL_DOT_Y       52
 #define UI_CAL_BAND_Y      64

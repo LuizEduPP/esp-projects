@@ -1,6 +1,5 @@
 #pragma once
 #include <stdint.h>
-// Gerado de mock/ui-icons-sheet.svg via cairosvg + use href
 #define UI_ICON_SIZE 32
 
 static const uint8_t ICO_GB_A[1024] = {
