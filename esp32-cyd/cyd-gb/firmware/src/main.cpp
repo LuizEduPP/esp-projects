@@ -4,6 +4,7 @@
 #include "touch_input.h"
 #include "sd_manager.h"
 #include "ui_launcher.h"
+#include "ui_screens.h"
 #include "emulator_bridge.h"
 #include "i18n.h"
 #include "ui_theme.h"
@@ -59,19 +60,10 @@ static void load_ram() {
 }
 
 static void redraw_game_ui() {
+    emu_set_palette(emu_get_palette());
     display_draw_game_frame();
     display_draw_status_bar(cur_title, emu_get_fps());
     display_draw_controls();
-}
-
-static void toast(const char* msg, uint16_t color) {
-    int cx = GAME_X + GAME_W / 2;
-    int cy = GAME_Y + GAME_H / 2;
-    tft.fillRoundRect(cx - 70, cy - 16, 140, 32, 6, TFT_BLACK);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(color);
-    tft.drawString(msg, cx, cy, 2);
-    delay(700);
 }
 
 void run_emu() {
@@ -117,11 +109,11 @@ void run_emu() {
                 case 0: break;
                 case 1:
                     save_ram();
-                    toast(tr(STR_SAVED), ui_theme_get()->menu_primary);
+                    ui_show_toast(tr(STR_SAVED), ui_theme_get()->ok);
                     break;
                 case 2:
                     load_ram(); emu_reset(); load_ram();
-                    toast(tr(STR_LOADED), ui_theme_get()->accent);
+                    ui_show_toast(tr(STR_LOADED), ui_theme_get()->accent);
                     break;
                 case 3:
                     emu_on=false; save_ram(); return;
@@ -157,39 +149,21 @@ void setup() {
     touch_init();
     tt_start();
 
-    if(!sd_init()) {
-        const UiTheme* th = ui_theme_get();
-        tft.fillScreen(th->bg);
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(th->menu_danger);
-        tft.drawString(tr(STR_SD_ERROR), SCREEN_CX, 120, 4);
-        tft.setTextColor(th->text_mute);
-        tft.drawString(tr(STR_SD_HINT), SCREEN_CX, 160, 2);
+    if (!sd_init()) {
+        ui_draw_sd_error();
         while(true) delay(1000);
     }
 
-    {
-        const UiTheme* th = ui_theme_get();
-        tft.fillScreen(th->bg);
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(th->accent);
-        tft.drawString("CYD-GB", SCREEN_CX, 120, 4);
-        tft.setTextColor(th->text_mute);
-        tft.drawString(tr(STR_SPLASH_SUB), SCREEN_CX, 160, 2);
-    }
-    delay(1200);
-
     uint8_t s_pal, s_fs, s_bl, s_lang;
     if (touch_load_storage(&s_pal, &s_fs, &s_bl, &s_lang)) {
-        i18n_set_lang(s_lang);
-        emu_set_palette(s_pal);
-        emu_set_frame_skip(s_fs);
-        display_set_backlight(s_bl);
         Serial.printf("[INIT] Settings from SD: pal=%d fs=%d bl=%d lang=%u\n", s_pal, s_fs, s_bl, s_lang);
     } else {
         i18n_set_lang(LANG_EN);
+        emu_set_palette(0);
         Serial.println("[INIT] No config on SD — defaults");
     }
+
+    ui_animate_splash(1200);
 
     Serial.printf("[INIT] Heap: %u\n",ESP.getFreeHeap());
 }
@@ -207,20 +181,26 @@ void loop() {
     char* d = strrchr(cur_title, '.');
     if (d) *d = 0;
 
-    tft.fillScreen(ui_theme_get()->bg);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(ui_theme_get()->accent);
-    tft.drawString(tr(STR_LOADING), SCREEN_CX, 120, 4);
-    tft.setTextColor(ui_theme_get()->text_hi);
-    tft.drawString(cur_title, SCREEN_CX, 160, 2);
+    auto load_rom = []() -> bool {
+        return emu_open_rom(cur_path);
+    };
 
-    if(!emu_open_rom(cur_path)){
-        tft.setTextColor(ui_theme_get()->menu_danger);
-        tft.drawString(tr(STR_OPEN_FAILED), SCREEN_CX, 200, 2); delay(2000); return;
+    if (!ui_loading_run(cur_title, load_rom)) {
+        tft.fillScreen(ui_theme_get()->bg);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(ui_theme_get()->danger);
+        tft.drawString(tr(STR_OPEN_FAILED), SCREEN_CX, 160, 2);
+        delay(2000);
+        return;
     }
     if(!emu_init(0,0)){
-        tft.setTextColor(ui_theme_get()->menu_danger);
-        tft.drawString(tr(STR_INIT_FAILED), SCREEN_CX, 200, 2); delay(2000); emu_close_rom(); return;
+        tft.fillScreen(ui_theme_get()->bg);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(ui_theme_get()->danger);
+        tft.drawString(tr(STR_INIT_FAILED), SCREEN_CX, 160, 2);
+        delay(2000);
+        emu_close_rom();
+        return;
     }
 
     load_ram();

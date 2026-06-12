@@ -1,6 +1,7 @@
 #include "display.h"
 #include "hw_config.h"
 #include "emulator_bridge.h"
+#include "ui_icons.h"
 #include "ui_theme.h"
 #include <Arduino.h>
 #include <stdio.h>
@@ -16,41 +17,36 @@ static char status_title[28] = "CYD-GB";
 static void draw_util_btn(int cx, int cy, uint16_t fill, bool is_start) {
     tft.fillCircle(cx, cy, BTN_UTIL_R, fill);
     tft.drawCircle(cx, cy, BTN_UTIL_R, TH->border);
-    int lw = BTN_UTIL_R + 4;
-    if (is_start) {
-        int s = BTN_UTIL_R / 2 + 1;
-        tft.fillTriangle(cx - s + 1, cy - s, cx - s + 1, cy + s, cx + s + 1, cy, TH->text_lo);
-    } else {
-        tft.fillRect(cx - lw / 2, cy - 3, lw, 2, TH->text_lo);
-        tft.fillRect(cx - lw / 2, cy + 1, lw, 2, TH->text_lo);
-    }
+    int ix = cx - BTN_UTIL_R + 2;
+    int iy = cy - BTN_UTIL_R + 2;
+    int isz = BTN_UTIL_R * 2 - 4;
+    if (is_start)
+        ui_icon_draw(ix, iy, isz, UI_ICON_PLAY, TH->icon);
+    else
+        ui_icon_draw(ix, iy, isz, UI_ICON_SELECT, TH->icon);
 }
 
 static void draw_pause_btn() {
     tft.fillRect(BTN_PAUSE_L, BTN_PAUSE_T, BTN_PAUSE_W, BTN_PAUSE_H, TH->pause);
     tft.drawRect(BTN_PAUSE_L, BTN_PAUSE_T, BTN_PAUSE_W, BTN_PAUSE_H, TH->border);
-    int cx = BTN_PAUSE_CX;
-    int cy = BTN_PAUSE_CY;
-    tft.fillRect(cx - 6, cy - 6, 3, 12, TH->text_lo);
-    tft.fillRect(cx + 3, cy - 6, 3, 12, TH->text_lo);
+    ui_icon_draw(BTN_PAUSE_L + 14, BTN_PAUSE_T + 2, 20, UI_ICON_PAUSE, TH->icon);
 }
 
 void display_draw_pause_btn() {
     draw_pause_btn();
 }
 
-static void draw_action_btn(int x, int y, int w, int h, uint16_t fill, const char* label) {
+static void draw_action_btn(int x, int y, int w, int h, uint16_t fill, uint16_t edge, const char* label) {
     tft.fillRect(x, y, w, h, fill);
-    tft.drawRect(x, y, w, h, TH->border);
+    tft.drawRect(x, y, w, h, edge);
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TH->text_lo, fill);
+    tft.setTextColor(TH->text_hi, fill);
     tft.drawString(label, x + w / 2, y + h / 2, 2);
 }
 
 static void draw_analog_stick(int cx, int cy, int16_t stick_dx, int16_t stick_dy, bool active) {
     tft.fillCircle(cx, cy, STICK_BASE_R, TH->stick_base);
     tft.drawCircle(cx, cy, STICK_BASE_R, TH->border);
-    tft.drawCircle(cx, cy, STICK_BASE_R - 5, TH->stick_ring);
 
     int kx = cx + (active ? stick_dx : 0);
     int ky = cy + (active ? stick_dy : 0);
@@ -82,7 +78,7 @@ void display_init() {
     tft.writedata(1);
 
     emu_build_palettes();
-    ui_theme_apply(0);
+    emu_set_palette(0);
     tft.fillScreen(TH->bg);
     ledcSetup(0, 5000, 8);
     ledcAttachPin(TFT_PIN_BL, 0);
@@ -104,12 +100,8 @@ void display_clear(uint16_t color) {
 
 void display_draw_game_frame() {
     tft.fillRect(0, 0, SCREEN_W, STATUS_H, TH->surface);
-    tft.drawFastHLine(0, STATUS_H - 1, SCREEN_W, TH->accent);
-
     tft.fillRect(0, BEZEL_Y, SCREEN_W, BEZEL_H, TH->bg);
-    tft.drawRoundRect(GAME_X - 1, GAME_Y - 1, GAME_W + 2, GAME_H + 2, 3, TH->border);
     tft.fillRect(GAME_X, GAME_Y, GAME_W, GAME_H, TH->bg);
-
     draw_pause_btn();
 }
 
@@ -119,25 +111,21 @@ void display_draw_status_bar(const char* title, uint32_t fps) {
         status_title[27] = 0;
     }
     tft.fillRect(0, 0, SCREEN_W, STATUS_H, TH->surface);
-    tft.drawFastHLine(0, STATUS_H - 1, SCREEN_W, TH->accent);
-    tft.fillCircle(10, STATUS_H / 2, 3, TH->accent);
+    ui_icon_draw_t(4, 2, 20, UI_ICON_CART);
     tft.setTextDatum(ML_DATUM);
-    tft.setTextColor(TH->text_hi, TH->surface);
-    tft.drawString(status_title, 20, STATUS_H / 2, 2);
+    tft.setTextColor(TH->text_mute, TH->surface);
+    tft.drawString(status_title, 26, STATUS_H / 2, 1);
     display_update_status_fps(fps);
     display_draw_pause_btn();
 }
 
 void display_update_status_fps(uint32_t fps) {
-    char fps_lbl[10];
-    snprintf(fps_lbl, sizeof(fps_lbl), "%u", (unsigned)fps);
-    int fx = BTN_PAUSE_L - 44;
-    tft.fillRect(fx - 8, 4, 40, STATUS_H - 8, TH->surface);
-    tft.setTextDatum(MC_DATUM);
+    char fps_lbl[16];
+    snprintf(fps_lbl, sizeof(fps_lbl), "%u fps", (unsigned)fps);
+    tft.fillRect(130, 0, 58, STATUS_H, TH->surface);
+    tft.setTextDatum(ML_DATUM);
     tft.setTextColor(TH->text_mute, TH->surface);
-    tft.drawString(fps_lbl, fx, STATUS_H / 2, 1);
-    tft.setTextDatum(MR_DATUM);
-    tft.drawString("fps", fx + 18, STATUS_H / 2, 1);
+    tft.drawString(fps_lbl, 155, STATUS_H / 2, 1);
     display_draw_pause_btn();
 }
 
@@ -159,14 +147,13 @@ void display_push_gb_line(uint8_t y, uint16_t* buf) {
 
 void display_draw_controls() {
     tft.fillRect(0, CTRL_Y, SCREEN_W, CTRL_H, TH->surface);
-    tft.drawFastHLine(0, CTRL_Y, SCREEN_W, TH->border);
 
     draw_util_btn(BTN_SE_X, BTN_SE_Y, TH->pill, false);
     draw_util_btn(BTN_ST_X, BTN_ST_Y, TH->pill, true);
 
     draw_analog_stick(STICK_CX, STICK_CY, 0, 0, false);
-    draw_action_btn(BTN_B_L, BTN_AB_T, BTN_B_W, BTN_AB_H, TH->btn_b, "B");
-    draw_action_btn(BTN_A_L, BTN_AB_T, BTN_A_W, BTN_AB_H, TH->btn_a, "A");
+    draw_action_btn(BTN_B_L, BTN_AB_T, BTN_B_W, BTN_AB_H, TH->btn_b, TH->btn_b_bd, "B");
+    draw_action_btn(BTN_A_L, BTN_AB_T, BTN_A_W, BTN_AB_H, TH->btn_a, TH->btn_a_bd, "A");
 }
 
 void display_update_dpad(uint8_t dirs, int16_t stick_dx, int16_t stick_dy) {

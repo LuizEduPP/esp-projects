@@ -10,6 +10,8 @@
 #define MAX_FILENAME    48
 #define ROM_PATH_GB     "/roms/gb"
 #define ROM_PATH_GBC    "/roms/gbc"
+#define COVER_PATH_GB   "/roms/gb/covers"
+#define COVER_PATH_GBC  "/roms/gbc/covers"
 #define SAVE_PATH       "/saves"
 #define CONFIG_PATH     "/config"
 #define CONFIG_FILE     "/config/cyd-gb.cfg"
@@ -41,6 +43,7 @@ bool sd_init();
 int  sd_scan_roms(RomEntry* list, int max_entries);
 bool sd_load_rom(const char* path, uint8_t** out_buf, uint32_t* out_size);
 void sd_free_rom(uint8_t* buf);
+bool sd_draw_rom_cover(const RomEntry* entry, int x, int y, int w, int h);
 
 
 bool sd_save_state(const char* rom_path, const uint8_t* sram, uint32_t size);

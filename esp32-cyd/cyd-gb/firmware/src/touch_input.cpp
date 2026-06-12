@@ -5,13 +5,17 @@
 #include "touch_input.h"
 #include "hw_config.h"
 #include "display.h"
+#include "emulator_bridge.h"
 #include "sd_manager.h"
 #include "i18n.h"
+#include "ui_icons.h"
+#include "ui_draw.h"
 #include "ui_theme.h"
 
 #define TH ui_theme_get()
 #include <Arduino.h>
 #include <string.h>
+#include <math.h>
 #include <XPT2046_Bitbang.h>
 
 
@@ -88,6 +92,9 @@ static void fill_config(CydGbConfig* cfg, uint8_t palette, uint8_t fskip, uint8_
 
 static void apply_config(const CydGbConfig* cfg) {
     if (cfg->language < LANG_COUNT) i18n_set_lang(cfg->language);
+    if (cfg->palette < NUM_PALETTES) emu_set_palette(cfg->palette);
+    emu_set_frame_skip(cfg->frame_skip);
+    display_set_backlight(cfg->brightness);
     if (cfg->cal_valid) {
         cal.x_min = cfg->cal_xmin;
         cal.x_max = cfg->cal_xmax;
@@ -108,7 +115,8 @@ static void save_cal_to_sd() {
         cfg.cal_ymin = cal.y_min;
         cfg.cal_ymax = cal.y_max;
     } else {
-        fill_config(&cfg, 0, 0, 255, i18n_get_lang());
+        fill_config(&cfg, emu_get_palette(), emu_get_frame_skip(),
+                    display_get_backlight(), i18n_get_lang());
         cfg.cal_valid = true;
     }
     sd_save_config(&cfg);
@@ -133,7 +141,8 @@ void touch_save_settings(uint8_t palette, uint8_t fskip, uint8_t brightness, uin
     } else {
         fill_config(&cfg, palette, fskip, brightness, lang);
     }
-    sd_save_config(&cfg);
+    if (!sd_save_config(&cfg))
+        Serial.println("[CFG] Save FAILED");
 }
 
 bool touch_load_settings(uint8_t* palette, uint8_t* fskip, uint8_t* brightness, uint8_t* lang) {
@@ -456,17 +465,135 @@ void touch_format_buttons(uint16_t btn, char* buf, size_t buflen) {
     }
 }
 
-void touch_run_calibration() {
-    tft.fillScreen(TH->bg);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TH->accent);
-    tft.drawString(tr(STR_CAL_TITLE), SCREEN_CX, 12, 4);
-    tft.setTextColor(TH->text_mute);
-    tft.drawString(tr(STR_CAL_HINT), SCREEN_CX, 35, 2);
+#define CAL_HDR_H     UI_CAL_HDR
+#define CAL_DOT_Y     UI_CAL_DOT_Y
+#define CAL_BAND_Y    UI_CAL_BAND_Y
+#define CAL_BAND_H    UI_CAL_BAND_H
+#define CAL_FOOT_Y    UI_CAL_FOOT_Y
 
-    struct { int16_t sx, sy; } targets[5] = {
-        {22, 50}, {SCREEN_W - 22, 50}, {22, SCREEN_H - 50},
-        {SCREEN_W - 22, SCREEN_H - 50}, {SCREEN_CX, SCREEN_H / 2}
+struct CalTarget { int16_t sx, sy; };
+
+static bool ls_fit(const int16_t* raw, const int16_t* scr, int n, float* a, float* b) {
+    int64_t sr = 0, ss = 0, srr = 0, srs = 0;
+    for (int i = 0; i < n; i++) {
+        sr += raw[i];
+        ss += scr[i];
+        srr += (int64_t)raw[i] * raw[i];
+        srs += (int64_t)raw[i] * scr[i];
+    }
+    float fn = (float)n;
+    float den = fn * (float)srr - (float)sr * (float)sr;
+    if (fabsf(den) < 1.0f) return false;
+    *a = (fn * (float)srs - (float)sr * (float)ss) / den;
+    *b = ((float)ss - (*a) * (float)sr) / fn;
+    return true;
+}
+
+static bool cal_from_points(const int16_t raw_y[5], const int16_t scr_x[5],
+                            const int16_t raw_x[5], const int16_t scr_y[5],
+                            CydTouchCal* nc) {
+    float ax, bx, ay, by;
+    if (!ls_fit(raw_y, scr_x, 5, &ax, &bx)) return false;
+    if (!ls_fit(raw_x, scr_y, 5, &ay, &by)) return false;
+    if (fabsf(ax) < 0.001f || fabsf(ay) < 0.001f) return false;
+
+    float span_x = -239.0f / ax;
+    float span_y = 319.0f / ay;
+    if (span_x < 200.0f || span_y < 200.0f) return false;
+
+    float x_max = -bx / ax;
+    float x_min = x_max - span_x;
+    float y_min = -by / ay;
+    float y_max = y_min + span_y;
+
+    int16_t mx = (int16_t)(span_x * 0.06f);
+    int16_t my = (int16_t)(span_y * 0.06f);
+    nc->x_min = (int16_t)x_min - mx;
+    nc->x_max = (int16_t)x_max + mx;
+    nc->y_min = (int16_t)y_min - my;
+    nc->y_max = (int16_t)y_max + my;
+    nc->swapped = false;
+    nc->invert_x = false;
+    nc->invert_y = false;
+    return true;
+}
+
+static void draw_cal_header() {
+    ui_bar_header(CAL_HDR_H, UI_ICON_TARGET, tr(STR_CAL_TITLE), 130);
+}
+
+static void draw_cal_progress(int step, const bool* done) {
+    static const int dx[5] = {48, 88, 128, 168, 208};
+    for (int n = 0; n < 5; n++) {
+        if (done[n]) {
+            tft.fillCircle(dx[n], CAL_DOT_Y, 5, TH->ok);
+        } else if (n == step) {
+            tft.drawCircle(dx[n], CAL_DOT_Y, 7, TH->accent);
+        } else {
+            tft.drawCircle(dx[n], CAL_DOT_Y, 5, TH->border);
+        }
+    }
+}
+
+static void draw_cal_band(int step, StringId point_id) {
+    tft.fillRect(0, CAL_BAND_Y, SCREEN_W, CAL_BAND_H, TH->surface);
+    tft.setTextDatum(MC_DATUM);
+    char buf[40];
+    snprintf(buf, sizeof(buf), tr(STR_CAL_STEP_OF), step + 1);
+    tft.setTextColor(TH->text_mute, TH->surface);
+    tft.drawString(buf, SCREEN_CX, CAL_BAND_Y + 12, 1);
+    snprintf(buf, sizeof(buf), "%s", tr(point_id));
+    tft.setTextColor(TH->text_hi, TH->surface);
+    tft.drawString(buf, SCREEN_CX, CAL_BAND_Y + 28, 2);
+}
+
+static void draw_cal_footer() {
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(TH->text_mute, TH->bg);
+    tft.drawString(tr(STR_CAL_FOOTER), SCREEN_CX, CAL_FOOT_Y, 1);
+}
+
+static void draw_cal_target(int tx, int ty, int state) {
+    int x = tx - UI_CAL_TARGET_SZ / 2;
+    int y = ty - UI_CAL_TARGET_SZ / 2;
+    if (state == 2) {
+        tft.fillRoundRect(x, y, UI_CAL_TARGET_SZ, UI_CAL_TARGET_SZ, 4, TH->border);
+        ui_icon_draw_ok(x + 12, y + 12, 32, UI_ICON_CHECK);
+    } else if (state == 1) {
+        tft.drawRoundRect(x, y, UI_CAL_TARGET_SZ, UI_CAL_TARGET_SZ, 4, TH->accent);
+        ui_icon_draw(x + 12, y + 12, 32, UI_ICON_CROSS, TH->accent);
+    } else {
+        tft.drawRoundRect(x, y, UI_CAL_TARGET_SZ, UI_CAL_TARGET_SZ, 4, TH->border);
+        ui_icon_draw(x + 12, y + 12, 32, UI_ICON_CROSS, TH->icon);
+    }
+}
+
+static void draw_cal_screen(int step, const bool* done,
+                            const CalTarget* targets,
+                            const StringId* label_ids) {
+    tft.fillScreen(TH->bg);
+    draw_cal_header();
+    draw_cal_progress(step, done);
+    draw_cal_band(step, label_ids[step]);
+    for (int n = 0; n < 5; n++) {
+        int st = done[n] ? 2 : (n == step ? 1 : 0);
+        draw_cal_target(targets[n].sx, targets[n].sy, st);
+    }
+    draw_cal_footer();
+}
+
+static void draw_cal_result_card(bool ok) {
+    ui_status_result(ok ? UI_ICON_CHECK : UI_ICON_X,
+                     ok ? STR_CAL_SAVED : STR_CAL_FAILED,
+                     ok ? STR_COUNT : STR_CAL_FACTORY,
+                     ok ? STR_CAL_AUTO_OK : STR_CAL_AUTO_FAIL,
+                     ok);
+}
+
+void touch_run_calibration() {
+    ui_sync();
+    CalTarget targets[5] = {
+        {36, 148}, {204, 148}, {36, 280}, {204, 280}, {120, 214}
     };
     static const StringId label_ids[5] = {
         STR_CAL_TL, STR_CAL_TR, STR_CAL_BL, STR_CAL_BR, STR_CAL_CENTER
@@ -474,17 +601,10 @@ void touch_run_calibration() {
     int16_t raw_x[5], raw_y[5];
     bool got[5] = {false};
 
-    for (int i = 0; i < 5; i++) {
-        tft.fillRect(0, 42, SCREEN_W, 20, TH->bg);
-        tft.setTextColor(TH->text_hi);
-        char msg[40];
-        snprintf(msg, sizeof(msg), tr(STR_CAL_STEP_FMT), i + 1, tr(label_ids[i]));
-        tft.drawString(msg, SCREEN_CX, 52, 2);
+    draw_cal_screen(0, got, targets, label_ids);
 
-        int tx = targets[i].sx, ty = targets[i].sy;
-        tft.drawCircle(tx, ty, 10, TH->accent);
-        tft.drawLine(tx - 14, ty, tx + 14, ty, TH->accent);
-        tft.drawLine(tx, ty - 14, tx, ty + 14, TH->accent);
+    for (int i = 0; i < 5; i++) {
+        draw_cal_screen(i, got, targets, label_ids);
 
         uint32_t t0 = millis();
         while (millis() - t0 < 15000) {
@@ -519,10 +639,13 @@ void touch_run_calibration() {
             raw_x[i] = samples_x[ns / 2];
             raw_y[i] = samples_y[ns / 2];
             got[i] = true;
-            Serial.printf("[CAL] %d: raw(%d,%d) screen(%d,%d)\n", i, raw_x[i], raw_y[i], tx, ty);
+            Serial.printf("[CAL] %d: raw(%d,%d) screen(%d,%d)\n",
+                          i, raw_x[i], raw_y[i], targets[i].sx, targets[i].sy);
+        } else {
+            got[i] = false;
         }
 
-        tft.fillCircle(tx, ty, 8, got[i] ? TH->menu_primary : TH->menu_danger);
+        draw_cal_target(targets[i].sx, targets[i].sy, got[i] ? 2 : 0);
 
         t0 = millis();
         while (millis() - t0 < 3000) {
@@ -535,27 +658,17 @@ void touch_run_calibration() {
 
     {
         int valid = 0;
-        int16_t ry_min = 32767, ry_max = -32768;
-        int16_t rx_min = 32767, rx_max = -32768;
+        int16_t scr_x[5], scr_y[5];
         for (int i = 0; i < 5; i++) {
             if (!got[i]) continue;
             valid++;
-            if (raw_y[i] < ry_min) ry_min = raw_y[i];
-            if (raw_y[i] > ry_max) ry_max = raw_y[i];
-            if (raw_x[i] < rx_min) rx_min = raw_x[i];
-            if (raw_x[i] > rx_max) rx_max = raw_x[i];
+            scr_x[i] = targets[i].sx;
+            scr_y[i] = targets[i].sy;
         }
         if (valid < 5) goto cal_fail;
 
         CydTouchCal nc = {0};
-        int16_t ry_span = ry_max - ry_min;
-        int16_t rx_span = rx_max - rx_min;
-        if (ry_span < 200 || rx_span < 200) goto cal_fail;
-
-        nc.x_min = ry_min - ry_span * 12 / 80;
-        nc.x_max = ry_max + ry_span * 12 / 80;
-        nc.y_min = rx_min - rx_span * 15 / 75;
-        nc.y_max = rx_max + rx_span * 15 / 75;
+        if (!cal_from_points(raw_y, scr_x, raw_x, scr_y, &nc)) goto cal_fail;
 
         cal = nc;
         save_cal_to_sd();
@@ -563,18 +676,12 @@ void touch_run_calibration() {
                       cal.x_min, cal.x_max, cal.y_min, cal.y_max);
     }
 
-    tft.fillScreen(TH->bg);
-    tft.setTextColor(TH->menu_primary);
-    tft.drawString(tr(STR_CAL_SAVED), SCREEN_CX, SCREEN_H / 2, 4);
+    draw_cal_result_card(true);
     delay(1200);
     return;
 
 cal_fail:
-    tft.fillScreen(TH->bg);
-    tft.setTextColor(TH->menu_danger);
-    tft.drawString(tr(STR_CAL_FAILED), SCREEN_CX, SCREEN_H / 2 - 20, 4);
-    tft.setTextColor(TH->text_mute);
-    tft.drawString(tr(STR_CAL_FACTORY), SCREEN_CX, SCREEN_H / 2 + 20, 2);
+    draw_cal_result_card(false);
     use_custom_cal = false;
     delay(2000);
 }

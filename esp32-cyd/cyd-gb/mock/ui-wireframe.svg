@@ -1,336 +1,376 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- CYD-GB 240x320 @ 0.5 scale - coords from firmware -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 640" font-family="system-ui, sans-serif" fill="#334155">
+<!-- CYD-GB wireframes 240x320 @ 0.5 | validate before firmware -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 740" font-family="system-ui, sans-serif" fill="#334155">
   <defs>
+    <filter id="sh" x="-6%" y="-3%" width="112%" height="108%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
     <style>
-      .frame { fill: #fff; stroke: #64748b; stroke-width: 1; }
-      .ctrl { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 0.8; }
-      .game { fill: #e2e8f0; stroke: #64748b; stroke-width: 0.8; }
-      .cap { fill: #64748b; font-size: 8px; text-anchor: middle; }
-      .t { font-size: 11px; }
-      .ts { font-size: 9px; }
-      .touch { fill: none; stroke: #94a3b8; stroke-width: 0.6; stroke-dasharray: 3 2; opacity: 0.7; }
-      .rowlbl { fill: #64748b; font-size: 8px; }
-      .accent { fill: #64748b; }
-      .hi { fill: #334155; }
+      .sheet { fill: #f1f5f9; }
+      .phone { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1; filter: url(#sh); }
+      .panel { fill: #f8fafc; stroke: #e2e8f0; stroke-width: 0.6; }
+      .game { fill: #e2e8f0; }
+      .hi { fill: #0f172a; }
       .mute { fill: #94a3b8; }
-      .danger { fill: #b91c1c; }
-      .ok { fill: #15803d; }
-      .prog { fill: #cbd5e1; }
-      .cover { stroke: #94a3b8; stroke-width: 0.6; }
-      .coversel { stroke: #64748b; stroke-width: 2; }
+      .danger { fill: #dc2626; stroke: #dc2626; }
+      .ok { fill: #16a34a; stroke: #16a34a; }
+      .ico { fill: none; stroke: #64748b; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+      .ico-hi { fill: none; stroke: #0f172a; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+      .ico-danger { fill: none; stroke: #dc2626; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+      .ico-ok { fill: none; stroke: #16a34a; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+      .ico-fill { fill: #64748b; stroke: none; }
+      .pri { fill: #475569; }
+      .t { font-size: 11px; dominant-baseline: middle; }
+      .ts { font-size: 9px; dominant-baseline: middle; }
+      .lbl { fill: #64748b; font-size: 8px; dominant-baseline: middle; }
+      .cap { fill: #334155; font-size: 9px; font-weight: 600; text-anchor: middle; }
+      .sec { fill: #64748b; font-size: 9px; font-weight: 600; letter-spacing: 0.06em; }
+      .prog { fill: #e2e8f0; }
+      .progf { fill: #64748b; }
+      .tz { fill: #eff6ff; stroke: #93c5fd; stroke-width: 0.8; stroke-dasharray: 3 3; opacity: 0.65; }
+      .tz-hi { fill: #dbeafe; stroke: #60a5fa; stroke-width: 0.8; opacity: 0.75; }
+      .tz-bad { fill: #fef2f2; stroke: #fca5a5; stroke-width: 0.8; stroke-dasharray: 3 3; opacity: 0.65; }
     </style>
+
+    <!-- icon library 24x24 | inline stroke for use/href -->
+    <symbol id="ico-gb" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="4" width="14" height="16" rx="2"/>
+      <rect x="7" y="6" width="10" height="7" rx="1" fill="#cbd5e1" stroke="none"/>
+      <circle cx="9" cy="16" r="1" fill="#64748b" stroke="none"/>
+      <rect x="11.5" y="15" width="5" height="2" rx="0.5" fill="#64748b" stroke="none"/>
+    </symbol>
+    <symbol id="ico-sd" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 4h7l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/>
+      <line x1="8" y1="10" x2="16" y2="18" stroke="#dc2626"/>
+      <line x1="16" y1="10" x2="8" y2="18" stroke="#dc2626"/>
+    </symbol>
+    <symbol id="ico-cart" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 8h12v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8z"/>
+      <path d="M9 8V6a3 3 0 0 1 6 0v2"/>
+      <rect x="10" y="11" width="4" height="5" rx="0.5" fill="#94a3b8" stroke="none"/>
+    </symbol>
+    <symbol id="ico-folder" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 8h6l2 2h8v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z"/>
+      <line x1="8" y1="13" x2="16" y2="13"/>
+      <line x1="8" y1="16" x2="13" y2="16"/>
+    </symbol>
+    <symbol id="ico-gear" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4" stroke-linecap="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4l1.4-1.4M17 7l1.4-1.4"/>
+    </symbol>
+    <symbol id="ico-grid" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4">
+      <rect x="4" y="4" width="7" height="7" rx="1"/>
+      <rect x="13" y="4" width="7" height="7" rx="1"/>
+      <rect x="4" y="13" width="7" height="7" rx="1"/>
+      <rect x="13" y="13" width="7" height="7" rx="1"/>
+    </symbol>
+    <symbol id="ico-chev-l" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l-6 6 6 6"/></symbol>
+    <symbol id="ico-chev-r" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6l6 6-6 6"/></symbol>
+    <symbol id="ico-pause" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.6" stroke-linecap="round">
+      <line x1="8" y1="5" x2="8" y2="19"/><line x1="16" y1="5" x2="16" y2="19"/>
+    </symbol>
+    <symbol id="ico-play" viewBox="0 0 24 24" fill="#64748b" stroke="none"><path d="M8 5l12 7-12 7V5z"/></symbol>
+    <symbol id="ico-save" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4" stroke-linejoin="round">
+      <path d="M5 4h11l3 3v13H5V4z"/><rect x="8" y="4" width="8" height="5"/><rect x="8" y="14" width="8" height="6" rx="1"/>
+    </symbol>
+    <symbol id="ico-load" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M5 18h14"/>
+    </symbol>
+    <symbol id="ico-sliders" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4" stroke-linecap="round">
+      <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
+      <circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="18" r="2"/>
+    </symbol>
+    <symbol id="ico-target" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4">
+      <circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>
+      <line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>
+      <line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
+    </symbol>
+    <symbol id="ico-exit" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 5H5v14h5"/><path d="M14 12H8"/><path d="M18 8l4 4-4 4"/>
+    </symbol>
+    <symbol id="ico-palette" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4">
+      <path d="M12 3a9 9 0 1 0 8 12H12a4 4 0 0 1 0-8 1 1 0 0 0 0-4z"/>
+      <circle cx="8" cy="10" r="1" fill="#9bbc0f" stroke="none"/>
+      <circle cx="11" cy="7" r="1" fill="#306230" stroke="none"/>
+      <circle cx="15" cy="9" r="1" fill="#0f380f" stroke="none"/>
+    </symbol>
+    <symbol id="ico-speed" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4" stroke-linecap="round">
+      <path d="M12 4a8 8 0 1 0 0 16"/><path d="M12 12l4-2"/>
+    </symbol>
+    <symbol id="ico-sun" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4" stroke-linecap="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+    </symbol>
+    <symbol id="ico-globe" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4">
+      <circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><line x1="3" y1="12" x2="21" y2="12"/>
+    </symbol>
+    <symbol id="ico-check" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>
+    </symbol>
+    <symbol id="ico-x" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="1.6" stroke-linecap="round">
+      <circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>
+    </symbol>
+    <symbol id="ico-dpad" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.4">
+      <rect x="9" y="4" width="6" height="16" rx="1"/><rect x="4" y="9" width="16" height="6" rx="1"/>
+    </symbol>
+    <symbol id="ico-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5" fill="#64748b"/></symbol>
+    <symbol id="ico-cross" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.6" stroke-linecap="round">
+      <line x1="12" y1="6" x2="12" y2="18"/><line x1="6" y1="12" x2="18" y2="12"/>
+    </symbol>
   </defs>
 
-  <!-- 1 Splash boot brand + progress -->
-  <g transform="translate(10,16) scale(0.5)">
-    <rect class="frame" width="240" height="320"/>
-    <rect class="ctrl" x="80" y="88" width="80" height="80" rx="8"/>
-    <text x="120" y="128" class="t" text-anchor="middle">GB</text>
-    <text x="120" y="188" class="t" text-anchor="middle">CYD-GB</text>
-    <text x="120" y="208" class="ts" text-anchor="middle">Game Boy</text>
-    <rect class="prog" x="20" y="288" width="200" height="6"/>
-    <rect class="progf" x="20" y="288" width="120" height="6"/>
-    <text x="120" y="304" class="rowlbl" text-anchor="middle">boot...</text>
+  <rect width="620" height="740" class="sheet"/>
+  <text x="24" y="28" class="hi" font-size="13" font-weight="700">CYD-GB Wireframes</text>
+  <text x="24" y="42" class="lbl" font-size="9">240 x 320 | tracejado azul = toque</text>
+
+  <!-- ===== ROW 1 ===== -->
+  <text x="24" y="68" class="sec">BOOT &amp; STATUS</text>
+
+  <!-- 1 Splash -->
+  <g transform="translate(24,76) scale(0.5)">
+    <rect class="phone" width="240" height="320" rx="2"/>
+    <rect class="panel" x="84" y="80" width="72" height="72" rx="12"/>
+    <use href="#ico-gb" x="96" y="92" width="48" height="48"/>
+    <text x="120" y="172" class="t hi" text-anchor="middle" font-weight="600">CYD-GB</text>
+    <text x="120" y="192" class="ts mute" text-anchor="middle">Game Boy</text>
+    <rect class="prog" x="24" y="252" width="192" height="6" rx="3"/>
+    <rect class="progf" x="24" y="252" width="120" height="6" rx="3"/>
+    <text x="120" y="268" class="lbl" text-anchor="middle">boot...</text>
   </g>
-  <text x="70" y="188" class="cap">Splash</text>
+  <text x="84" y="252" class="cap">1 Splash</text>
 
-  <!-- 2 SD error card + hint -->
-  <g transform="translate(150,16) scale(0.5)">
-    <rect class="frame" width="240" height="320"/>
-    <rect class="ctrl" x="40" y="72" width="160" height="100"/>
-    <rect x="100" y="92" width="40" height="52" fill="none" stroke="#64748b"/>
-    <line x1="108" y1="100" x2="132" y2="124" stroke="#b91c1c"/>
-    <line x1="132" y1="100" x2="108" y2="124" stroke="#b91c1c"/>
-    <text x="120" y="198" class="t" text-anchor="middle">SD card error!</text>
-    <text x="120" y="222" class="ts" text-anchor="middle">Insert FAT32 SD</text>
-    <text x="120" y="242" class="rowlbl" text-anchor="middle">reset device</text>
+  <!-- 2 SD error -->
+  <g transform="translate(164,76) scale(0.5)">
+    <rect class="phone" width="240" height="320" rx="2"/>
+    <use href="#ico-sd" x="96" y="92" width="48" height="48"/>
+    <text x="120" y="172" class="t danger" text-anchor="middle">SD card error!</text>
+    <text x="120" y="192" class="ts mute" text-anchor="middle">Insert FAT32 SD</text>
+    <text x="120" y="212" class="lbl" text-anchor="middle">reset device</text>
   </g>
-  <text x="210" y="188" class="cap">SD error</text>
+  <text x="224" y="252" class="cap">2 SD error</text>
 
-  <!-- 3 Loading spinner + progress -->
-  <g transform="translate(290,16) scale(0.5)">
-    <rect class="frame" width="240" height="320"/>
-    <text x="120" y="96" class="t" text-anchor="middle">Loading...</text>
-    <text x="120" y="128" class="ts" text-anchor="middle">game_title</text>
-    <circle class="touch" cx="120" cy="188" r="28"/>
-    <circle cx="120" cy="160" r="4" fill="#64748b"/>
-    <circle cx="140" cy="172" r="4" fill="#94a3b8"/>
-    <circle cx="140" cy="204" r="4" fill="#cbd5e1"/>
-    <circle cx="120" cy="216" r="4" fill="#cbd5e1"/>
-    <circle cx="100" cy="204" r="4" fill="#cbd5e1"/>
-    <circle cx="100" cy="172" r="4" fill="#94a3b8"/>
-    <rect class="prog" x="20" y="248" width="200" height="8"/>
-    <rect class="progf" x="20" y="248" width="130" height="8"/>
-    <text x="120" y="272" class="rowlbl" text-anchor="middle">reading ROM...</text>
+  <!-- 3 Loading -->
+  <g transform="translate(304,76) scale(0.5)">
+    <rect class="phone" width="240" height="320" rx="2"/>
+    <rect class="panel" x="88" y="92" width="64" height="48" rx="6"/>
+    <use href="#ico-cart" x="100" y="100" width="40" height="32"/>
+    <text x="120" y="172" class="t hi" text-anchor="middle">Loading...</text>
+    <text x="120" y="192" class="ts mute" text-anchor="middle">game_title</text>
+    <rect class="prog" x="24" y="252" width="192" height="6" rx="3"/>
+    <rect class="progf" x="24" y="252" width="140" height="6" rx="3"/>
+    <text x="120" y="268" class="lbl" text-anchor="middle">reading ROM...</text>
   </g>
-  <text x="350" y="188" class="cap">Loading</text>
+  <text x="364" y="252" class="cap">3 Loading</text>
 
-  <!-- 4 No ROMs empty state -->
-  <g transform="translate(430,16) scale(0.5)">
-    <rect class="frame" width="240" height="320"/>
-    <rect class="ctrl" x="0" y="0" width="240" height="36"/>
-    <line x1="0" y1="35" x2="240" y2="35" stroke="#64748b"/>
-    <rect class="ctrl" x="88" y="100" width="64" height="48"/>
-    <line x1="96" y1="108" x2="144" y2="108" stroke="#94a3b8"/>
-    <line x1="96" y1="118" x2="144" y2="118" stroke="#94a3b8"/>
-    <line x1="96" y1="128" x2="128" y2="128" stroke="#94a3b8"/>
-    <text x="120" y="178" class="t" text-anchor="middle">No ROMs found!</text>
-    <text x="120" y="202" class="ts" text-anchor="middle">/roms/gb/*.gb</text>
+  <!-- 4 No ROMs -->
+  <g transform="translate(444,76) scale(0.5)">
+    <rect class="phone" width="240" height="320" rx="2"/>
+    <use href="#ico-folder" x="96" y="100" width="48" height="48"/>
+    <text x="120" y="172" class="t danger" text-anchor="middle">No ROMs found!</text>
+    <text x="120" y="192" class="ts mute" text-anchor="middle">/roms/gb/*.gb</text>
+    <text x="120" y="212" class="lbl" text-anchor="middle">add .gb files to SD</text>
   </g>
-  <text x="490" y="188" class="cap">No ROMs</text>
+  <text x="504" y="252" class="cap">4 No ROMs</text>
 
-  <!-- 5 Launcher grid 2x3 cover art + footer -->
-  <g transform="translate(10,200) scale(0.5)">
-    <rect class="frame" width="240" height="320"/>
-    <rect class="ctrl" x="0" y="0" width="240" height="36"/>
-    <line x1="0" y1="35" x2="240" y2="35" stroke="#64748b"/>
-    <text x="12" y="13" class="ts">Games</text>
-    <text x="12" y="28" class="ts">12 ROMs</text>
-    <circle class="ctrl" cx="216" cy="18" r="16"/>
-    <rect class="touch" x="192" y="0" width="48" height="36"/>
+  <!-- ===== ROW 2 ===== -->
+  <text x="24" y="288" class="sec">BIBLIOTECA &amp; JOGO</text>
 
-    <!-- grid 2 cols x 3 rows | cell 113x74 gap 6 pad 4 -->
-    <!-- row0 col0 selected -->
-    <rect class="ctrl coversel" x="4" y="40" width="113" height="74"/>
-    <rect class="cover" x="6" y="42" width="109" height="52" fill="#cbd5e1"/>
-    <rect x="10" y="46" width="101" height="44" fill="#94a3b8" opacity="0.35"/>
-    <text x="60" y="72" class="ts" text-anchor="middle">TETRIS</text>
-    <text x="60" y="106" class="rowlbl" text-anchor="middle">tetris.gb</text>
+  <!-- 5 Launcher -->
+  <g transform="translate(24,296) scale(0.5)">
+    <rect class="phone" width="240" height="320" rx="2"/>
+    <rect fill="#f8fafc" x="0" y="0" width="240" height="40"/>
+    <line x1="0" y1="39" x2="240" y2="39" stroke="#e2e8f0"/>
+    <use href="#ico-grid" x="8" y="8" width="24" height="24"/>
+    <text x="36" y="18" class="t hi">Games</text>
+    <text x="36" y="32" class="lbl">12 ROMs</text>
+    <rect class="tz" x="188" y="0" width="52" height="40"/>
+    <use href="#ico-gear" x="200" y="8" width="24" height="24"/>
 
-    <!-- row0 col1 -->
-    <rect class="ctrl" x="123" y="40" width="113" height="74"/>
-    <rect class="cover" x="125" y="42" width="109" height="52" fill="#e2e8f0"/>
-    <rect x="129" y="46" width="101" height="44" fill="#64748b" opacity="0.25"/>
-    <text x="181" y="72" class="ts" text-anchor="middle">ZELDA</text>
-    <text x="181" y="106" class="rowlbl" text-anchor="middle">zelda.gb</text>
+    <rect class="tz-hi" x="8" y="48" width="108" height="104" rx="4"/>
+    <rect fill="#cbd5e1" x="12" y="52" width="100" height="68" rx="3"/>
+    <use href="#ico-cart" x="44" y="68" width="36" height="28"/>
+    <text x="62" y="140" class="lbl" text-anchor="middle">tetris.gb</text>
 
-    <!-- row1 col0 -->
-    <rect class="ctrl" x="4" y="120" width="113" height="74"/>
-    <rect class="cover" x="6" y="122" width="109" height="52" fill="#dcfce7"/>
-    <text x="60" y="152" class="ts" text-anchor="middle">POKEMON</text>
-    <text x="60" y="186" class="rowlbl" text-anchor="middle">pokemon.gbc</text>
+    <rect class="tz" x="124" y="48" width="108" height="104" rx="4"/>
+    <rect fill="#e2e8f0" x="128" y="52" width="100" height="68" rx="3"/>
+    <use href="#ico-cart" x="160" y="68" width="36" height="28"/>
+    <text x="178" y="140" class="lbl" text-anchor="middle">zelda.gb</text>
 
-    <!-- row1 col1 -->
-    <rect class="ctrl" x="123" y="120" width="113" height="74"/>
-    <rect class="cover" x="125" y="122" width="109" height="52" fill="#fef3c7"/>
-    <text x="181" y="152" class="ts" text-anchor="middle">MARIO</text>
-    <text x="181" y="186" class="rowlbl" text-anchor="middle">mario.gb</text>
+    <rect class="tz" x="8" y="160" width="108" height="104" rx="4"/>
+    <rect fill="#dcfce7" x="12" y="164" width="100" height="68" rx="3"/>
+    <use href="#ico-cart" x="44" y="180" width="36" height="28"/>
+    <text x="62" y="252" class="lbl" text-anchor="middle">pokemon.gbc</text>
 
-    <!-- row2 col0 -->
-    <rect class="ctrl" x="4" y="200" width="113" height="74"/>
-    <rect class="cover" x="6" y="202" width="109" height="52" fill="#dbeafe"/>
-    <text x="60" y="232" class="ts" text-anchor="middle">METROID</text>
-    <text x="60" y="266" class="rowlbl" text-anchor="middle">metroid.gb</text>
+    <rect class="tz" x="124" y="160" width="108" height="104" rx="4"/>
+    <rect fill="#fef3c7" x="128" y="164" width="100" height="68" rx="3"/>
+    <use href="#ico-cart" x="160" y="180" width="36" height="28"/>
+    <text x="178" y="252" class="lbl" text-anchor="middle">mario.gb</text>
 
-    <!-- row2 col1 -->
-    <rect class="ctrl" x="123" y="200" width="113" height="74"/>
-    <rect class="cover" x="125" y="202" width="109" height="52" fill="#fce7f3"/>
-    <text x="181" y="232" class="ts" text-anchor="middle">KIRBY</text>
-    <text x="181" y="266" class="rowlbl" text-anchor="middle">kirby.gb</text>
-
-    <rect class="ctrl" x="0" y="278" width="240" height="42"/>
-    <rect class="touch" x="0" y="278" width="120" height="42"/>
-    <rect class="touch" x="120" y="278" width="120" height="42"/>
-    <text x="60" y="303" class="ts" text-anchor="middle">&lt; Prev</text>
-    <text x="120" y="303" class="rowlbl" text-anchor="middle">1/2</text>
-    <text x="180" y="303" class="ts" text-anchor="middle">Next &gt;</text>
+    <rect fill="#f8fafc" x="0" y="272" width="240" height="48"/>
+    <line x1="0" y1="272" x2="240" y2="272" stroke="#e2e8f0"/>
+    <rect class="tz-hi" x="0" y="272" width="120" height="48"/>
+    <rect class="tz" x="120" y="272" width="120" height="48"/>
+    <line x1="120" y1="272" x2="120" y2="320" stroke="#e2e8f0"/>
+    <use href="#ico-chev-l" x="36" y="284" width="24" height="24"/>
+    <text x="120" y="296" class="lbl" text-anchor="middle">1/3</text>
+    <use href="#ico-chev-r" x="168" y="284" width="24" height="24"/>
   </g>
-  <text x="70" y="372" class="cap">Launcher grid</text>
+  <text x="84" y="472" class="cap">5 Launcher</text>
 
-  <!-- 6 In-game hw_config.h display.cpp -->
-  <g transform="translate(150,200) scale(0.5)">
-    <rect class="frame" width="240" height="320"/>
-    <rect class="ctrl" x="0" y="0" width="240" height="24"/>
-    <circle cx="10" cy="12" r="3" fill="#94a3b8"/>
-    <text x="20" y="12" class="ts">title</text>
-    <text x="160" y="12" class="ts" text-anchor="middle">42 fps</text>
-    <rect class="ctrl" x="204" y="0" width="36" height="24"/>
-    <rect x="216" y="6" width="3" height="12" fill="#64748b"/>
-    <rect x="225" y="6" width="3" height="12" fill="#64748b"/>
-    <rect class="game" x="0" y="25" width="240" height="216" fill="none" stroke="#cbd5e1" stroke-width="0.5"/>
-    <rect class="game" x="1" y="26" width="238" height="214"/>
-    <rect class="ctrl" x="0" y="242" width="240" height="78"/>
-    <circle class="ctrl" cx="52" cy="281" r="34"/>
-    <circle fill="#94a3b8" cx="52" cy="281" r="10"/>
-    <circle class="ctrl" cx="120" cy="267" r="12"/>
-    <rect x="112" y="264" width="16" height="2" fill="#64748b"/>
-    <rect x="112" y="268" width="16" height="2" fill="#64748b"/>
-    <circle class="ctrl" cx="120" cy="295" r="12"/>
-    <polygon points="114,288 114,302 128,295" fill="#64748b"/>
-    <rect class="ctrl" x="155" y="242" width="40" height="78"/>
-    <text x="175" y="281" class="t" text-anchor="middle">B</text>
-    <rect class="ctrl" x="197" y="242" width="43" height="78"/>
-    <text x="218" y="281" class="t" text-anchor="middle">A</text>
+  <!-- 6 In-game -->
+  <g transform="translate(164,296) scale(0.5)">
+    <rect class="phone" width="240" height="320" rx="2"/>
+    <rect fill="#f8fafc" x="0" y="0" width="240" height="24"/>
+    <use href="#ico-cart" x="4" y="2" width="20" height="20"/>
+    <text x="26" y="12" class="lbl">title</text>
+    <text x="155" y="12" class="lbl">42 fps</text>
+    <rect class="tz-hi" x="188" y="0" width="52" height="24"/>
+    <use href="#ico-pause" x="202" y="2" width="20" height="20"/>
+    <rect class="game" x="0" y="25" width="240" height="214"/>
+    <rect fill="#f8fafc" x="0" y="239" width="240" height="81"/>
+    <rect class="tz-hi" x="4" y="243" width="88" height="73" rx="4"/>
+    <circle fill="#e2e8f0" cx="48" cy="279" r="30" stroke="#cbd5e1"/>
+    <use href="#ico-dpad" x="36" y="267" width="24" height="24"/>
+    <rect class="tz" x="96" y="243" width="48" height="32" rx="4"/>
+    <circle fill="#e2e8f0" cx="120" cy="259" r="12" stroke="#cbd5e1"/>
+    <use href="#ico-dot" x="114" y="253" width="12" height="12"/>
+    <rect class="tz" x="96" y="279" width="48" height="37" rx="4"/>
+    <circle fill="#e2e8f0" cx="120" cy="297" r="12" stroke="#cbd5e1"/>
+    <use href="#ico-play" x="114" y="291" width="12" height="12"/>
+    <rect class="tz" x="148" y="239" width="44" height="81" rx="2"/>
+    <text x="170" y="279" class="t hi" text-anchor="middle">B</text>
+    <rect class="tz-hi" x="194" y="239" width="46" height="81" rx="2"/>
+    <text x="217" y="279" class="t hi" text-anchor="middle">A</text>
   </g>
-  <text x="210" y="372" class="cap">In-game</text>
+  <text x="224" y="472" class="cap">6 In-game</text>
 
-  <!-- 7 Pause full bleed rows 48px -->
-  <g transform="translate(290,200) scale(0.5)">
-    <rect class="frame" width="240" height="320"/>
-    <rect class="ctrl" x="0" y="0" width="240" height="32"/>
-    <line x1="0" y1="31" x2="240" y2="31" stroke="#64748b"/>
-    <text x="120" y="16" class="t" text-anchor="middle">Paused</text>
-    <rect class="ctrl" x="0" y="32" width="240" height="48"/>
-    <text x="120" y="58" class="ts" text-anchor="middle">Resume</text>
-    <rect class="ctrl" x="0" y="80" width="240" height="48"/>
-    <text x="120" y="106" class="ts" text-anchor="middle">Save</text>
-    <rect class="ctrl" x="0" y="128" width="240" height="48"/>
-    <text x="120" y="154" class="ts" text-anchor="middle">Load</text>
-    <rect class="ctrl" x="0" y="176" width="240" height="48"/>
-    <text x="120" y="202" class="ts" text-anchor="middle">Settings</text>
-    <rect class="ctrl" x="0" y="224" width="240" height="48"/>
-    <text x="120" y="250" class="ts" text-anchor="middle">Calibrate</text>
-    <rect class="ctrl" x="0" y="272" width="240" height="48"/>
-    <text x="120" y="298" class="ts" text-anchor="middle">Quit</text>
+  <!-- 7 Pause -->
+  <g transform="translate(304,296) scale(0.5)">
+    <rect class="phone" width="240" height="320" rx="2"/>
+    <rect fill="#f8fafc" x="0" y="0" width="240" height="32"/>
+    <use href="#ico-pause" x="98" y="4" width="24" height="24"/>
+    <text x="130" y="16" class="t hi">Paused</text>
+    <rect class="tz-hi" x="0" y="32" width="240" height="48"/>
+    <use href="#ico-play" x="20" y="44" width="24" height="24"/>
+    <text x="130" y="56" class="ts hi">Resume</text>
+    <rect class="tz" x="0" y="80" width="240" height="48"/>
+    <use href="#ico-save" x="20" y="92" width="24" height="24"/>
+    <text x="130" y="104" class="ts hi">Save</text>
+    <rect class="tz" x="0" y="128" width="240" height="48"/>
+    <use href="#ico-load" x="20" y="140" width="24" height="24"/>
+    <text x="130" y="152" class="ts hi">Load</text>
+    <rect class="tz" x="0" y="176" width="240" height="48"/>
+    <use href="#ico-sliders" x="20" y="188" width="24" height="24"/>
+    <text x="130" y="200" class="ts hi">Settings</text>
+    <rect class="tz" x="0" y="224" width="240" height="48"/>
+    <use href="#ico-target" x="20" y="236" width="24" height="24"/>
+    <text x="130" y="248" class="ts hi">Calibrate</text>
+    <rect class="tz-bad" x="0" y="272" width="240" height="48"/>
+    <use href="#ico-exit" x="20" y="284" width="24" height="24"/>
+    <text x="130" y="296" class="ts danger">Quit</text>
   </g>
-  <text x="350" y="372" class="cap">Pause</text>
+  <text x="364" y="472" class="cap">7 Pause</text>
 
-  <!-- 8 Settings touch 2.8in - theme rows full bleed min 48px tap -->
-  <g transform="translate(430,200) scale(0.5)">
-    <rect class="frame" width="240" height="320"/>
-    <!-- HDR 32 -->
-    <rect class="ctrl" x="0" y="0" width="240" height="32"/>
-    <line x1="0" y1="31" x2="240" y2="31" stroke="#64748b"/>
-    <text x="120" y="16" class="t" text-anchor="middle">Settings</text>
-
-    <!-- row0 palette y=32 h=58 | tap L/R 72px -->
-    <rect class="ctrl" x="0" y="32" width="240" height="58"/>
-    <rect class="touch" x="0" y="32" width="72" height="58"/>
-    <rect class="touch" x="168" y="32" width="72" height="58"/>
-    <text x="36" y="58" class="t" text-anchor="middle">&lt;</text>
-    <text x="204" y="58" class="t" text-anchor="middle">&gt;</text>
-    <text x="12" y="44" class="rowlbl">Palette</text>
-    <text x="120" y="56" class="ts" text-anchor="middle">#1 Classic Green</text>
-    <rect fill="#9bbc0f" x="44" y="72" width="32" height="6" rx="1"/>
-    <rect fill="#306230" x="82" y="72" width="32" height="6" rx="1"/>
-    <rect fill="#0f380f" x="120" y="72" width="32" height="6" rx="1"/>
-    <rect fill="#051405" x="158" y="72" width="32" height="6" rx="1"/>
-
-    <!-- row1 frame skip y=90 h=48 -->
-    <rect class="ctrl" x="0" y="90" width="240" height="48"/>
-    <rect class="touch" x="0" y="90" width="72" height="48"/>
-    <rect class="touch" x="168" y="90" width="72" height="48"/>
-    <text x="36" y="116" class="t" text-anchor="middle">&lt;</text>
-    <text x="204" y="116" class="t" text-anchor="middle">&gt;</text>
-    <text x="12" y="104" class="rowlbl">Frame skip</text>
-    <text x="120" y="118" class="ts" text-anchor="middle">0 (~60fps)</text>
-
-    <!-- row2 brightness y=138 h=48 -->
-    <rect class="ctrl" x="0" y="138" width="240" height="48"/>
-    <rect class="touch" x="0" y="138" width="72" height="48"/>
-    <rect class="touch" x="168" y="138" width="72" height="48"/>
-    <text x="36" y="164" class="t" text-anchor="middle">&lt;</text>
-    <text x="204" y="164" class="t" text-anchor="middle">&gt;</text>
-    <text x="12" y="152" class="rowlbl">Brightness</text>
-    <text x="120" y="166" class="ts" text-anchor="middle">100%</text>
-
-    <!-- row3 language y=186 h=48 -->
-    <rect class="ctrl" x="0" y="186" width="240" height="48"/>
-    <rect class="touch" x="0" y="186" width="72" height="48"/>
-    <rect class="touch" x="168" y="186" width="72" height="48"/>
-    <text x="36" y="212" class="t" text-anchor="middle">&lt;</text>
-    <text x="204" y="212" class="t" text-anchor="middle">&gt;</text>
-    <text x="12" y="200" class="rowlbl">Language</text>
-    <text x="120" y="214" class="ts" text-anchor="middle">English</text>
-
-    <!-- save y=270 h=50 full bleed -->
-    <rect class="ctrl" x="0" y="270" width="240" height="50"/>
-    <text x="120" y="297" class="t" text-anchor="middle">Save and back</text>
+  <!-- 8 Settings -->
+  <g transform="translate(444,296) scale(0.5)">
+    <rect class="phone" width="240" height="320" rx="2"/>
+    <rect fill="#f8fafc" x="0" y="0" width="240" height="32"/>
+    <use href="#ico-gear" x="98" y="4" width="24" height="24"/>
+    <text x="130" y="16" class="t hi">Settings</text>
+    <rect class="tz" x="0" y="32" width="240" height="60"/>
+    <rect class="tz-hi" x="0" y="32" width="72" height="60"/>
+    <rect class="tz-hi" x="168" y="32" width="72" height="60"/>
+    <use href="#ico-palette" x="8" y="40" width="20" height="20"/>
+    <text x="32" y="44" class="lbl">Palette</text>
+    <text x="120" y="58" class="ts hi" text-anchor="middle">Classic Green</text>
+    <use href="#ico-chev-l" x="24" y="60" width="24" height="24"/>
+    <use href="#ico-chev-r" x="192" y="60" width="24" height="24"/>
+    <rect fill="#9bbc0f" x="48" y="76" width="28" height="6" rx="1"/>
+    <rect fill="#306230" x="84" y="76" width="28" height="6" rx="1"/>
+    <rect fill="#0f380f" x="120" y="76" width="28" height="6" rx="1"/>
+    <rect fill="#051405" x="156" y="76" width="28" height="6" rx="1"/>
+    <rect class="tz" x="0" y="92" width="240" height="52"/>
+    <rect class="tz-hi" x="0" y="92" width="72" height="52"/>
+    <rect class="tz-hi" x="168" y="92" width="72" height="52"/>
+    <use href="#ico-speed" x="8" y="100" width="20" height="20"/>
+    <text x="32" y="108" class="lbl">Frame skip</text>
+    <text x="120" y="122" class="ts hi" text-anchor="middle">0</text>
+    <rect class="tz" x="0" y="144" width="240" height="52"/>
+    <use href="#ico-sun" x="8" y="152" width="20" height="20"/>
+    <text x="32" y="160" class="lbl">Brightness</text>
+    <text x="120" y="174" class="ts hi" text-anchor="middle">100%</text>
+    <rect class="tz" x="0" y="196" width="240" height="52"/>
+    <use href="#ico-globe" x="8" y="204" width="20" height="20"/>
+    <text x="32" y="212" class="lbl">Language</text>
+    <text x="120" y="226" class="ts hi" text-anchor="middle">English</text>
+    <rect class="tz-hi" x="0" y="248" width="240" height="72"/>
+    <rect class="pri" x="0" y="248" width="240" height="72" fill="#475569"/>
+    <use href="#ico-check" x="52" y="272" width="20" height="20"/>
+    <text x="130" y="284" class="t" fill="#fff">Save and back</text>
   </g>
-  <text x="490" y="372" class="cap">Settings</text>
+  <text x="504" y="472" class="cap">8 Settings</text>
 
-  <!-- 9 Calibration touch 2.8in targets + progress -->
-  <g transform="translate(10,384) scale(0.5)">
-    <rect class="frame" width="240" height="320"/>
-    <!-- header -->
-    <rect class="ctrl" x="0" y="0" width="240" height="32"/>
-    <line x1="0" y1="31" x2="240" y2="31" stroke="#64748b"/>
-    <text x="120" y="16" class="t" text-anchor="middle">Calibration</text>
+  <!-- ===== ROW 3 ===== -->
+  <text x="24" y="508" class="sec">CALIBRACAO &amp; FEEDBACK</text>
 
-    <!-- step progress 1..5 -->
-    <circle cx="36" cy="48" r="6" fill="#64748b"/>
-    <circle cx="72" cy="48" r="6" fill="#64748b"/>
-    <circle cx="108" cy="48" r="8" fill="none" stroke="#64748b" stroke-width="2"/>
-    <circle cx="144" cy="48" r="6" fill="none" stroke="#cbd5e1"/>
-    <circle cx="180" cy="48" r="6" fill="none" stroke="#cbd5e1"/>
-    <line x1="42" y1="48" x2="66" y2="48" stroke="#64748b"/>
-    <line x1="78" y1="48" x2="100" y2="48" stroke="#64748b"/>
-    <line x1="116" y1="48" x2="138" y2="48" stroke="#cbd5e1"/>
-    <line x1="150" y1="48" x2="174" y2="48" stroke="#cbd5e1"/>
-
-    <!-- instruction band -->
-    <rect class="ctrl" x="0" y="64" width="240" height="32"/>
-    <text x="120" y="76" class="rowlbl" text-anchor="middle">Step 3 of 5</text>
-    <text x="120" y="90" class="ts" text-anchor="middle">Touch Bottom-Left +</text>
-
-    <!-- TL done (22,50) -->
-    <circle class="touch" cx="22" cy="50" r="28"/>
-    <circle cx="22" cy="50" r="12" fill="#15803d"/>
-    <line x1="8" y1="50" x2="36" y2="50" stroke="#15803d"/>
-    <line x1="22" y1="36" x2="22" y2="64" stroke="#15803d"/>
-
-    <!-- TR done (218,50) -->
-    <circle class="touch" cx="218" cy="50" r="28"/>
-    <circle cx="218" cy="50" r="12" fill="#15803d"/>
-    <line x1="204" y1="50" x2="232" y2="50" stroke="#15803d"/>
-    <line x1="218" y1="36" x2="218" y2="64" stroke="#15803d"/>
-
-    <!-- BL active (22,270) -->
-    <circle class="touch" cx="22" cy="270" r="28"/>
-    <circle cx="22" cy="270" r="14" fill="none" stroke="#64748b" stroke-width="2"/>
-    <line x1="4" y1="270" x2="40" y2="270" stroke="#64748b" stroke-width="2"/>
-    <line x1="22" y1="252" x2="22" y2="288" stroke="#64748b" stroke-width="2"/>
-    <circle cx="22" cy="270" r="4" fill="#64748b"/>
-
-    <!-- BR pending (218,270) -->
-    <circle class="touch" cx="218" cy="270" r="28"/>
-    <circle cx="218" cy="270" r="12" fill="none" stroke="#cbd5e1"/>
-    <line x1="204" y1="270" x2="232" y2="270" stroke="#cbd5e1"/>
-    <line x1="218" y1="256" x2="218" y2="284" stroke="#cbd5e1"/>
-
-    <!-- center pending (120,160) -->
-    <circle class="touch" cx="120" cy="160" r="28"/>
-    <circle cx="120" cy="160" r="12" fill="none" stroke="#cbd5e1"/>
-    <line x1="106" y1="160" x2="134" y2="160" stroke="#cbd5e1"/>
-    <line x1="120" y1="146" x2="120" y2="174" stroke="#cbd5e1"/>
-
-    <!-- footer hint -->
-    <text x="120" y="312" class="rowlbl" text-anchor="middle">hold 3s between points</text>
+  <!-- 9 Calibration -->
+  <g transform="translate(24,516) scale(0.5)">
+    <rect class="phone" width="240" height="320" rx="2"/>
+    <rect fill="#f8fafc" x="0" y="0" width="240" height="32"/>
+    <use href="#ico-target" x="98" y="4" width="24" height="24"/>
+    <text x="130" y="16" class="t hi">Calibration</text>
+    <circle cx="48" cy="52" r="5" fill="#64748b"/>
+    <circle cx="88" cy="52" r="5" fill="#64748b"/>
+    <circle cx="128" cy="52" r="7" fill="none" stroke="#64748b" stroke-width="1.5"/>
+    <circle cx="168" cy="52" r="5" fill="none" stroke="#cbd5e1"/>
+    <circle cx="208" cy="52" r="5" fill="none" stroke="#cbd5e1"/>
+    <rect fill="#f8fafc" x="0" y="64" width="240" height="44"/>
+    <text x="120" y="80" class="lbl" text-anchor="middle">Step 3 of 5</text>
+    <text x="120" y="96" class="ts hi" text-anchor="middle">Touch bottom-left</text>
+    <rect class="tz-hi" x="8" y="120" width="56" height="56" rx="4"/>
+    <use href="#ico-check" x="20" y="132" width="32" height="32"/>
+    <rect class="tz" x="176" y="120" width="56" height="56" rx="4"/>
+    <use href="#ico-check" x="188" y="132" width="32" height="32"/>
+    <rect class="tz-hi" x="8" y="252" width="56" height="56" rx="4"/>
+    <use href="#ico-cross" x="20" y="264" width="32" height="32"/>
+    <rect class="tz" x="176" y="252" width="56" height="56" rx="4"/>
+    <use href="#ico-cross" x="188" y="264" width="32" height="32" opacity="0.35"/>
+    <rect class="tz" x="92" y="186" width="56" height="56" rx="4"/>
+    <use href="#ico-cross" x="104" y="198" width="32" height="32" opacity="0.35"/>
+    <text x="120" y="308" class="lbl" text-anchor="middle">hold 3s between points</text>
   </g>
-  <text x="70" y="556" class="cap">Calibration</text>
+  <text x="84" y="692" class="cap">9 Calibration</text>
 
-  <!-- 10 Cal OK success card -->
-  <g transform="translate(150,384) scale(0.5)">
-    <rect class="frame" width="240" height="320"/>
-    <rect class="ctrl" x="30" y="110" width="180" height="100"/>
-    <circle cx="120" cy="145" r="18" fill="none" stroke="#15803d" stroke-width="2"/>
-    <polyline points="110,145 118,153 132,137" fill="none" stroke="#15803d" stroke-width="2"/>
-    <text x="120" y="182" class="ts" text-anchor="middle">Calibration saved!</text>
-    <text x="120" y="230" class="rowlbl" text-anchor="middle">auto close 1.2s</text>
+  <!-- 10 Cal OK -->
+  <g transform="translate(164,516) scale(0.5)">
+    <rect class="phone" width="240" height="320" rx="2"/>
+    <use href="#ico-check" x="96" y="92" width="48" height="48"/>
+    <text x="120" y="172" class="t ok" text-anchor="middle">Calibration saved!</text>
+    <text x="120" y="212" class="lbl" text-anchor="middle">auto close 1.2s</text>
   </g>
-  <text x="210" y="556" class="cap">Cal OK</text>
+  <text x="224" y="692" class="cap">10 Cal OK</text>
 
-  <!-- 11 Cal fail error card -->
-  <g transform="translate(290,384) scale(0.5)">
-    <rect class="frame" width="240" height="320"/>
-    <rect class="ctrl" x="30" y="100" width="180" height="110"/>
-    <circle cx="120" cy="132" r="18" fill="none" stroke="#b91c1c" stroke-width="2"/>
-    <line x1="110" y1="122" x2="130" y2="142" stroke="#b91c1c" stroke-width="2"/>
-    <line x1="130" y1="122" x2="110" y2="142" stroke="#b91c1c" stroke-width="2"/>
-    <text x="120" y="168" class="ts" text-anchor="middle">Calibration failed!</text>
-    <text x="120" y="188" class="rowlbl" text-anchor="middle">Using factory map</text>
-    <text x="120" y="230" class="rowlbl" text-anchor="middle">auto close 2s</text>
+  <!-- 11 Cal fail -->
+  <g transform="translate(304,516) scale(0.5)">
+    <rect class="phone" width="240" height="320" rx="2"/>
+    <use href="#ico-x" x="96" y="92" width="48" height="48"/>
+    <text x="120" y="172" class="t danger" text-anchor="middle">Calibration failed!</text>
+    <text x="120" y="192" class="ts mute" text-anchor="middle">Using factory map</text>
+    <text x="120" y="212" class="lbl" text-anchor="middle">auto close 2s</text>
   </g>
-  <text x="350" y="556" class="cap">Cal fail</text>
+  <text x="364" y="692" class="cap">11 Cal fail</text>
 
-  <!-- 12 Toast banner over game -->
-  <g transform="translate(430,384) scale(0.5)">
-    <rect class="frame" width="240" height="320"/>
-    <rect class="game" x="1" y="26" width="238" height="214" opacity="0.5"/>
-    <rect class="ctrl" x="20" y="118" width="200" height="44"/>
-    <text x="120" y="142" class="t" text-anchor="middle">SAVED!</text>
-    <text x="120" y="156" class="rowlbl" text-anchor="middle">700ms</text>
+  <!-- 12 Toast -->
+  <g transform="translate(444,516) scale(0.5)">
+    <rect class="phone" width="240" height="320" rx="2"/>
+    <rect fill="#f8fafc" x="0" y="0" width="240" height="24"/>
+    <rect class="game" x="0" y="25" width="240" height="214"/>
+    <rect fill="#f8fafc" x="0" y="239" width="240" height="81"/>
+    <rect fill="#0f172a" opacity="0.04" x="0" y="25" width="240" height="214"/>
+    <rect fill="#ffffff" x="20" y="118" width="200" height="44" rx="6" stroke="#e2e8f0"/>
+    <use href="#ico-check" x="28" y="128" width="24" height="24"/>
+    <text x="118" y="136" class="t ok" font-weight="600">SAVED!</text>
+    <text x="118" y="152" class="lbl">700ms</text>
   </g>
-  <text x="490" y="556" class="cap">Toast</text>
+  <text x="504" y="692" class="cap">12 Toast</text>
 </svg>

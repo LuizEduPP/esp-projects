@@ -1,6 +1,7 @@
 #include "sd_manager.h"
 #include "hw_config.h"
 #include "emulator_bridge.h"
+#include "display.h"
 #include "i18n.h"
 #include <SD.h>
 #include <SPI.h>
@@ -17,6 +18,8 @@ bool sd_init() {
     Serial.printf("[SD] Type:%d Size:%lluMB\n",SD.cardType(),SD.cardSize()/(1024*1024));
     if(!SD.exists(ROM_PATH_GB)) SD.mkdir(ROM_PATH_GB);
     if(!SD.exists(ROM_PATH_GBC)) SD.mkdir(ROM_PATH_GBC);
+    if(!SD.exists(COVER_PATH_GB)) SD.mkdir(COVER_PATH_GB);
+    if(!SD.exists(COVER_PATH_GBC)) SD.mkdir(COVER_PATH_GBC);
     if(!SD.exists(SAVE_PATH)) SD.mkdir(SAVE_PATH);
     if(!SD.exists(CONFIG_PATH)) SD.mkdir(CONFIG_PATH);
     ready=true; return true;
@@ -79,6 +82,7 @@ bool sd_load_config(CydGbConfig* cfg) {
 bool sd_save_config(const CydGbConfig* cfg) {
     if (!ready || !cfg) return false;
     if (!SD.exists(CONFIG_PATH)) SD.mkdir(CONFIG_PATH);
+    if (SD.exists(CONFIG_FILE)) SD.remove(CONFIG_FILE);
     File f = SD.open(CONFIG_FILE, FILE_WRITE);
     if (!f) {
         Serial.println("[SD] Config write fail");
@@ -94,8 +98,10 @@ bool sd_save_config(const CydGbConfig* cfg) {
     f.printf("xmax=%d\n", cfg->cal_xmax);
     f.printf("ymin=%d\n", cfg->cal_ymin);
     f.printf("ymax=%d\n", cfg->cal_ymax);
+    f.flush();
     f.close();
-    Serial.printf("[SD] Config saved -> %s\n", CONFIG_FILE);
+    Serial.printf("[SD] Config saved -> %s (pal=%u fskip=%u bright=%u lang=%u)\n",
+                  CONFIG_FILE, cfg->palette, cfg->frame_skip, cfg->brightness, cfg->language);
     return true;
 }
 
@@ -128,6 +134,80 @@ int sd_scan_roms(RomEntry* l, int mx) {
 
 bool sd_load_rom(const char* p, uint8_t** buf, uint32_t* sz) { return false;  }
 void sd_free_rom(uint8_t* b) { if(b) free(b); }
+
+static void cover_basename(const char* filename, char* out, size_t n) {
+    strncpy(out, filename, n - 1);
+    out[n - 1] = 0;
+    char* dot = strrchr(out, '.');
+    if (dot) *dot = 0;
+}
+
+bool sd_draw_rom_cover(const RomEntry* entry, int x, int y, int w, int h) {
+    if (!ready || !entry || w <= 0 || h <= 0) return false;
+    char base[MAX_FILENAME];
+    cover_basename(entry->filename, base, sizeof(base));
+    const char* dir = entry->is_gbc ? COVER_PATH_GBC : COVER_PATH_GB;
+    char path[96];
+    snprintf(path, sizeof(path), "%s/%s.bmp", dir, base);
+    if (!SD.exists(path)) {
+        for (char* p = base; *p; p++)
+            if (*p >= 'A' && *p <= 'Z') *p = (char)(*p - 'A' + 'a');
+        snprintf(path, sizeof(path), "%s/%s.bmp", dir, base);
+        if (!SD.exists(path)) return false;
+    }
+
+    File f = SD.open(path, FILE_READ);
+    if (!f) return false;
+
+    uint8_t hdr[54];
+    if (f.read(hdr, 54) != 54 || hdr[0] != 'B' || hdr[1] != 'M') {
+        f.close();
+        return false;
+    }
+
+    uint32_t offset = (uint32_t)hdr[10] | ((uint32_t)hdr[11] << 8) |
+                      ((uint32_t)hdr[12] << 16) | ((uint32_t)hdr[13] << 24);
+    int32_t bw = (int32_t)((uint32_t)hdr[18] | ((uint32_t)hdr[19] << 8) |
+                           ((uint32_t)hdr[20] << 16) | ((uint32_t)hdr[21] << 24));
+    int32_t bh = (int32_t)((uint32_t)hdr[22] | ((uint32_t)hdr[23] << 8) |
+                           ((uint32_t)hdr[24] << 16) | ((uint32_t)hdr[25] << 24));
+    uint16_t bpp = (uint16_t)hdr[28] | ((uint16_t)hdr[29] << 8);
+    if (bpp != 24 || bw <= 0 || bh <= 0 || bw > 512 || bh > 512) {
+        f.close();
+        return false;
+    }
+
+    int row_bytes = ((bw * 3 + 3) / 4) * 4;
+    uint8_t* row = (uint8_t*)malloc((size_t)row_bytes);
+    if (!row) {
+        f.close();
+        return false;
+    }
+
+    uint16_t* line = (uint16_t*)malloc((size_t)w * sizeof(uint16_t));
+    if (!line) {
+        free(row);
+        f.close();
+        return false;
+    }
+
+    for (int dy = 0; dy < h; dy++) {
+        int sy = (int)((int64_t)(bh - 1) * dy / h);
+        f.seek(offset + (uint32_t)sy * (uint32_t)row_bytes);
+        if (f.read(row, (size_t)row_bytes) != (size_t)row_bytes) break;
+        for (int dx = 0; dx < w; dx++) {
+            int sx = (int)((int64_t)(bw - 1) * dx / (w > 1 ? w - 1 : 1));
+            int idx = sx * 3;
+            line[dx] = tft.color565(row[idx + 2], row[idx + 1], row[idx]);
+        }
+        tft.pushImage(x, y + dy, w, 1, line);
+    }
+
+    free(line);
+    free(row);
+    f.close();
+    return true;
+}
 
 void sd_get_save_path(const char* rp, char* sp, int mx) {
     const char* fn=strrchr(rp,'/'); if(!fn)fn=rp; else fn++;

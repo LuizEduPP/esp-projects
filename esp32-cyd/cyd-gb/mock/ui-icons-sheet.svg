@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- CYD-GB icon sheet - edite os <symbol> aqui, valide visualmente, depois: yarn cyd-gb:icons -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 520" font-family="system-ui, sans-serif">
+  <defs>
+    <symbol id="ico-gb" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="4" width="14" height="16" rx="2"/>
+      <rect x="7" y="6" width="10" height="7" rx="1" fill="#cbd5e1" stroke="none"/>
+      <circle cx="9" cy="16" r="1" fill="#64748b" stroke="none"/>
+      <rect x="11.5" y="15" width="5" height="2" rx="0.5" fill="#64748b" stroke="none"/>
+    </symbol>
+    <symbol id="ico-sd" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 4h7l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/>
+      <line x1="8" y1="10" x2="16" y2="18" stroke="#dc2626" stroke-width="1.1"/>
+      <line x1="16" y1="10" x2="8" y2="18" stroke="#dc2626" stroke-width="1.1"/>
+    </symbol>
+    <symbol id="ico-cart" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 8h12v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8z"/>
+      <path d="M9 8V6a3 3 0 0 1 6 0v2"/>
+      <rect x="10" y="11" width="4" height="5" rx="0.5" fill="#94a3b8" stroke="none"/>
+    </symbol>
+    <symbol id="ico-folder" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 8h6l2 2h8v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z"/>
+      <line x1="8" y1="13" x2="16" y2="13"/>
+      <line x1="8" y1="16" x2="13" y2="16"/>
+    </symbol>
+    <symbol id="ico-gear" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1" stroke-linecap="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4l1.4-1.4M17 7l1.4-1.4"/>
+    </symbol>
+    <symbol id="ico-grid" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1">
+      <rect x="4" y="4" width="7" height="7" rx="1"/>
+      <rect x="13" y="4" width="7" height="7" rx="1"/>
+      <rect x="4" y="13" width="7" height="7" rx="1"/>
+      <rect x="13" y="13" width="7" height="7" rx="1"/>
+    </symbol>
+    <symbol id="ico-chev-l" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 6l-6 6 6 6"/>
+    </symbol>
+    <symbol id="ico-chev-r" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 6l6 6-6 6"/>
+    </symbol>
+    <symbol id="ico-pause" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.2" stroke-linecap="round">
+      <line x1="8" y1="5" x2="8" y2="19"/>
+      <line x1="16" y1="5" x2="16" y2="19"/>
+    </symbol>
+    <symbol id="ico-play" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1" stroke-linejoin="round">
+      <path d="M9 7l9 5-9 5V7z"/>
+    </symbol>
+    <symbol id="ico-save" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1" stroke-linejoin="round">
+      <path d="M5 4h11l3 3v13H5V4z"/>
+      <rect x="8" y="4" width="8" height="5"/>
+      <rect x="8" y="14" width="8" height="6" rx="1"/>
+    </symbol>
+    <symbol id="ico-load" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 4v10"/>
+      <path d="M8 10l4 4 4-4"/>
+      <path d="M5 18h14"/>
+    </symbol>
+    <symbol id="ico-sliders" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1" stroke-linecap="round">
+      <line x1="4" y1="6" x2="20" y2="6"/>
+      <line x1="4" y1="12" x2="20" y2="12"/>
+      <line x1="4" y1="18" x2="20" y2="18"/>
+      <circle cx="9" cy="6" r="1.5"/>
+      <circle cx="15" cy="12" r="1.5"/>
+      <circle cx="11" cy="18" r="1.5"/>
+    </symbol>
+    <symbol id="ico-target" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1">
+      <circle cx="12" cy="12" r="8"/>
+      <circle cx="12" cy="12" r="3"/>
+      <line x1="12" y1="2" x2="12" y2="6"/>
+      <line x1="12" y1="18" x2="12" y2="22"/>
+      <line x1="2" y1="12" x2="6" y2="12"/>
+      <line x1="18" y1="12" x2="22" y2="12"/>
+    </symbol>
+    <symbol id="ico-exit" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 5H5v14h5"/>
+      <path d="M14 12H8"/>
+      <path d="M18 8l4 4-4 4"/>
+    </symbol>
+    <symbol id="ico-palette" viewBox="0 0 24 24" stroke="none">
+      <rect x="4" y="4" width="7" height="7" rx="1.5" fill="#475569"/>
+      <rect x="13" y="4" width="7" height="7" rx="1.5" fill="#475569"/>
+      <rect x="4" y="13" width="7" height="7" rx="1.5" fill="#475569"/>
+      <rect x="13" y="13" width="7" height="7" rx="1.5" fill="#475569"/>
+    </symbol>
+    <symbol id="ico-speed" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 17a7 7 0 0 1 14 0"/>
+      <line x1="12" y1="17" x2="12" y2="10"/>
+      <line x1="12" y1="17" x2="16" y2="13"/>
+      <circle cx="12" cy="17" r="1.5" fill="#64748b" stroke="none"/>
+    </symbol>
+    <symbol id="ico-sun" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1" stroke-linecap="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+    </symbol>
+    <symbol id="ico-globe" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.1">
+      <circle cx="12" cy="12" r="9"/>
+      <ellipse cx="12" cy="12" rx="4" ry="9"/>
+      <line x1="3" y1="12" x2="21" y2="12"/>
+    </symbol>
+    <symbol id="ico-check" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/>
+      <path d="M8 12l3 3 5-6"/>
+    </symbol>
+    <symbol id="ico-x" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="1.2" stroke-linecap="round">
+      <circle cx="12" cy="12" r="9"/>
+      <path d="M9 9l6 6M15 9l-6 6"/>
+    </symbol>
+    <symbol id="ico-select" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.2" stroke-linecap="round">
+      <line x1="5" y1="9" x2="19" y2="9"/>
+      <line x1="5" y1="13" x2="19" y2="13"/>
+    </symbol>
+    <symbol id="ico-cross" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.2" stroke-linecap="round">
+      <line x1="12" y1="6" x2="12" y2="18"/>
+      <line x1="6" y1="12" x2="18" y2="12"/>
+    </symbol>
+  </defs>
+
+  <style>
+    .bg { fill: #f1f5f9; }
+    .title { fill: #0f172a; font-size: 16px; font-weight: 700; }
+    .sub { fill: #64748b; font-size: 10px; }
+    .cell-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; }
+    .cell-surface { fill: #f8fafc; stroke: #e2e8f0; stroke-width: 1; }
+    .lbl { fill: #64748b; font-size: 9px; text-anchor: middle; }
+    .sec { fill: #0f172a; font-size: 11px; font-weight: 600; }
+    .hint { fill: #94a3b8; font-size: 8px; }
+  </style>
+
+  <rect width="720" height="520" class="bg"/>
+
+  <text x="24" y="32" class="title">CYD-GB - Icon Sheet</text>
+  <text x="24" y="50" class="sub">Edite os &lt;symbol id="ico-*"&gt; em &lt;defs&gt;. Valide aqui. Depois: yarn cyd-gb:icons</text>
+
+  <!-- grid 6 x 4 | cell 112 x 88 | icon 24px centered -->
+  <g id="icon-grid">
+    <g transform="translate(24,64)"><rect width="112" height="88" rx="6" class="cell-bg"/><use href="#ico-gb" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">gb</text></g>
+    <g transform="translate(136,64)"><rect width="112" height="88" rx="6" class="cell-surface"/><use href="#ico-sd" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">sd</text></g>
+    <g transform="translate(248,64)"><rect width="112" height="88" rx="6" class="cell-bg"/><use href="#ico-cart" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">cart</text></g>
+    <g transform="translate(360,64)"><rect width="112" height="88" rx="6" class="cell-surface"/><use href="#ico-folder" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">folder</text></g>
+    <g transform="translate(472,64)"><rect width="112" height="88" rx="6" class="cell-bg"/><use href="#ico-gear" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">gear</text></g>
+    <g transform="translate(584,64)"><rect width="112" height="88" rx="6" class="cell-surface"/><use href="#ico-grid" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">grid</text></g>
+
+    <g transform="translate(24,160)"><rect width="112" height="88" rx="6" class="cell-surface"/><use href="#ico-chev-l" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">chev-l</text></g>
+    <g transform="translate(136,160)"><rect width="112" height="88" rx="6" class="cell-bg"/><use href="#ico-chev-r" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">chev-r</text></g>
+    <g transform="translate(248,160)"><rect width="112" height="88" rx="6" class="cell-surface"/><use href="#ico-pause" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">pause</text></g>
+    <g transform="translate(360,160)"><rect width="112" height="88" rx="6" class="cell-bg"/><use href="#ico-play" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">play</text></g>
+    <g transform="translate(472,160)"><rect width="112" height="88" rx="6" class="cell-surface"/><use href="#ico-save" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">save</text></g>
+    <g transform="translate(584,160)"><rect width="112" height="88" rx="6" class="cell-bg"/><use href="#ico-load" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">load</text></g>
+
+    <g transform="translate(24,256)"><rect width="112" height="88" rx="6" class="cell-bg"/><use href="#ico-sliders" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">sliders</text></g>
+    <g transform="translate(136,256)"><rect width="112" height="88" rx="6" class="cell-surface"/><use href="#ico-target" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">target</text></g>
+    <g transform="translate(248,256)"><rect width="112" height="88" rx="6" class="cell-bg"/><use href="#ico-exit" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">exit</text></g>
+    <g transform="translate(360,256)"><rect width="112" height="88" rx="6" class="cell-surface"/><use href="#ico-palette" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">palette</text></g>
+    <g transform="translate(472,256)"><rect width="112" height="88" rx="6" class="cell-bg"/><use href="#ico-speed" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">speed</text></g>
+    <g transform="translate(584,256)"><rect width="112" height="88" rx="6" class="cell-surface"/><use href="#ico-sun" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">sun</text></g>
+
+    <g transform="translate(24,352)"><rect width="112" height="88" rx="6" class="cell-surface"/><use href="#ico-globe" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">globe</text></g>
+    <g transform="translate(136,352)"><rect width="112" height="88" rx="6" class="cell-bg"/><use href="#ico-check" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">check</text></g>
+    <g transform="translate(248,352)"><rect width="112" height="88" rx="6" class="cell-surface"/><use href="#ico-x" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">x</text></g>
+    <g transform="translate(360,352)"><rect width="112" height="88" rx="6" class="cell-bg"/><use href="#ico-select" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">select</text></g>
+    <g transform="translate(472,352)"><rect width="112" height="88" rx="6" class="cell-surface"/><use href="#ico-cross" x="44" y="20" width="24" height="24"/><text x="56" y="72" class="lbl">cross</text></g>
+  </g>
+
+  <!-- escala: gear em 12 / 16 / 20 / 24 px -->
+  <text x="24" y="468" class="sec">Escala (gear + pause)</text>
+  <text x="24" y="482" class="hint">como aparecem no header (20px) e bot-es (16px)</text>
+
+  <g transform="translate(24,492)">
+    <rect width="168" height="20" rx="4" fill="#ffffff" stroke="#e2e8f0"/>
+    <use href="#ico-gear" x="4" y="4" width="12" height="12"/>
+    <use href="#ico-gear" x="24" y="2" width="16" height="16"/>
+    <use href="#ico-gear" x="48" y="0" width="20" height="20"/>
+    <use href="#ico-gear" x="76" y="-2" width="24" height="24"/>
+    <text x="8" y="14" class="hint" transform="translate(0,-22)">12</text>
+    <text x="28" y="14" class="hint" transform="translate(0,-22)">16</text>
+    <text x="52" y="14" class="hint" transform="translate(0,-22)">20</text>
+    <text x="80" y="14" class="hint" transform="translate(0,-22)">24</text>
+  </g>
+
+  <g transform="translate(220,492)">
+    <rect width="168" height="20" rx="4" fill="#f8fafc" stroke="#e2e8f0"/>
+    <use href="#ico-pause" x="4" y="4" width="12" height="12"/>
+    <use href="#ico-pause" x="24" y="2" width="16" height="16"/>
+    <use href="#ico-pause" x="48" y="0" width="20" height="20"/>
+    <use href="#ico-pause" x="76" y="-2" width="24" height="24"/>
+  </g>
+
+  <!-- phone frame preview 240x320 @ 0.5 -->
+  <g transform="translate(520,448)">
+    <rect width="120" height="160" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <rect x="0" y="0" width="120" height="20" fill="#f8fafc"/>
+    <use href="#ico-gb" x="4" y="2" width="16" height="16"/>
+    <use href="#ico-gear" x="100" y="2" width="16" height="16"/>
+    <use href="#ico-pause" x="52" y="68" width="16" height="16"/>
+    <use href="#ico-chev-l" x="8" y="132" width="16" height="16"/>
+    <use href="#ico-chev-r" x="96" y="132" width="16" height="16"/>
+    <text x="60" y="156" class="hint" text-anchor="middle">mini UI</text>
+  </g>
+</svg>
