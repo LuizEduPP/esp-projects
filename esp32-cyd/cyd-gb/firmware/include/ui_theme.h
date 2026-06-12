@@ -20,6 +20,8 @@ typedef struct {
     uint16_t btn_b_bd;
     uint16_t pause;
     uint16_t pill;
+    uint16_t pill_icon;
+    uint16_t pill_bd;
     uint16_t stick_base;
     uint16_t stick_ring;
     uint16_t stick_knob;

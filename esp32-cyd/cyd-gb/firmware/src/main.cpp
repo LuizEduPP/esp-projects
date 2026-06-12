@@ -83,14 +83,14 @@ void run_emu() {
             uint8_t dpad = touch_get_dpad_visual();
             int16_t sdx = 0, sdy = 0;
             touch_get_dpad_stick(&sdx, &sdy);
-            if (dpad != last_dpad || abs(sdx - last_sdx) > 1 || abs(sdy - last_sdy) > 1) {
+            if (dpad != last_dpad || abs(sdx - last_sdx) > 2 || abs(sdy - last_sdy) > 2) {
                 display_update_dpad(dpad, sdx, sdy);
                 last_dpad = dpad;
                 last_sdx = sdx;
                 last_sdy = sdy;
             }
         } else if (last_dpad || last_sdx || last_sdy) {
-            display_update_dpad(0, 0, 0);
+            display_reset_dpad();
             last_dpad = 0;
             last_sdx = last_sdy = 0;
         }

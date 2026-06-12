@@ -26,7 +26,7 @@ void ui_wait_release(void) {
 void ui_bar_header(int h, UiIcon icon, const char* title, int title_x) {
     tft.fillRect(0, 0, SCREEN_W, h, TH->surface);
     tft.drawFastHLine(0, h - 1, SCREEN_W, TH->border);
-    tft.fillRect(0, h - 3, SCREEN_W, 2, TH->accent);
+    tft.fillRect(0, h - 4, SCREEN_W, 3, TH->accent);
     ui_icon_draw_t(98, 4, 24, icon);
     tft.setTextDatum(TL_DATUM);
     tft.setTextColor(TH->text_hi, TH->surface);
@@ -46,6 +46,10 @@ void ui_menu_row(int y, int h, UiIcon icon, const char* label, bool hl, bool dan
 }
 
 void ui_progress_bar(int x, int y, int w, int h, int pct) {
+    ui_progress_bar_update(x, y, w, h, pct);
+}
+
+void ui_progress_bar_update(int x, int y, int w, int h, int pct) {
     if (pct < 0) pct = 0;
     if (pct > 100) pct = 100;
     tft.fillRoundRect(x, y, w, h, h / 2, TH->pal[2]);

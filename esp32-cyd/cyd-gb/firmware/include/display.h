@@ -12,4 +12,5 @@ void display_draw_status_bar(const char* title, uint32_t fps);
 void display_update_status_fps(uint32_t fps);
 void display_draw_controls();
 void display_update_dpad(uint8_t dirs, int16_t stick_dx, int16_t stick_dy);
+void display_reset_dpad(void);
 void display_draw_pause_btn();

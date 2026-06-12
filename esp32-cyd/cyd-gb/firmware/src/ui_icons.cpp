@@ -77,8 +77,12 @@ static void blit_icon(int x, int y, int size, const uint8_t* alpha, uint16_t fg,
 }
 
 void ui_icon_draw(int x, int y, int size, UiIcon icon, uint16_t color) {
+    ui_icon_draw_on(x, y, size, icon, color, ui_theme_get()->surface);
+}
+
+void ui_icon_draw_on(int x, int y, int size, UiIcon icon, uint16_t color, uint16_t bg) {
     if (icon >= UI_ICON_COUNT || size < 8) return;
-    blit_icon(x, y, size, ICON_ALPHA[icon], color, ui_theme_get()->surface);
+    blit_icon(x, y, size, ICON_ALPHA[icon], color, bg);
 }
 
 void ui_icon_draw_t(int x, int y, int size, UiIcon icon) {

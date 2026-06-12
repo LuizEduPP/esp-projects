@@ -16,20 +16,20 @@ static char status_title[28] = "CYD-GB";
 
 static void draw_util_btn(int cx, int cy, uint16_t fill, bool is_start) {
     tft.fillCircle(cx, cy, BTN_UTIL_R, fill);
-    tft.drawCircle(cx, cy, BTN_UTIL_R, TH->border);
+    tft.drawCircle(cx, cy, BTN_UTIL_R, TH->pill_bd);
     int ix = cx - BTN_UTIL_R + 2;
     int iy = cy - BTN_UTIL_R + 2;
     int isz = BTN_UTIL_R * 2 - 4;
     if (is_start)
-        ui_icon_draw(ix, iy, isz, UI_ICON_PLAY, TH->icon);
+        ui_icon_draw_on(ix, iy, isz, UI_ICON_PLAY, TH->pill_icon, fill);
     else
-        ui_icon_draw(ix, iy, isz, UI_ICON_SELECT, TH->icon);
+        ui_icon_draw_on(ix, iy, isz, UI_ICON_SELECT, TH->pill_icon, fill);
 }
 
 static void draw_pause_btn() {
     tft.fillRect(BTN_PAUSE_L, BTN_PAUSE_T, BTN_PAUSE_W, BTN_PAUSE_H, TH->pause);
     tft.drawRect(BTN_PAUSE_L, BTN_PAUSE_T, BTN_PAUSE_W, BTN_PAUSE_H, TH->border);
-    ui_icon_draw(BTN_PAUSE_L + 14, BTN_PAUSE_T + 2, 20, UI_ICON_PAUSE, TH->icon);
+    ui_icon_draw_on(BTN_PAUSE_L + 14, BTN_PAUSE_T + 2, 20, UI_ICON_PAUSE, TH->pill_icon, TH->pause);
 }
 
 void display_draw_pause_btn() {
@@ -44,21 +44,37 @@ static void draw_action_btn(int x, int y, int w, int h, uint16_t fill, uint16_t 
     tft.drawString(label, x + w / 2, y + h / 2, 2);
 }
 
-static void draw_analog_stick(int cx, int cy, int16_t stick_dx, int16_t stick_dy, bool active) {
-    tft.fillCircle(cx, cy, STICK_BASE_R, TH->stick_base);
-    tft.drawCircle(cx, cy, STICK_BASE_R, TH->border);
+#define STICK_BOX_X  (STICK_CX - STICK_BASE_R - 2)
+#define STICK_BOX_Y  (STICK_CY - STICK_BASE_R - 2)
+#define STICK_BOX_W  (STICK_BASE_R * 2 + 4)
+#define STICK_BOX_H  (STICK_BASE_R * 2 + 4)
 
-    int kx = cx + (active ? stick_dx : 0);
-    int ky = cy + (active ? stick_dy : 0);
-    uint16_t knob = active ? TH->stick_act : TH->stick_knob;
-    tft.fillCircle(kx, ky, STICK_KNOB_R, knob);
+static int16_t stick_knob_x = STICK_CX;
+static int16_t stick_knob_y = STICK_CY;
+static bool stick_drag = false;
+
+static void draw_stick_knob(int kx, int ky, uint16_t fill) {
+    tft.fillCircle(kx, ky, STICK_KNOB_R, fill);
     tft.drawCircle(kx, ky, STICK_KNOB_R, TH->border);
 }
 
-#define STICK_BOX_X  (STICK_CX - STICK_BASE_R - 4)
-#define STICK_BOX_Y  (STICK_CY - STICK_BASE_R - 4)
-#define STICK_BOX_W  (STICK_BASE_R * 2 + 8)
-#define STICK_BOX_H  (STICK_BASE_R * 2 + 8)
+static void redraw_stick_zone(int16_t stick_dx, int16_t stick_dy, bool active) {
+    tft.fillRect(STICK_BOX_X, STICK_BOX_Y, STICK_BOX_W, STICK_BOX_H, TH->surface);
+    tft.fillCircle(STICK_CX, STICK_CY, STICK_BASE_R, TH->stick_base);
+    tft.drawCircle(STICK_CX, STICK_CY, STICK_BASE_R, TH->border);
+    int kx = STICK_CX + (active ? stick_dx : 0);
+    int ky = STICK_CY + (active ? stick_dy : 0);
+    draw_stick_knob(kx, ky, active ? TH->stick_act : TH->stick_knob);
+    stick_knob_x = kx;
+    stick_knob_y = ky;
+    stick_drag = active;
+}
+
+static void draw_analog_stick(int cx, int cy, int16_t stick_dx, int16_t stick_dy, bool active) {
+    (void)cx;
+    (void)cy;
+    redraw_stick_zone(stick_dx, stick_dy, active);
+}
 
 void display_init() {
     pinMode(TFT_PIN_BL, OUTPUT);
@@ -126,7 +142,6 @@ void display_update_status_fps(uint32_t fps) {
     tft.setTextDatum(ML_DATUM);
     tft.setTextColor(TH->text_mute, TH->surface);
     tft.drawString(fps_lbl, 155, STATUS_H / 2, 1);
-    display_draw_pause_btn();
 }
 
 void display_push_gb_line(uint8_t y, uint16_t* buf) {
@@ -158,6 +173,13 @@ void display_draw_controls() {
 
 void display_update_dpad(uint8_t dirs, int16_t stick_dx, int16_t stick_dy) {
     (void)dirs;
-    tft.fillRect(STICK_BOX_X, STICK_BOX_Y, STICK_BOX_W, STICK_BOX_H, TH->surface);
-    draw_analog_stick(STICK_CX, STICK_CY, stick_dx, stick_dy, true);
+    int kx = STICK_CX + stick_dx;
+    int ky = STICK_CY + stick_dy;
+    if (stick_drag && kx == stick_knob_x && ky == stick_knob_y) return;
+    redraw_stick_zone(stick_dx, stick_dy, true);
+}
+
+void display_reset_dpad(void) {
+    if (!stick_drag && stick_knob_x == STICK_CX && stick_knob_y == STICK_CY) return;
+    redraw_stick_zone(0, 0, false);
 }

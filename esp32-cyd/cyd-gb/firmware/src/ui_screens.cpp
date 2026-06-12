@@ -6,10 +6,11 @@
 #include "ui_icons.h"
 #include "ui_theme.h"
 #include <Arduino.h>
+#include <string.h>
 
 #define TH ui_theme_get()
 
-void ui_draw_splash(int progress_pct) {
+static void draw_splash_static(void) {
     ui_sync();
     tft.fillScreen(TH->bg);
     tft.fillRoundRect(UI_SPLASH_PANEL_X, UI_SPLASH_PANEL_Y,
@@ -22,20 +23,27 @@ void ui_draw_splash(int progress_pct) {
     tft.drawString("CYD-GB", SCREEN_CX, UI_STATUS_TITLE_Y, 2);
     tft.setTextColor(TH->text_mute, TH->bg);
     tft.drawString(tr(STR_SPLASH_SUB), SCREEN_CX, UI_STATUS_SUB_Y, 2);
-    ui_progress_bar(UI_STATUS_BAR_X, UI_STATUS_BAR_Y,
-                    UI_STATUS_BAR_W, UI_STATUS_BAR_H, progress_pct);
     tft.setTextColor(TH->text_mute, TH->bg);
     tft.drawString(tr(STR_BOOT), SCREEN_CX, UI_STATUS_BAR_HINT, 1);
 }
 
+void ui_draw_splash(int progress_pct) {
+    draw_splash_static();
+    ui_progress_bar(UI_STATUS_BAR_X, UI_STATUS_BAR_Y,
+                    UI_STATUS_BAR_W, UI_STATUS_BAR_H, progress_pct);
+}
+
 void ui_animate_splash(uint32_t duration_ms) {
+    draw_splash_static();
     uint32_t t0 = millis();
     while (millis() - t0 < duration_ms) {
         int pct = (int)((millis() - t0) * 100 / duration_ms);
-        ui_draw_splash(pct);
+        ui_progress_bar_update(UI_STATUS_BAR_X, UI_STATUS_BAR_Y,
+                               UI_STATUS_BAR_W, UI_STATUS_BAR_H, pct);
         delay(40);
     }
-    ui_draw_splash(100);
+    ui_progress_bar_update(UI_STATUS_BAR_X, UI_STATUS_BAR_Y,
+                           UI_STATUS_BAR_W, UI_STATUS_BAR_H, 100);
 }
 
 void ui_draw_sd_error() {
@@ -43,7 +51,7 @@ void ui_draw_sd_error() {
     ui_status_result(UI_ICON_SD, STR_SD_ERROR, STR_SD_HINT, STR_RESET_DEVICE, false);
 }
 
-void ui_draw_loading(const char* title, int progress_pct) {
+static void draw_loading_static(const char* title) {
     tft.fillScreen(TH->bg);
     tft.fillRoundRect(88, 92, 64, 48, 6, TH->surface);
     tft.drawRoundRect(88, 92, 64, 48, 6, TH->border);
@@ -53,21 +61,28 @@ void ui_draw_loading(const char* title, int progress_pct) {
     tft.drawString(tr(STR_LOADING), SCREEN_CX, UI_STATUS_TITLE_Y, 2);
     tft.setTextColor(TH->text_mute, TH->bg);
     tft.drawString(title, SCREEN_CX, UI_STATUS_SUB_Y, 2);
-    ui_progress_bar(UI_STATUS_BAR_X, UI_STATUS_BAR_Y,
-                    UI_STATUS_BAR_W, UI_STATUS_BAR_H, progress_pct);
     tft.setTextColor(TH->text_mute, TH->bg);
     tft.drawString(tr(STR_READING_ROM), SCREEN_CX, UI_STATUS_BAR_HINT, 1);
 }
 
+void ui_draw_loading(const char* title, int progress_pct) {
+    draw_loading_static(title);
+    ui_progress_bar(UI_STATUS_BAR_X, UI_STATUS_BAR_Y,
+                    UI_STATUS_BAR_W, UI_STATUS_BAR_H, progress_pct);
+}
+
 bool ui_loading_run(const char* title, bool (*load_fn)(void)) {
+    draw_loading_static(title);
     uint32_t t0 = millis();
     while (millis() - t0 < 400) {
         int pct = (int)((millis() - t0) * 65 / 400);
-        ui_draw_loading(title, pct);
+        ui_progress_bar_update(UI_STATUS_BAR_X, UI_STATUS_BAR_Y,
+                               UI_STATUS_BAR_W, UI_STATUS_BAR_H, pct);
         delay(30);
     }
     bool ok = load_fn ? load_fn() : true;
-    ui_draw_loading(title, 100);
+    ui_progress_bar_update(UI_STATUS_BAR_X, UI_STATUS_BAR_Y,
+                           UI_STATUS_BAR_W, UI_STATUS_BAR_H, 100);
     delay(80);
     return ok;
 }

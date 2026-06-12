@@ -29,6 +29,7 @@ typedef enum {
 } UiIcon;
 
 void ui_icon_draw(int x, int y, int size, UiIcon icon, uint16_t color);
+void ui_icon_draw_on(int x, int y, int size, UiIcon icon, uint16_t color, uint16_t bg);
 void ui_icon_draw_t(int x, int y, int size, UiIcon icon);
 void ui_icon_draw_ok(int x, int y, int size, UiIcon icon);
 void ui_icon_draw_danger(int x, int y, int size, UiIcon icon);

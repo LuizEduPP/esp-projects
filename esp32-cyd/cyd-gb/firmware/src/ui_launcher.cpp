@@ -18,7 +18,7 @@
 static void draw_header(int cnt) {
     tft.fillRect(0, 0, SCREEN_W, UI_HDR_H, TH->surface);
     tft.drawFastHLine(0, UI_HDR_H - 1, SCREEN_W, TH->border);
-    tft.fillRect(0, UI_HDR_H - 3, SCREEN_W, 2, TH->accent);
+    tft.fillRect(0, UI_HDR_H - 4, SCREEN_W, 3, TH->accent);
 
     ui_icon_draw_t(UI_HDR_ICON_X, 8, 24, UI_ICON_GRID);
     tft.setTextDatum(TL_DATUM);
@@ -33,7 +33,7 @@ static void draw_header(int cnt) {
     ui_icon_draw_t(UI_HDR_GEAR_X - 12, 8, 24, UI_ICON_GEAR);
 
     for (int c = 0; c < 4; c++)
-        tft.fillRoundRect(124 + c * 14, 31, 12, 6, 2, TH->pal[c]);
+        tft.fillRoundRect(118 + c * 16, 28, 14, 10, 2, TH->pal[c]);
 }
 
 static uint16_t cover_tint(const char* name) {
@@ -114,7 +114,7 @@ static void draw_footer(int pg, int tp) {
 }
 
 static void draw_grid(RomEntry* roms, int cnt, int pg, int sel) {
-    tft.fillRect(0, UI_GRID_TOP, SCREEN_W, GRID_BOT - UI_GRID_TOP, TH->bg);
+    tft.fillRect(0, UI_GRID_TOP, SCREEN_W, GRID_BOT - UI_GRID_TOP, TH->surface);
     int base = pg * UI_GRID_ITEMS;
     int end = min(base + UI_GRID_ITEMS, cnt);
     for (int i = base; i < end; i++)
@@ -268,7 +268,7 @@ static void draw_set_row(int y, int h, int row, StringId label_id, const char* v
     }
     if (swatches) {
         for (int c = 0; c < 4; c++)
-            tft.fillRoundRect(48 + c * 36, y + 44, 28, 8, 2, TH->pal[c]);
+            tft.fillRoundRect(40 + c * 40, y + 42, 32, 10, 2, TH->pal[c]);
     }
 }
 
@@ -279,8 +279,8 @@ void launcher_settings_menu() {
     uint8_t lang = i18n_get_lang();
     emu_set_palette(pal);
 
-    auto draw_settings = [&]() {
-        tft.fillScreen(TH->bg);
+    auto draw_settings = [&](bool full_clear) {
+        if (full_clear) tft.fillScreen(TH->bg);
         ui_bar_header(UI_SET_HDR, UI_ICON_GEAR, tr(STR_SETTINGS), 130);
 
         char palstr[24];
@@ -318,7 +318,7 @@ void launcher_settings_menu() {
         return y >= 0 && ty >= y && ty < y + row_h(i);
     };
 
-    draw_settings();
+    draw_settings(true);
     ui_wait_release();
 
     while (true) {
@@ -360,7 +360,7 @@ void launcher_settings_menu() {
                 emu_set_palette(pal);
                 emu_set_frame_skip(fs);
                 display_set_backlight(bl);
-                draw_settings();
+                draw_settings(false);
                 delay(120);
             }
         }
