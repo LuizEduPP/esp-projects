@@ -4,6 +4,8 @@
 
 Board docs and pin map: [witnessmenow/ESP32-Cheap-Yellow-Display](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display).
 
+![CYD-GB UI wireframe](cyd-gb/mock/ui-wireframe.svg)
+
 ## Projects
 
 | Project | Description | Docs |

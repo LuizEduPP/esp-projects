@@ -2,7 +2,13 @@
 
 **Game Boy / Game Boy Color** emulator for the [**ESP32-2432S028R**](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display) (Cheap Yellow Display). Fully touchscreen controlled — no extra physical buttons.
 
-> **Credits:** hardware at [witnessmenow/ESP32-Cheap-Yellow-Display](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display). Emulator core forked from [**cyd-gb**](https://github.com/artanergin44-collab/cyd-gb) by [artanergin44-collab](https://github.com/artanergin44-collab/cyd-gb), with **minigb_apu** audio (internal DAC, GPIO 26).
+> **Credits:** UI redesign by **Luiz Eduardo**. Hardware at [witnessmenow/ESP32-Cheap-Yellow-Display](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display). Emulator core forked from [**cyd-gb**](https://github.com/artanergin44-collab/cyd-gb) by [artanergin44-collab](https://github.com/artanergin44-collab/cyd-gb), with **minigb_apu** audio (internal DAC, GPIO 26).
+
+## UI wireframe
+
+Layout reference for the 240×320 touchscreen UI (launcher, in-game controls, settings, calibration). Source: [`mock/ui-wireframe.svg`](mock/ui-wireframe.svg). Icons: [`mock/ui-icons-sheet.svg`](mock/ui-icons-sheet.svg).
+
+![CYD-GB UI wireframe](mock/ui-wireframe.svg)
 
 ## What you need
 
