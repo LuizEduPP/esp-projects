@@ -6,6 +6,10 @@
 #include "hw_config.h"
 #include "display.h"
 #include "sd_manager.h"
+#include "i18n.h"
+#include "ui_theme.h"
+
+#define TH ui_theme_get()
 #include <Arduino.h>
 #include <string.h>
 #include <XPT2046_Bitbang.h>
@@ -18,14 +22,19 @@ static bool use_custom_cal = false;
 static volatile uint16_t cur_btns = 0;
 static volatile int16_t scr_x = -1, scr_y = -1;
 static volatile bool pressed = false;
+static volatile uint8_t dpad_vis = 0;
+static volatile int16_t dpad_stick_dx = 0, dpad_stick_dy = 0;
+static volatile bool dpad_touch = false;
+static volatile bool stick_captured = false;
 static uint16_t btn_hold = 0;
 static uint32_t last_good_ms = 0;
 static SemaphoreHandle_t touch_mtx = nullptr;
-#define BTN_HOLD_MS 50
+#define BTN_HOLD_MS 90
 #define SAMPLE_N 3
-#define CTRL_Y_MIN (CTRL_Y + 8)
-#define ZONE_RELEASE_MS 70
+#define ZONE_RELEASE_MS 120
 #define ZONE_LATCH 2
+#define DPAD_DEAD 7
+#define DPAD_AXIS_MIN 6
 
 static int16_t samp_x[SAMPLE_N], samp_y[SAMPLE_N];
 static uint8_t samp_n = 0;
@@ -62,11 +71,12 @@ static bool read_point(int16_t* rx, int16_t* ry, int16_t* rz) {
     return true;
 }
 
-static void fill_config(CydGbConfig* cfg, uint8_t palette, uint8_t fskip, uint8_t brightness) {
+static void fill_config(CydGbConfig* cfg, uint8_t palette, uint8_t fskip, uint8_t brightness, uint8_t lang) {
     sd_config_defaults(cfg);
     cfg->palette = palette;
     cfg->frame_skip = fskip;
     cfg->brightness = brightness;
+    cfg->language = lang;
     cfg->cal_valid = use_custom_cal;
     if (use_custom_cal) {
         cfg->cal_xmin = cal.x_min;
@@ -77,6 +87,7 @@ static void fill_config(CydGbConfig* cfg, uint8_t palette, uint8_t fskip, uint8_
 }
 
 static void apply_config(const CydGbConfig* cfg) {
+    if (cfg->language < LANG_COUNT) i18n_set_lang(cfg->language);
     if (cfg->cal_valid) {
         cal.x_min = cfg->cal_xmin;
         cal.x_max = cfg->cal_xmax;
@@ -97,7 +108,7 @@ static void save_cal_to_sd() {
         cfg.cal_ymin = cal.y_min;
         cfg.cal_ymax = cal.y_max;
     } else {
-        fill_config(&cfg, 0, 0, 255);
+        fill_config(&cfg, 0, 0, 255, i18n_get_lang());
         cfg.cal_valid = true;
     }
     sd_save_config(&cfg);
@@ -105,12 +116,13 @@ static void save_cal_to_sd() {
     Serial.println("[CAL] Saved to SD");
 }
 
-void touch_save_settings(uint8_t palette, uint8_t fskip, uint8_t brightness) {
+void touch_save_settings(uint8_t palette, uint8_t fskip, uint8_t brightness, uint8_t lang) {
     CydGbConfig cfg;
     if (sd_load_config(&cfg)) {
         cfg.palette = palette;
         cfg.frame_skip = fskip;
         cfg.brightness = brightness;
+        cfg.language = lang;
         cfg.cal_valid = use_custom_cal;
         if (use_custom_cal) {
             cfg.cal_xmin = cal.x_min;
@@ -119,22 +131,23 @@ void touch_save_settings(uint8_t palette, uint8_t fskip, uint8_t brightness) {
             cfg.cal_ymax = cal.y_max;
         }
     } else {
-        fill_config(&cfg, palette, fskip, brightness);
+        fill_config(&cfg, palette, fskip, brightness, lang);
     }
     sd_save_config(&cfg);
 }
 
-bool touch_load_settings(uint8_t* palette, uint8_t* fskip, uint8_t* brightness) {
-    return touch_load_storage(palette, fskip, brightness);
+bool touch_load_settings(uint8_t* palette, uint8_t* fskip, uint8_t* brightness, uint8_t* lang) {
+    return touch_load_storage(palette, fskip, brightness, lang);
 }
 
-bool touch_load_storage(uint8_t* palette, uint8_t* fskip, uint8_t* brightness) {
+bool touch_load_storage(uint8_t* palette, uint8_t* fskip, uint8_t* brightness, uint8_t* lang) {
     CydGbConfig cfg;
     if (!sd_load_config(&cfg)) return false;
     apply_config(&cfg);
     if (palette) *palette = cfg.palette;
     if (fskip) *fskip = cfg.frame_skip;
     if (brightness) *brightness = cfg.brightness;
+    if (lang) *lang = cfg.language;
     return true;
 }
 
@@ -192,55 +205,85 @@ static bool in_rect(int16_t x, int16_t y, int16_t x0, int16_t y0, int16_t x1, in
     return x >= x0 && x <= x1 && y >= y0 && y <= y1;
 }
 
-static bool in_circle(int16_t x, int16_t y, int16_t cx, int16_t cy, int16_t r) {
-    int32_t dx = x - cx, dy = y - cy;
-    return dx * dx + dy * dy <= (int32_t)r * r;
+static bool in_rect_pad(int16_t x, int16_t y, int16_t cx, int16_t cy,
+                        int16_t hw, int16_t hh, int16_t pad) {
+    return in_rect(x, y, cx - hw - pad, cy - hh - pad, cx + hw + pad, cy + hh + pad);
 }
 
-static uint16_t classify_dpad(int16_t x, int16_t y) {
-    int cx = DPAD_CX, cy = DPAD_CY, arm = DPAD_ARM + DPAD_HIT_EXTRA;
+static bool in_square(int16_t x, int16_t y, int16_t cx, int16_t cy, int16_t half, int16_t pad) {
+    return in_rect_pad(x, y, cx, cy, half, half, pad);
+}
+
+static bool in_circle(int16_t x, int16_t y, int16_t cx, int16_t cy, int16_t r) {
     int dx = x - cx, dy = y - cy;
-    if (abs(dx) > arm || abs(dy) > arm) return 0;
+    return (int32_t)dx * dx + (int32_t)dy * dy <= (int32_t)r * r;
+}
+
+static void stick_vector(int16_t x, int16_t y, int16_t* stick_dx, int16_t* stick_dy,
+                         uint16_t* btns) {
+    int dx = x - STICK_CX, dy = y - STICK_CY;
+    int sdx = dx, sdy = dy;
+    if (abs(sdx) > STICK_RANGE) sdx = (sdx > 0) ? STICK_RANGE : -STICK_RANGE;
+    if (abs(sdy) > STICK_RANGE) sdy = (sdy > 0) ? STICK_RANGE : -STICK_RANGE;
+    if (stick_dx) *stick_dx = (int16_t)sdx;
+    if (stick_dy) *stick_dy = (int16_t)sdy;
 
     uint16_t b = 0;
-    if (dy < -4) b |= GB_BTN_UP;
-    if (dy > 4) b |= GB_BTN_DOWN;
-    if (dx < -4) b |= GB_BTN_LEFT;
-    if (dx > 4) b |= GB_BTN_RIGHT;
+    if (dx * dx + dy * dy >= DPAD_DEAD * DPAD_DEAD) {
+        if (dy < -DPAD_AXIS_MIN) b |= GB_BTN_UP;
+        if (dy > DPAD_AXIS_MIN) b |= GB_BTN_DOWN;
+        if (dx < -DPAD_AXIS_MIN) b |= GB_BTN_LEFT;
+        if (dx > DPAD_AXIS_MIN) b |= GB_BTN_RIGHT;
+    }
+    if (btns) *btns = b;
+}
+
+static bool stick_hit_start(int16_t x, int16_t y) {
+    int hit_r = STICK_BASE_R + STICK_HIT_EXTRA;
+    int dx = x - STICK_CX, dy = y - STICK_CY;
+    return dx * dx + dy * dy <= (int32_t)hit_r * hit_r;
+}
+
+static uint16_t classify_stick(int16_t x, int16_t y, int16_t* stick_dx, int16_t* stick_dy,
+                               bool captured) {
+    if (!captured && !stick_hit_start(x, y)) return 0;
+    uint16_t b = 0;
+    stick_vector(x, y, stick_dx, stick_dy, &b);
     return b;
 }
 
 static uint16_t classify_action(int16_t x, int16_t y) {
     if (y < CTRL_Y_MIN) return 0;
     uint16_t b = 0;
-    if (in_circle(x, y, BTN_A_X, BTN_A_Y, BTN_A_R + BTN_TOUCH_PAD)) b |= GB_BTN_A;
-    if (in_circle(x, y, BTN_B_X, BTN_B_Y, BTN_B_R + BTN_TOUCH_PAD)) b |= GB_BTN_B;
+    int p = BTN_TOUCH_PAD;
+    if (in_rect(x, y, BTN_B_L - p, BTN_AB_T - p,
+                BTN_B_L + BTN_B_W + p, BTN_AB_T + BTN_AB_H + p))
+        b |= GB_BTN_B;
+    if (in_rect(x, y, BTN_A_L - p, BTN_AB_T - p,
+                BTN_A_L + BTN_A_W + p, BTN_AB_T + BTN_AB_H + p))
+        b |= GB_BTN_A;
     return b;
 }
 
 static uint16_t classify_util(int16_t x, int16_t y) {
-    if (y < CTRL_Y_MIN) return 0;
-
-    if (in_rect(x, y,
-                BTN_MENU_X - BTN_MENU_W / 2 - 10, BTN_MENU_Y - BTN_MENU_H / 2 - 10,
-                BTN_MENU_X + BTN_MENU_W / 2 + 10, BTN_MENU_Y + BTN_MENU_H / 2 + 10))
+    if (in_rect(x, y, BTN_PAUSE_L, BTN_PAUSE_T,
+                BTN_PAUSE_L + BTN_PAUSE_W, BTN_PAUSE_T + BTN_PAUSE_H))
         return GB_BTN_MENU;
 
-    if (in_rect(x, y,
-                BTN_ST_X - BTN_ST_W / 2 - 8, BTN_ST_Y - BTN_ST_H / 2 - 8,
-                BTN_ST_X + BTN_ST_W / 2 + 8, BTN_ST_Y + BTN_ST_H / 2 + 8))
+    if (y < CTRL_Y_MIN) return 0;
+
+    if (in_circle(x, y, BTN_ST_X, BTN_ST_Y, BTN_UTIL_HIT))
         return GB_BTN_START;
 
-    if (in_rect(x, y,
-                BTN_SE_X - BTN_SE_W / 2 - 8, BTN_SE_Y - BTN_SE_H / 2 - 8,
-                BTN_SE_X + BTN_SE_W / 2 + 8, BTN_SE_Y + BTN_SE_H / 2 + 8))
+    if (in_circle(x, y, BTN_SE_X, BTN_SE_Y, BTN_UTIL_HIT))
         return GB_BTN_SELECT;
 
     return 0;
 }
 
 static uint16_t classify(int16_t x, int16_t y) {
-    return classify_util(x, y) | classify_dpad(x, y) | classify_action(x, y);
+    int16_t sdx, sdy;
+    return classify_util(x, y) | classify_stick(x, y, &sdx, &sdy, false) | classify_action(x, y);
 }
 
 static int16_t median3(int16_t a, int16_t b, int16_t c) {
@@ -266,6 +309,17 @@ static void push_sample(int16_t x, int16_t y, int16_t* fx, int16_t* fy) {
 static void reset_gesture() {
     samp_n = 0;
     zone_util = zone_dpad = zone_action = {};
+    dpad_vis = 0;
+    dpad_stick_dx = dpad_stick_dy = 0;
+    dpad_touch = false;
+    stick_captured = false;
+}
+
+static void zone_feed_instant(TouchZone* z, uint16_t btn, uint32_t now) {
+    z->candidate = btn;
+    z->latched = btn;
+    z->latch_cnt = btn ? ZONE_LATCH : 0;
+    if (btn) z->last_ms = now;
 }
 
 static void zone_feed(TouchZone* z, uint16_t btn, uint32_t now) {
@@ -292,17 +346,43 @@ static uint16_t merge_zones(uint32_t now) {
 }
 
 static void update_zones(int16_t x, int16_t y, uint32_t now) {
-    if (y < CTRL_Y_MIN) return;
-
-    if (y < CTRL_DIV_Y + 12) {
-        zone_feed(&zone_util, classify_util(x, y), now);
+    uint16_t pause = classify_util(x, y);
+    if (pause == GB_BTN_MENU) {
+        zone_feed(&zone_util, GB_BTN_MENU, now);
         return;
     }
 
-    if (x <= ZONE_DPAD_X_MAX) {
-        zone_feed(&zone_dpad, classify_dpad(x, y), now);
+    if (stick_captured) {
+        int16_t sdx = 0, sdy = 0;
+        uint16_t btn = classify_stick(x, y, &sdx, &sdy, true);
+        zone_feed_instant(&zone_dpad, btn, now);
+        dpad_vis = (uint8_t)btn;
+        dpad_stick_dx = sdx;
+        dpad_stick_dy = sdy;
+        dpad_touch = true;
+        return;
+    }
+
+    if (y < CTRL_Y_MIN) return;
+
+    if (y < ZONE_STICK_Y_MIN) {
+        zone_feed(&zone_util, pause, now);
+        return;
+    }
+
+    if (x <= ZONE_STICK_X_MAX && stick_hit_start(x, y)) {
+        stick_captured = true;
+        int16_t sdx = 0, sdy = 0;
+        uint16_t btn = classify_stick(x, y, &sdx, &sdy, true);
+        zone_feed_instant(&zone_dpad, btn, now);
+        dpad_vis = (uint8_t)btn;
+        dpad_stick_dx = sdx;
+        dpad_stick_dy = sdy;
+        dpad_touch = true;
     } else if (x >= ZONE_ACTION_X_MIN) {
         zone_feed(&zone_action, classify_action(x, y), now);
+    } else if (pause) {
+        zone_feed(&zone_util, pause, now);
     }
 }
 
@@ -318,7 +398,7 @@ void touch_update() {
         pressed = true;
         last_good_ms = now;
 
-        if (fy >= CTRL_Y_MIN) {
+        if (stick_captured || fy >= CTRL_Y_MIN || fy < STATUS_H) {
             update_zones(fx, fy, now);
             cur_btns = merge_zones(now);
             btn_hold = cur_btns;
@@ -330,11 +410,15 @@ void touch_update() {
         pressed = true;
         cur_btns = merge_zones(now);
         if (!cur_btns) cur_btns = btn_hold;
+        if (stick_captured) dpad_touch = true;
     } else {
         pressed = false;
         cur_btns = 0;
         scr_x = scr_y = -1;
         btn_hold = 0;
+        dpad_vis = 0;
+        dpad_stick_dx = dpad_stick_dy = 0;
+        dpad_touch = false;
         reset_gesture();
     }
 }
@@ -343,6 +427,14 @@ uint16_t touch_get_buttons() { return cur_btns; }
 bool touch_is_pressed() { return pressed; }
 int16_t touch_get_x() { return scr_x; }
 int16_t touch_get_y() { return scr_y; }
+uint8_t touch_get_dpad_visual() { return dpad_vis; }
+bool touch_dpad_active() { return dpad_touch; }
+bool touch_get_dpad_stick(int16_t* dx, int16_t* dy) {
+    if (!dpad_touch) return false;
+    if (dx) *dx = dpad_stick_dx;
+    if (dy) *dy = dpad_stick_dy;
+    return true;
+}
 
 void touch_format_buttons(uint16_t btn, char* buf, size_t buflen) {
     if (!buf || buflen == 0) return;
@@ -365,32 +457,34 @@ void touch_format_buttons(uint16_t btn, char* buf, size_t buflen) {
 }
 
 void touch_run_calibration() {
-    tft.fillScreen(TFT_BLACK);
+    tft.fillScreen(TH->bg);
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(0xFFE0);
-    tft.drawString("CALIBRATION", SCREEN_CX, 12, 4);
-    tft.setTextColor(0xAD55);
-    tft.drawString("Touch each + carefully", SCREEN_CX, 35, 2);
+    tft.setTextColor(TH->accent);
+    tft.drawString(tr(STR_CAL_TITLE), SCREEN_CX, 12, 4);
+    tft.setTextColor(TH->text_mute);
+    tft.drawString(tr(STR_CAL_HINT), SCREEN_CX, 35, 2);
 
     struct { int16_t sx, sy; } targets[5] = {
         {22, 50}, {SCREEN_W - 22, 50}, {22, SCREEN_H - 50},
         {SCREEN_W - 22, SCREEN_H - 50}, {SCREEN_CX, SCREEN_H / 2}
     };
-    const char* labels[5] = {"Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right", "Center"};
+    static const StringId label_ids[5] = {
+        STR_CAL_TL, STR_CAL_TR, STR_CAL_BL, STR_CAL_BR, STR_CAL_CENTER
+    };
     int16_t raw_x[5], raw_y[5];
     bool got[5] = {false};
 
     for (int i = 0; i < 5; i++) {
-        tft.fillRect(0, 42, SCREEN_W, 20, TFT_BLACK);
-        tft.setTextColor(TFT_WHITE);
-        char msg[32];
-        snprintf(msg, 32, "%d/5: %s", i + 1, labels[i]);
+        tft.fillRect(0, 42, SCREEN_W, 20, TH->bg);
+        tft.setTextColor(TH->text_hi);
+        char msg[40];
+        snprintf(msg, sizeof(msg), tr(STR_CAL_STEP_FMT), i + 1, tr(label_ids[i]));
         tft.drawString(msg, SCREEN_CX, 52, 2);
 
         int tx = targets[i].sx, ty = targets[i].sy;
-        tft.drawCircle(tx, ty, 10, 0x07E0);
-        tft.drawLine(tx - 14, ty, tx + 14, ty, 0x07E0);
-        tft.drawLine(tx, ty - 14, tx, ty + 14, 0x07E0);
+        tft.drawCircle(tx, ty, 10, TH->accent);
+        tft.drawLine(tx - 14, ty, tx + 14, ty, TH->accent);
+        tft.drawLine(tx, ty - 14, tx, ty + 14, TH->accent);
 
         uint32_t t0 = millis();
         while (millis() - t0 < 15000) {
@@ -428,7 +522,7 @@ void touch_run_calibration() {
             Serial.printf("[CAL] %d: raw(%d,%d) screen(%d,%d)\n", i, raw_x[i], raw_y[i], tx, ty);
         }
 
-        tft.fillCircle(tx, ty, 8, got[i] ? TFT_GREEN : TFT_RED);
+        tft.fillCircle(tx, ty, 8, got[i] ? TH->menu_primary : TH->menu_danger);
 
         t0 = millis();
         while (millis() - t0 < 3000) {
@@ -469,18 +563,18 @@ void touch_run_calibration() {
                       cal.x_min, cal.x_max, cal.y_min, cal.y_max);
     }
 
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextColor(0x07E0);
-    tft.drawString("Calibration Saved!", SCREEN_CX, SCREEN_H / 2, 4);
+    tft.fillScreen(TH->bg);
+    tft.setTextColor(TH->menu_primary);
+    tft.drawString(tr(STR_CAL_SAVED), SCREEN_CX, SCREEN_H / 2, 4);
     delay(1200);
     return;
 
 cal_fail:
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextColor(TFT_RED);
-    tft.drawString("Calibration Failed!", SCREEN_CX, SCREEN_H / 2 - 20, 4);
-    tft.setTextColor(0x7BEF);
-    tft.drawString("Using factory map", SCREEN_CX, SCREEN_H / 2 + 20, 2);
+    tft.fillScreen(TH->bg);
+    tft.setTextColor(TH->menu_danger);
+    tft.drawString(tr(STR_CAL_FAILED), SCREEN_CX, SCREEN_H / 2 - 20, 4);
+    tft.setTextColor(TH->text_mute);
+    tft.drawString(tr(STR_CAL_FACTORY), SCREEN_CX, SCREEN_H / 2 + 20, 2);
     use_custom_cal = false;
     delay(2000);
 }

@@ -3,171 +3,246 @@
 #include "touch_input.h"
 #include "emulator_bridge.h"
 #include "hw_config.h"
+#include "i18n.h"
+#include "ui_theme.h"
 #include <Arduino.h>
+#include <math.h>
 
-#define ITEMS_PP 7
-#define ITEM_H   34
-#define ITEM_Y0  44
-#define ITEM_X   8
-#define ITEM_W   (SCREEN_W - ITEM_X * 2)
+#define HDR_H      36
+#define FTR_H      44
+#define FTR_Y      (SCREEN_H - FTR_H)
+#define LIST_TOP   HDR_H
+#define LIST_BOT   FTR_Y
+#define ITEMS_PP   5
+#define ITEM_H     42
+#define ITEM_X     8
+#define ITEM_W     (SCREEN_W - ITEM_X * 2)
+#define GEAR_X     (SCREEN_W - 24)
+#define GEAR_Y     (HDR_H / 2)
+#define GEAR_R     16
+
+#define TH ui_theme_get()
 
 static void wait_release() {
     while (touch_is_pressed()) delay(10);
-    delay(100);
+    delay(80);
 }
 
-static void draw_header(const char* t) {
-    tft.fillRect(0, 0, SCREEN_W, 36, 0x18C3);
-    tft.setTextColor(TFT_WHITE, 0x18C3); tft.setTextDatum(ML_DATUM);
-    tft.drawString(t, 10, 18, 2);
-    tft.setTextDatum(MR_DATUM); tft.setTextColor(0x7BEF, 0x18C3);
-    tft.drawString("CYD-GB", SCREEN_W - 10, 18, 1);
+static void draw_gear(int cx, int cy) {
+    tft.fillCircle(cx, cy, GEAR_R, TH->border);
+    tft.drawCircle(cx, cy, GEAR_R, TH->accent);
+    tft.drawCircle(cx, cy, 5, TH->mute);
+    for (int i = 0; i < 6; i++) {
+        float a = i * 3.14159f / 3.0f;
+        int x1 = cx + (int)(7 * cos(a));
+        int y1 = cy + (int)(7 * sin(a));
+        int x2 = cx + (int)(12 * cos(a));
+        int y2 = cy + (int)(12 * sin(a));
+        tft.drawLine(x1, y1, x2, y2, TH->mute);
+    }
+}
+
+static void draw_header(int cnt) {
+    tft.fillRect(0, 0, SCREEN_W, HDR_H, TH->surface);
+    tft.drawFastHLine(0, HDR_H - 1, SCREEN_W, TH->accent);
+
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(TH->text_hi, TH->surface);
+    tft.drawString(tr(STR_GAMES), 12, 13, 2);
+
+    char sub[20];
+    snprintf(sub, sizeof(sub), tr(STR_ROMS_FMT), cnt);
+    tft.setTextColor(TH->text_mute, TH->surface);
+    tft.drawString(sub, 12, 28, 1);
+
+    draw_gear(GEAR_X, GEAR_Y);
+}
+
+static void draw_rom_card(RomEntry* r, int y, bool sel) {
+    uint16_t bg = sel ? TH->card_sel : TH->card;
+    uint16_t bd = sel ? TH->accent : TH->border;
+    tft.fillRoundRect(ITEM_X, y, ITEM_W, ITEM_H - 4, 8, bg);
+    if (sel) tft.drawRoundRect(ITEM_X, y, ITEM_W, ITEM_H - 4, 8, bd);
+
+    uint16_t bc = r->is_gbc ? TH->accent : TH->mute;
+    tft.fillRoundRect(ITEM_X + 8, y + 8, 28, 22, 5, bc);
+    tft.setTextColor(TH->text_lo, bc);
+    tft.setTextDatum(MC_DATUM);
+    tft.drawString(r->is_gbc ? "C" : "D", ITEM_X + 22, y + 19, 2);
+
+    char nm[28];
+    strncpy(nm, r->filename, 26);
+    nm[26] = 0;
+    char* dot = strrchr(nm, '.');
+    if (dot) *dot = 0;
+    tft.setTextColor(sel ? TH->text_hi : TH->text_hi, bg);
+    tft.setTextDatum(ML_DATUM);
+    tft.drawString(nm, ITEM_X + 44, y + 14, 2);
+
+    char sz[12];
+    snprintf(sz, sizeof(sz), "%uK", r->size / 1024);
+    tft.setTextColor(TH->text_mute, bg);
+    tft.drawString(sz, ITEM_X + 44, y + 30, 1);
+
+    if (sel) tft.fillCircle(ITEM_X + ITEM_W - 12, y + ITEM_H / 2 - 2, 4, TH->accent);
+}
+
+static void draw_footer(int pg, int tp) {
+    tft.fillRect(0, FTR_Y, SCREEN_W, FTR_H, TH->surface);
+    tft.drawFastHLine(0, FTR_Y, SCREEN_W, TH->border);
+
+    tft.fillRoundRect(10, FTR_Y + 8, 72, 28, 8, TH->border);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(TH->accent, TH->border);
+    tft.drawString(tr(STR_PREV), 46, FTR_Y + 22, 2);
+
+    if (tp > 1) {
+        char ps[12];
+        snprintf(ps, sizeof(ps), "%d / %d", pg + 1, tp);
+        tft.setTextColor(TH->text_mute, TH->surface);
+        tft.drawString(ps, SCREEN_CX, FTR_Y + 22, 2);
+    }
+
+    tft.fillRoundRect(SCREEN_W - 82, FTR_Y + 8, 72, 28, 8, TH->border);
+    tft.setTextColor(TH->accent, TH->border);
+    tft.drawString(tr(STR_NEXT), SCREEN_W - 46, FTR_Y + 22, 2);
 }
 
 static void draw_list(RomEntry* r, int cnt, int pg, int sel) {
-    int s = pg * ITEMS_PP, e = min(s + ITEMS_PP, cnt);
-    tft.fillRect(0, 38, SCREEN_W, SCREEN_H - 58, TFT_BLACK);
-
+    tft.fillRect(0, LIST_TOP, SCREEN_W, LIST_BOT - LIST_TOP, TH->bg);
+    int s = pg * ITEMS_PP;
+    int e = min(s + ITEMS_PP, cnt);
     for (int i = s; i < e; i++) {
-        int y = ITEM_Y0 + (i - s) * ITEM_H;
-        uint16_t bg = (i == sel) ? 0x0014 : 0x0000;
-        uint16_t fg = (i == sel) ? 0xFFE0 : TFT_WHITE;
-        tft.fillRoundRect(ITEM_X, y, ITEM_W, ITEM_H - 4, 4, bg);
-
-        uint16_t bc = r[i].is_gbc ? 0x07E0 : 0x7BEF;
-        const char* bt = r[i].is_gbc ? "GBC" : "GB";
-        tft.fillRoundRect(ITEM_X + 3, y + 5, 26, 18, 3, bc);
-        tft.setTextColor(TFT_BLACK, bc); tft.setTextDatum(MC_DATUM);
-        tft.drawString(bt, ITEM_X + 16, y + 14, 1);
-
-        char nm[30]; strncpy(nm, r[i].filename, 28); nm[28] = 0;
-        char* dot = strrchr(nm, '.'); if (dot) *dot = 0;
-        tft.setTextColor(fg, bg); tft.setTextDatum(ML_DATUM);
-        tft.drawString(nm, ITEM_X + 34, y + ITEM_H / 2 - 2, 2);
-
-        char sz[12]; snprintf(sz, 12, "%uK", r[i].size / 1024);
-        tft.setTextColor(0x7BEF, bg); tft.setTextDatum(MR_DATUM);
-        tft.drawString(sz, SCREEN_W - 8, y + ITEM_H / 2 - 2, 1);
+        int y = LIST_TOP + 4 + (i - s) * ITEM_H;
+        draw_rom_card(&r[i], y, i == sel);
     }
+    draw_footer(pg, (cnt + ITEMS_PP - 1) / ITEMS_PP);
+}
 
-    tft.fillRect(0, SCREEN_H - 20, SCREEN_W, 20, 0x18C3);
-    int tp = (cnt + ITEMS_PP - 1) / ITEMS_PP;
-    if (tp > 1) {
-        tft.setTextColor(TFT_WHITE, 0x18C3); tft.setTextDatum(MC_DATUM);
-        char ps[16]; snprintf(ps, 16, "< %d/%d >", pg + 1, tp);
-        tft.drawString(ps, SCREEN_CX, SCREEN_H - 10, 1);
-    }
-    tft.setTextColor(0xFFE0, 0x18C3); tft.setTextDatum(ML_DATUM);
-    tft.drawString("[CFG]", 5, SCREEN_H - 10, 1);
-    tft.setTextDatum(MR_DATUM);
-    tft.drawString("[CAL]", SCREEN_W - 5, SCREEN_H - 10, 1);
+static bool hit_gear(int16_t tx, int16_t ty) {
+    int dx = tx - GEAR_X, dy = ty - GEAR_Y;
+    return dx * dx + dy * dy <= (GEAR_R + 4) * (GEAR_R + 4);
 }
 
 int launcher_show(RomEntry* roms, int cnt) {
     int pg = 0;
-    tft.fillScreen(TFT_BLACK);
-    draw_header("Game Boy ROMs");
+    tft.fillScreen(TH->bg);
+    draw_header(cnt);
 
     if (cnt == 0) {
         tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TFT_RED); tft.drawString("No ROMs found!", SCREEN_CX, 100, 4);
-        tft.setTextColor(0x7BEF); tft.drawString("Put .gb in /roms/gb/", SCREEN_CX, 140, 2);
-        tft.drawString("on your SD card", SCREEN_CX, 165, 2);
+        tft.setTextColor(TH->menu_danger);
+        tft.drawString(tr(STR_NO_ROMS), SCREEN_CX, 120, 4);
+        tft.setTextColor(TH->text_mute);
+        tft.drawString(tr(STR_NO_ROMS_HINT), SCREEN_CX, 150, 2);
         while (true) delay(1000);
     }
 
     draw_list(roms, cnt, pg, -1);
     wait_release();
 
-    uint32_t dbg_t = 0;
     bool was_pressed = false;
-    bool cal_pending = false;
     bool cfg_pending = false;
     int pending_sel = -1;
+    int16_t last_tx = 0, last_ty = 0;
 
     while (true) {
         bool pressed = touch_is_pressed();
         if (pressed) {
             int16_t tx = touch_get_x(), ty = touch_get_y();
-            if (ty >= ITEM_Y0 && ty < ITEM_Y0 + ITEMS_PP * ITEM_H) {
-                int idx = pg * ITEMS_PP + (ty - ITEM_Y0) / ITEM_H;
-                if (idx < cnt && idx != pending_sel) {
+            last_tx = tx;
+            last_ty = ty;
+            if (hit_gear(tx, ty)) cfg_pending = true;
+            else if (ty >= LIST_TOP && ty < LIST_BOT) {
+                int idx = pg * ITEMS_PP + (ty - LIST_TOP - 4) / ITEM_H;
+                if (idx >= pg * ITEMS_PP && idx < min(pg * ITEMS_PP + ITEMS_PP, cnt) && idx != pending_sel) {
                     pending_sel = idx;
                     draw_list(roms, cnt, pg, pending_sel);
                 }
             }
-            if (ty >= SCREEN_H - 20) {
+        } else if (was_pressed) {
+            if (cfg_pending) return -3;
+            if (pending_sel >= 0) return pending_sel;
+            if (last_ty >= FTR_Y) {
                 int tp = (cnt + ITEMS_PP - 1) / ITEMS_PP;
-                if (tx < 60 && pg > 0) { pg--; pending_sel = -1; draw_list(roms, cnt, pg, -1); delay(300); }
-                else if (tx > SCREEN_W - 58 && tx < SCREEN_W - 2) cal_pending = true;
-                else if (tx < 58) cfg_pending = true;
-                else if (tx > SCREEN_W - 140 && tx < SCREEN_W - 60 && pg < tp - 1) {
-                    pg++; pending_sel = -1; draw_list(roms, cnt, pg, -1); delay(300);
+                if (last_tx < 90 && pg > 0) {
+                    pg--;
+                    draw_list(roms, cnt, pg, -1);
+                } else if (last_tx > SCREEN_W - 90 && pg < tp - 1) {
+                    pg++;
+                    draw_list(roms, cnt, pg, -1);
                 }
             }
-        } else {
-            if (was_pressed) {
-                if (cal_pending) return -2;
-                if (cfg_pending) return -3;
-                if (pending_sel >= 0) return pending_sel;
-            }
-            cal_pending = false;
             cfg_pending = false;
             pending_sel = -1;
         }
         was_pressed = pressed;
-
-        if (millis() - dbg_t > 3000) {
-            dbg_t = millis();
-            Serial.printf("[LAUNCH] pg=%d pending=%d touch=%d,%d pressed=%d\n",
-                          pg, pending_sel, touch_get_x(), touch_get_y(), (int)pressed);
-        }
         delay(10);
     }
 }
 
-static void mbtn(int y, const char* t, uint16_t fg, bool hl) {
-    int bx = (SCREEN_W - 190) / 2;
-    uint16_t bg = hl ? 0x2945 : 0x1082;
-    tft.fillRoundRect(bx, y, 190, 26, 5, bg);
-    tft.drawRoundRect(bx, y, 190, 26, 5, 0x528A);
-    tft.setTextColor(fg, bg); tft.setTextDatum(MC_DATUM);
-    tft.drawString(t, SCREEN_CX, y + 13, 2);
+static void draw_menu_btn(int y, int h, const char* t, uint16_t fg, uint16_t bg, bool hl) {
+    int bx = 10;
+    int bw = SCREEN_W - 20;
+    tft.fillRoundRect(bx, y, bw, h, 8, hl ? TH->border : bg);
+    if (hl) tft.drawRoundRect(bx, y, bw, h, 8, TH->accent);
+    tft.setTextColor(fg, hl ? TH->border : bg);
+    tft.setTextDatum(MC_DATUM);
+    tft.drawString(t, SCREEN_CX, y + h / 2, 2);
 }
 
 int launcher_ingame_menu() {
-    int bx = (SCREEN_W - 200) / 2;
-    int by = 20;
-    int bh = SCREEN_H - 40;
-    tft.fillRect(bx, by, 200, bh, TFT_BLACK);
-    tft.drawRoundRect(bx, by, 200, bh, 6, 0x528A);
-    tft.setTextColor(0xFFE0, TFT_BLACK); tft.setTextDatum(MC_DATUM);
-    tft.drawString("PAUSED", SCREEN_CX, by + 18, 4);
+    tft.fillScreen(TH->bg);
+
+    tft.fillRect(0, 0, SCREEN_W, 36, TH->surface);
+    tft.drawFastHLine(0, 35, SCREEN_W, TH->accent);
+    tft.setTextColor(TH->text_hi, TH->surface);
+    tft.setTextDatum(MC_DATUM);
+    tft.drawString(tr(STR_PAUSED), SCREEN_CX, 18, 2);
 
     #define MI 6
-    int yp[MI] = {by + 38, by + 78, by + 118, by + 158, by + 198, by + 238};
-    const char* lb[MI] = {"Continuar", "Salvar", "Carregar", "Config", "Calibrar", "Voltar ao Menu"};
-    uint16_t fc[MI] = {TFT_GREEN, 0x07FF, 0x07FF, 0xFFE0, 0xFFE0, TFT_RED};
-    for (int i = 0; i < MI; i++) mbtn(yp[i], lb[i], fc[i], false);
+    const int MBH = 36;
+    const int MBG = 8;
+    const int MY0 = 48;
+    const StringId lb_ids[MI] = {
+        STR_MENU_RESUME, STR_MENU_SAVE, STR_MENU_LOAD,
+        STR_MENU_SETTINGS, STR_MENU_CALIBRATE, STR_MENU_QUIT
+    };
+    uint16_t fc[MI] = {TH->menu_primary, TH->accent, TH->accent, TH->text_hi, TH->text_hi, TH->menu_danger};
+    uint16_t bg[MI] = {TH->card_sel, TH->card, TH->card, TH->card, TH->card, TH->card};
+
+    for (int i = 0; i < MI; i++)
+        draw_menu_btn(MY0 + i * (MBH + MBG), MBH, tr(lb_ids[i]), fc[i], bg[i], i == 0);
+
     wait_release();
 
     int hl = -1;
     while (true) {
         if (touch_is_pressed()) {
             int16_t tx = touch_get_x(), ty = touch_get_y();
-            if (tx >= bx && tx <= bx + 200) {
-                for (int i = 0; i < MI; i++) if (ty >= yp[i] && ty < yp[i] + 26) {
+            for (int i = 0; i < MI; i++) {
+                int y = MY0 + i * (MBH + MBG);
+                if (tx >= 10 && tx <= SCREEN_W - 10 && ty >= y && ty < y + MBH) {
                     if (hl != i) {
-                        if (hl >= 0) mbtn(yp[hl], lb[hl], fc[hl], false);
-                        mbtn(yp[i], lb[i], fc[i], true);
+                        if (hl >= 0)
+                            draw_menu_btn(MY0 + hl * (MBH + MBG), MBH, tr(lb_ids[hl]), fc[hl], bg[hl], hl == 0);
+                        draw_menu_btn(y, MBH, tr(lb_ids[i]), fc[i], bg[i], true);
                         hl = i;
                     }
                     break;
                 }
             }
         } else if (hl >= 0) {
-            int s = hl; hl = -1;
-            switch (s) { case 0: return 0; case 1: return 1; case 2: return 2; case 3: return 5; case 4: return 4; case 5: return 3; }
+            int s = hl;
+            hl = -1;
+            switch (s) {
+                case 0: return 0;
+                case 1: return 1;
+                case 2: return 2;
+                case 3: return 5;
+                case 4: return 4;
+                case 5: return 3;
+            }
         }
         delay(15);
     }
@@ -177,43 +252,72 @@ void launcher_settings_menu() {
     uint8_t pal = emu_get_palette();
     uint8_t fs = emu_get_frame_skip();
     uint8_t bl = display_get_backlight();
-    int row_w = SCREEN_W - 20;
-    int row_x = 10;
+    uint8_t lang = i18n_get_lang();
+
+    const int HDR = 32;
+    const int RX = 8;
+    const int RW = SCREEN_W - 16;
+    const int BOX_H = 28;
+    const int ROW_H = 48;
+    const int Y0 = 38;
+    const int OK_Y = 278;
+    const int OK_H = 34;
+
+    static const StringId row_labels[4] = {
+        STR_PALETTE, STR_FRAME_SKIP, STR_BRIGHTNESS, STR_LANGUAGE
+    };
+
+    auto row_y = [&](int i) { return Y0 + i * ROW_H; };
+    auto box_y = [&](int i) { return row_y(i) + 12; };
+
+    auto draw_row = [&](int i, const char* value, bool swatches) {
+        int by = box_y(i);
+        tft.setTextDatum(TL_DATUM);
+        tft.setTextColor(TH->text_mute, TH->bg);
+        tft.drawString(tr(row_labels[i]), RX, row_y(i), 1);
+        tft.fillRoundRect(RX, by, RW, BOX_H, 6, TH->surface);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(TH->text_hi, TH->surface);
+        tft.drawString(value, SCREEN_CX, by + BOX_H / 2 - (swatches ? 3 : 0), 1);
+        tft.setTextColor(TH->accent, TH->surface);
+        tft.drawString("<", RX + 14, by + BOX_H / 2, 2);
+        tft.drawString(">", RX + RW - 14, by + BOX_H / 2, 2);
+        if (swatches) {
+            for (int c = 0; c < 4; c++)
+                tft.fillRoundRect(RX + 36 + c * 38, by + BOX_H - 9, 32, 5, 1, emu_palette_color(pal, c));
+        }
+    };
 
     auto draw_settings = [&]() {
-        tft.fillScreen(TFT_BLACK);
+        tft.fillScreen(TH->bg);
+        tft.fillRect(0, 0, SCREEN_W, HDR, TH->surface);
+        tft.drawFastHLine(0, HDR - 1, SCREEN_W, TH->accent);
         tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(0xFFE0); tft.drawString("SETTINGS", SCREEN_CX, 18, 4);
+        tft.setTextColor(TH->text_hi, TH->surface);
+        tft.drawString(tr(STR_SETTINGS), SCREEN_CX, HDR / 2, 2);
 
-        tft.setTextColor(TFT_WHITE); tft.drawString("Color Palette:", SCREEN_CX, 48, 2);
-        tft.fillRoundRect(row_x, 62, row_w, 28, 5, 0x1082);
-        char palstr[40]; snprintf(palstr, 40, "%d/%d %s", pal + 1, NUM_PALETTES, emu_get_palette_name(pal));
-        tft.setTextColor(0x07E0, 0x1082); tft.drawString(palstr, SCREEN_CX, 76, 2);
-        tft.setTextColor(0x7BEF, 0x1082);
-        tft.setTextDatum(ML_DATUM); tft.drawString("<<", row_x + 8, 76, 2);
-        tft.setTextDatum(MR_DATUM); tft.drawString(">>", SCREEN_W - 8, 76, 2);
+        char palstr[24];
+        snprintf(palstr, sizeof(palstr), "#%d %s", pal + 1, emu_get_palette_name(pal));
+        draw_row(0, palstr, true);
 
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TFT_WHITE); tft.drawString("Frame Skip:", SCREEN_CX, 108, 2);
-        tft.fillRoundRect(row_x, 122, row_w, 28, 5, 0x1082);
-        char fss[16]; snprintf(fss, 16, "%d (FPS ~%d)", fs, fs == 0 ? 60 : 60 / (fs + 1));
-        tft.setTextColor(0x07E0, 0x1082); tft.drawString(fss, SCREEN_CX, 136, 2);
-        tft.setTextColor(0x7BEF, 0x1082);
-        tft.setTextDatum(ML_DATUM); tft.drawString("<", row_x + 8, 136, 2);
-        tft.setTextDatum(MR_DATUM); tft.drawString(">", SCREEN_W - 8, 136, 2);
+        char fss[20];
+        snprintf(fss, sizeof(fss), "%d (~%dfps)", fs, fs == 0 ? 60 : 60 / (fs + 1));
+        draw_row(1, fss, false);
 
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TFT_WHITE); tft.drawString("Brightness:", SCREEN_CX, 168, 2);
-        tft.fillRoundRect(row_x, 182, row_w, 28, 5, 0x1082);
-        char bls[16]; snprintf(bls, 16, "%d%%", bl * 100 / 255);
-        tft.setTextColor(0x07E0, 0x1082); tft.drawString(bls, SCREEN_CX, 196, 2);
-        tft.setTextColor(0x7BEF, 0x1082);
-        tft.setTextDatum(ML_DATUM); tft.drawString("<", row_x + 8, 196, 2);
-        tft.setTextDatum(MR_DATUM); tft.drawString(">", SCREEN_W - 8, 196, 2);
+        char bls[8];
+        snprintf(bls, sizeof(bls), "%d%%", bl * 100 / 255);
+        draw_row(2, bls, false);
 
-        tft.fillRoundRect((SCREEN_W - 120) / 2, 230, 120, 24, 5, 0x07E0);
-        tft.setTextColor(TFT_BLACK, 0x07E0); tft.setTextDatum(MC_DATUM);
-        tft.drawString("DONE", SCREEN_CX, 242, 2);
+        draw_row(3, i18n_lang_label(lang), false);
+
+        tft.fillRoundRect(RX, OK_Y, RW, OK_H, 8, TH->accent);
+        tft.setTextColor(TH->text_lo, TH->accent);
+        tft.drawString(tr(STR_SAVE_BACK), SCREEN_CX, OK_Y + OK_H / 2, 2);
+    };
+
+    auto hit_row = [&](int i, int16_t tx, int16_t ty) {
+        int by = box_y(i);
+        return ty >= by && ty < by + BOX_H && tx >= RX && tx <= RX + RW;
     };
 
     draw_settings();
@@ -224,23 +328,29 @@ void launcher_settings_menu() {
             int16_t tx = touch_get_x(), ty = touch_get_y();
             bool changed = false;
 
-            if (ty >= 62 && ty < 90) {
-                if (tx < SCREEN_CX) { pal = (pal + NUM_PALETTES - 1) % NUM_PALETTES; changed = true; }
-                else if (tx > SCREEN_CX) { pal = (pal + 1) % NUM_PALETTES; changed = true; }
-            }
-            if (ty >= 122 && ty < 150) {
-                if (tx < SCREEN_CX && fs > 0) { fs--; changed = true; }
-                else if (tx > SCREEN_CX && fs < 4) { fs++; changed = true; }
-            }
-            if (ty >= 182 && ty < 210) {
-                if (tx < SCREEN_CX && bl > 30) { bl -= 25; changed = true; }
-                else if (tx > SCREEN_CX && bl < 255) { bl = min(255, bl + 25); changed = true; }
-            }
-            if (ty >= 230 && ty < 254 && tx >= (SCREEN_W - 120) / 2 && tx <= (SCREEN_W + 120) / 2) {
+            if (hit_row(0, tx, ty)) {
+                if (tx < SCREEN_CX) pal = (pal + NUM_PALETTES - 1) % NUM_PALETTES;
+                else if (tx > SCREEN_CX) pal = (pal + 1) % NUM_PALETTES;
+                changed = true;
+            } else if (hit_row(1, tx, ty)) {
+                if (tx < SCREEN_CX && fs > 0) fs--;
+                else if (tx > SCREEN_CX && fs < 4) fs++;
+                changed = true;
+            } else if (hit_row(2, tx, ty)) {
+                if (tx < SCREEN_CX && bl > 30) bl -= 25;
+                else if (tx > SCREEN_CX && bl < 255) bl = min(255, bl + 25);
+                changed = true;
+            } else if (hit_row(3, tx, ty)) {
+                if (tx < SCREEN_CX) lang = (lang + LANG_COUNT - 1) % LANG_COUNT;
+                else if (tx > SCREEN_CX) lang = (lang + 1) % LANG_COUNT;
+                i18n_set_lang(lang);
+                changed = true;
+            } else if (ty >= OK_Y && ty < OK_Y + OK_H && tx >= RX && tx <= RX + RW) {
                 emu_set_palette(pal);
                 emu_set_frame_skip(fs);
                 display_set_backlight(bl);
-                touch_save_settings(pal, fs, bl);
+                i18n_set_lang(lang);
+                touch_save_settings(pal, fs, bl, lang);
                 wait_release();
                 return;
             }
@@ -250,7 +360,7 @@ void launcher_settings_menu() {
                 emu_set_frame_skip(fs);
                 display_set_backlight(bl);
                 draw_settings();
-                delay(200);
+                delay(120);
             }
         }
         delay(20);

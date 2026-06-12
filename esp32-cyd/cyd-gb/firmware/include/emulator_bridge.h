@@ -17,6 +17,9 @@ uint16_t* emu_get_line_buffer();
 
 
 #define NUM_PALETTES 20
+void emu_build_palettes();
 void emu_set_palette(uint8_t idx);
 uint8_t emu_get_palette();
 const char* emu_get_palette_name(uint8_t idx);
+uint16_t emu_palette_color(uint8_t pal_idx, uint8_t shade);
+uint16_t emu_palette_color_dim(uint8_t pal_idx, uint8_t shade, uint8_t num, uint8_t den);

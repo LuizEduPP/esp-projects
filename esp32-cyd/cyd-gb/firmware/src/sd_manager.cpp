@@ -1,5 +1,7 @@
 #include "sd_manager.h"
 #include "hw_config.h"
+#include "emulator_bridge.h"
+#include "i18n.h"
 #include <SD.h>
 #include <SPI.h>
 #include <Arduino.h>
@@ -24,6 +26,7 @@ void sd_config_defaults(CydGbConfig* cfg) {
     cfg->palette = 0;
     cfg->frame_skip = 0;
     cfg->brightness = 255;
+    cfg->language = LANG_EN;
     cfg->cal_valid = false;
     cfg->cal_xmin = 3700;
     cfg->cal_xmax = 200;
@@ -57,9 +60,10 @@ bool sd_load_config(CydGbConfig* cfg) {
         while (*p == ' ' || *p == '\r') p++;
 
         int v;
-        if ((v = parse_key_int(p, "pal")) >= 0) cfg->palette = (uint8_t)v;
-        else if ((v = parse_key_int(p, "fskip")) >= 0) cfg->frame_skip = (uint8_t)v;
+        if ((v = parse_key_int(p, "pal")) >= 0) cfg->palette = (uint8_t)min(v, NUM_PALETTES - 1);
+        else if ((v = parse_key_int(p, "fskip")) >= 0) cfg->frame_skip = (uint8_t)min(v, 4);
         else if ((v = parse_key_int(p, "bright")) >= 0) cfg->brightness = (uint8_t)v;
+        else if ((v = parse_key_int(p, "lang")) >= 0) cfg->language = (uint8_t)min(v, 2);
         else if ((v = parse_key_int(p, "cal")) >= 0) cfg->cal_valid = (v != 0);
         else if ((v = parse_key_int(p, "xmin")) >= 0) cfg->cal_xmin = (int16_t)v;
         else if ((v = parse_key_int(p, "xmax")) >= 0) cfg->cal_xmax = (int16_t)v;
@@ -67,8 +71,8 @@ bool sd_load_config(CydGbConfig* cfg) {
         else if ((v = parse_key_int(p, "ymax")) >= 0) cfg->cal_ymax = (int16_t)v;
     }
     f.close();
-    Serial.printf("[SD] Config loaded pal=%u fskip=%u bright=%u cal=%d\n",
-                  cfg->palette, cfg->frame_skip, cfg->brightness, cfg->cal_valid);
+    Serial.printf("[SD] Config loaded pal=%u fskip=%u bright=%u lang=%u cal=%d\n",
+                  cfg->palette, cfg->frame_skip, cfg->brightness, cfg->language, cfg->cal_valid);
     return true;
 }
 
@@ -84,6 +88,7 @@ bool sd_save_config(const CydGbConfig* cfg) {
     f.printf("pal=%u\n", cfg->palette);
     f.printf("fskip=%u\n", cfg->frame_skip);
     f.printf("bright=%u\n", cfg->brightness);
+    f.printf("lang=%u\n", cfg->language);
     f.printf("cal=%d\n", cfg->cal_valid ? 1 : 0);
     f.printf("xmin=%d\n", cfg->cal_xmin);
     f.printf("xmax=%d\n", cfg->cal_xmax);

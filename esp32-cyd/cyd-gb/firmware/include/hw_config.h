@@ -27,47 +27,65 @@
 #define GB_SCREEN_W 160
 #define GB_SCREEN_H 144
 
-#define GAME_H 200
-#define CTRL_Y 200
-#define CTRL_H (SCREEN_H - CTRL_Y)
+/*
+ * Layout 240×320 — ver mock/ui-wireframe.svg
+ *   status  0..24
+ *   jogo   24..242
+ *   deck  242..320 (78px)
+ */
+#define STATUS_H       24
+#define CTRL_H         78
+#define CTRL_Y         (SCREEN_H - CTRL_H)
+#define CTRL_CY        (CTRL_Y + CTRL_H / 2)
+#define BEZEL_Y        STATUS_H
+#define BEZEL_H        (CTRL_Y - BEZEL_Y)
+#define GAME_W         238
+#define GAME_H         214
+#define GAME_X         1
+#define GAME_Y         (BEZEL_Y + 2)
 
+#define CTRL_Y_MIN     CTRL_Y
+#define ZONE_STICK_Y_MIN (CTRL_Y + 6)
 
+#define BTN_PAUSE_W    36
+#define BTN_PAUSE_H    STATUS_H
+#define BTN_PAUSE_L    (SCREEN_W - BTN_PAUSE_W)
+#define BTN_PAUSE_T    0
+#define BTN_PAUSE_CX   (BTN_PAUSE_L + BTN_PAUSE_W / 2)
+#define BTN_PAUSE_CY   (STATUS_H / 2)
+#define BTN_TOUCH_PAD  4
 
-#define CTRL_ROW1_Y  (CTRL_Y + 16)
-#define CTRL_DIV_Y   (CTRL_Y + 38)
+/* SELECT / START — small circles, stacked center deck */
+#define BTN_UTIL_X     SCREEN_CX
+#define BTN_SE_X       BTN_UTIL_X
+#define BTN_ST_X       BTN_UTIL_X
+#define BTN_UTIL_R     12
+#define BTN_UTIL_HIT   (BTN_UTIL_R + BTN_TOUCH_PAD)
+#define BTN_UTIL_GAP   4
+#define BTN_SE_Y       (CTRL_CY - BTN_UTIL_R - BTN_UTIL_GAP / 2)
+#define BTN_ST_Y       (CTRL_CY + BTN_UTIL_R + BTN_UTIL_GAP / 2)
 
+/* A / B — side by side right, full deck height, flush edges */
+#define BTN_AB_GAP     2
+#define BTN_B_L        155
+#define BTN_B_W        40
+#define BTN_A_W        43
+#define BTN_A_L        (SCREEN_W - BTN_A_W)
+#define BTN_AB_T       CTRL_Y
+#define BTN_AB_H       CTRL_H
+#define BTN_B_CX       (BTN_B_L + BTN_B_W / 2)
+#define BTN_A_CX       (BTN_A_L + BTN_A_W / 2)
+#define BTN_AB_CY      CTRL_CY
 
-#define BTN_MENU_X   36
-#define BTN_MENU_Y   CTRL_ROW1_Y
-#define BTN_MENU_W   56
-#define BTN_MENU_H   24
+#define ZONE_STICK_X_MAX   110
+#define ZONE_UTIL_X_MIN    88
+#define ZONE_UTIL_X_MAX    152
+#define ZONE_ACTION_X_MIN  BTN_B_L
 
-#define BTN_SE_X    108
-#define BTN_SE_Y    CTRL_ROW1_Y
-#define BTN_SE_W     50
-#define BTN_SE_H     24
-
-#define BTN_ST_X    178
-#define BTN_ST_Y    CTRL_ROW1_Y
-#define BTN_ST_W     50
-#define BTN_ST_H     24
-
-
-#define DPAD_CX       52
-#define DPAD_CY      (CTRL_Y + 78)
-#define DPAD_ARM       36
-#define DPAD_THICK     15
-#define DPAD_HIT_EXTRA 10
-
-#define BTN_A_X       212
-#define BTN_A_Y      (CTRL_Y + 64)
-#define BTN_A_R        19
-
-#define BTN_B_X       176
-#define BTN_B_Y      (CTRL_Y + 94)
-#define BTN_B_R        19
-#define BTN_TOUCH_PAD   3
-
-
-#define ZONE_DPAD_X_MAX   106
-#define ZONE_ACTION_X_MIN 118
+/* Analógico — altura máxima do deck */
+#define STICK_CX        52
+#define STICK_CY        CTRL_CY
+#define STICK_BASE_R    34
+#define STICK_KNOB_R    10
+#define STICK_HIT_EXTRA 8
+#define STICK_RANGE     (STICK_BASE_R - STICK_KNOB_R - 2)

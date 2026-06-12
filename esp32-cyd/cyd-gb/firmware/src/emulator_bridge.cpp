@@ -1,6 +1,7 @@
 #include "emulator_bridge.h"
 #include "display.h"
 #include "hw_config.h"
+#include "ui_theme.h"
 #include <Arduino.h>
 #include <string.h>
 #include <SD.h>
@@ -70,42 +71,89 @@ static uint8_t fskip = 0, fcnt = 0;
 static uint32_t fpsc = 0, fpst = 0, cfps = 0;
 static volatile uint8_t jpad = 0;
 
+struct PalRGB { uint8_t r, g, b; };
 
-#define SW(c) (uint16_t)(((c)>>8)|((c)<<8))
-
-static const uint16_t pals[NUM_PALETTES][4] = {
-    {SW(0x9FE5),SW(0x4F64),SW(0x2542),SW(0x0261)},
-    {SW(0xFFFF),SW(0xAD55),SW(0x52AA),SW(0x0000)},
-    {SW(0xFFFF),SW(0xB596),SW(0x6B4D),SW(0x0000)},
-    {SW(0xFFDF),SW(0xD68F),SW(0x7A4B),SW(0x1082)},
-    {SW(0xBF5F),SW(0x6CDF),SW(0x339F),SW(0x0019)},
-    {SW(0xFFF0),SW(0xFC00),SW(0x8800),SW(0x2000)},
-    {SW(0xE71C),SW(0x9CD3),SW(0x4228),SW(0x0000)},
-    {SW(0xFFFF),SW(0xFE20),SW(0xC800),SW(0x4000)},
-    {SW(0xAFFF),SW(0x5F5F),SW(0x2D1F),SW(0x0019)},
-    {SW(0xFFF0),SW(0xBDE0),SW(0x5AE0),SW(0x0120)},
-    {SW(0xFFFF),SW(0xFD20),SW(0xAB00),SW(0x4000)},
-    {SW(0xFFDF),SW(0xF71C),SW(0xAA13),SW(0x3808)},
-    {SW(0xCFFF),SW(0x867F),SW(0x433F),SW(0x0019)},
-    {SW(0xFFB6),SW(0xD52A),SW(0x8A08),SW(0x3000)},
-    {SW(0xFFFF),SW(0xBF5F),SW(0x5F1F),SW(0x0019)},
-    {SW(0xFFF8),SW(0xFCC0),SW(0xC880),SW(0x6000)},
-    {SW(0xEF3C),SW(0x867F),SW(0x4179),SW(0x0000)},
-    {SW(0xFFFF),SW(0x07FF),SW(0x001F),SW(0x0000)},
-    {SW(0x0000),SW(0x4228),SW(0xAD55),SW(0xFFFF)},
-    {SW(0xFE60),SW(0xAB00),SW(0x5000),SW(0x0000)},
+static const PalRGB pal_src[NUM_PALETTES][4] = {
+    {{155,188, 15},{139,172, 15},{ 48, 98, 48},{ 15, 56, 15}}, /* Classic Green */
+    {{224,224,216},{160,160,152},{ 96, 96, 88},{ 32, 32, 24}}, /* Original DMG */
+    {{192,192,184},{128,128,120},{ 80, 80, 72},{ 48, 48, 40}}, /* Pocket Gray */
+    {{255,240,200},{220,180,120},{160,100, 60},{ 80, 48, 24}}, /* Warm Sepia */
+    {{180,220,255},{120,170,230},{ 60,110,180},{ 20, 50,100}}, /* Cool Blue */
+    {{255,200,120},{220,140, 60},{160, 80, 30},{ 80, 40, 10}}, /* Autumn */
+    {{255,255,255},{170,170,170},{ 85, 85, 85},{  0,  0,  0}}, /* Grayscale */
+    {{255,120, 80},{220, 60, 40},{160, 20, 10},{ 80,  0,  0}}, /* Lava */
+    {{ 80,180,255},{ 40,120,200},{ 20, 70,140},{  0, 30, 80}}, /* Ocean */
+    {{140,220,100},{ 90,170, 60},{ 50,110, 30},{ 20, 60, 10}}, /* Forest */
+    {{255,180,100},{230,120, 60},{180, 70, 30},{120, 30,  0}}, /* Sunset */
+    {{255,140,160},{220, 80,100},{160, 40, 60},{100,  0, 20}}, /* Cherry */
+    {{200,240,255},{140,200,230},{ 80,150,190},{ 30, 80,120}}, /* Ice */
+    {{180,120, 80},{140, 80, 50},{100, 50, 25},{ 60, 25, 10}}, /* Chocolate */
+    {{180,255,200},{120,220,150},{ 70,170,100},{ 30,100, 50}}, /* Mint */
+    {{255,220,180},{230,170,130},{190,120, 80},{140, 70, 40}}, /* Peach */
+    {{220,180,255},{170,130,220},{120, 80,170},{ 70, 40,110}}, /* Lavender */
+    {{255,  0,255},{  0,255,255},{255,255,  0},{255,  0,  0}}, /* Neon */
+    {{  0,  0,  0},{ 85, 85, 85},{170,170,170},{255,255,255}}, /* Inverted */
+    {{255,220, 80},{220,170, 40},{170,120, 10},{120, 80,  0}}, /* Gold */
 };
+
 static const char* palnames[NUM_PALETTES] = {
     "Classic Green","Original DMG","Pocket Gray","Warm Sepia","Cool Blue",
     "Autumn","Grayscale","Lava","Ocean","Forest",
     "Sunset","Cherry","Ice","Chocolate","Mint",
     "Peach","Lavender","Neon","Inverted","Gold"
 };
-static uint8_t curpal = 0;
 
-void emu_set_palette(uint8_t i) { if (i<NUM_PALETTES) curpal=i; }
+/* [palette][layer 0=OBJ0,1=OBJ1,2=BG][shade 0-3] */
+static uint16_t pals[NUM_PALETTES][3][4];
+static uint8_t curpal = 0;
+static bool pals_ready = false;
+
+static uint16_t make565(uint8_t r, uint8_t g, uint8_t b) {
+    return tft.color565(r, g, b);
+}
+
+static uint16_t dim565(uint16_t c, uint8_t num, uint8_t den) {
+    if (den == 0) return c;
+    uint8_t r = ((c >> 11) & 0x1F) * 255 / 31 * num / den;
+    uint8_t g = ((c >> 5) & 0x3F) * 255 / 63 * num / den;
+    uint8_t b = (c & 0x1F) * 255 / 31 * num / den;
+    return make565(r, g, b);
+}
+
+void emu_build_palettes() {
+    if (pals_ready) return;
+    for (int p = 0; p < NUM_PALETTES; p++) {
+        for (int s = 0; s < 4; s++) {
+            uint16_t base = make565(pal_src[p][s].r, pal_src[p][s].g, pal_src[p][s].b);
+            pals[p][0][s] = base;
+            pals[p][1][s] = dim565(base, 82, 100);
+            pals[p][2][s] = base;
+        }
+    }
+    pals_ready = true;
+    Serial.println("[EMU] Palettes built (RGB565 + layers)");
+}
+
+void emu_set_palette(uint8_t i) {
+    if (!pals_ready) emu_build_palettes();
+    if (i >= NUM_PALETTES) i = NUM_PALETTES - 1;
+    curpal = i;
+    ui_theme_apply(i);
+}
+
 uint8_t emu_get_palette() { return curpal; }
-const char* emu_get_palette_name(uint8_t i) { return (i<NUM_PALETTES)?palnames[i]:"?"; }
+const char* emu_get_palette_name(uint8_t i) { return (i < NUM_PALETTES) ? palnames[i] : "?"; }
+
+uint16_t emu_palette_color(uint8_t pal_idx, uint8_t shade) {
+    if (!pals_ready) emu_build_palettes();
+    if (pal_idx >= NUM_PALETTES) pal_idx = 0;
+    if (shade > 3) shade = 3;
+    return pals[pal_idx][2][shade];
+}
+
+uint16_t emu_palette_color_dim(uint8_t pal_idx, uint8_t shade, uint8_t num, uint8_t den) {
+    return dim565(emu_palette_color(pal_idx, shade), num, den);
+}
 
 
 static uint8_t IRAM_ATTR gb_rom_read(struct gb_s* g, const uint_fast32_t a) {
@@ -123,8 +171,18 @@ static void gb_err(struct gb_s* g, const enum gb_error_e e, const uint16_t a) {
 static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint_fast8_t ln) {
     (void)g;
     if (fskip>0 && (fcnt%(fskip+1))!=0) return;
-    const uint16_t* p = pals[curpal];
-    for (int x=0;x<GB_SCREEN_W;x++) lbuf[x]=p[px[x]&3];
+    const uint16_t (*layer)[4] = pals[curpal];
+    for (int x=0;x<GB_SCREEN_W;x++) {
+        uint8_t v = px[x];
+        uint8_t shade = v & 3;
+        int li = 2;
+        switch (v & 0x30) {
+            case 0x00: li = 0; break;
+            case 0x10: li = 1; break;
+            case 0x20: li = 2; break;
+        }
+        lbuf[x] = layer[li][shade];
+    }
     display_push_gb_line(ln, lbuf);
 }
 

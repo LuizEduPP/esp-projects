@@ -5,10 +5,13 @@
 #include "sd_manager.h"
 #include "ui_launcher.h"
 #include "emulator_bridge.h"
+#include "i18n.h"
+#include "ui_theme.h"
 
 static RomEntry roms[64];
 static int rcnt = 0;
 static char cur_path[80] = {0};
+static char cur_title[32] = {0};
 static TaskHandle_t ttask = nullptr;
 static volatile bool emu_on = false, menu_req = false;
 static volatile bool menu_btn_prev = false;
@@ -42,7 +45,6 @@ static void tt_start() {
     if(!ttask) xTaskCreatePinnedToCore(touch_task,"t",4096,0,5,&ttask,0);
     else vTaskResume(ttask);
 }
-static void tt_stop() { if(ttask) vTaskSuspend(ttask); }
 
 static void save_ram() {
     if(!cur_path[0]) return;
@@ -56,15 +58,56 @@ static void load_ram() {
         if(t){if(sd_load_state(cur_path,t,sz))emu_set_cart_ram(t,sz);free(t);} }
 }
 
+static void redraw_game_ui() {
+    display_draw_game_frame();
+    display_draw_status_bar(cur_title, emu_get_fps());
+    display_draw_controls();
+}
+
+static void toast(const char* msg, uint16_t color) {
+    int cx = GAME_X + GAME_W / 2;
+    int cy = GAME_Y + GAME_H / 2;
+    tft.fillRoundRect(cx - 70, cy - 16, 140, 32, 6, TFT_BLACK);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(color);
+    tft.drawString(msg, cx, cy, 2);
+    delay(700);
+}
 
 void run_emu() {
     emu_on = true; menu_req = false; menu_btn_prev = false;
     display_clear(TFT_BLACK);
-    display_draw_controls();
+    redraw_game_ui();
 
-    uint32_t ft=0;
+    uint32_t ft = 0;
+    uint32_t fps_t = 0;
+    uint8_t last_dpad = 0;
+    int16_t last_sdx = 0, last_sdy = 0;
+
     while(emu_on) {
         emu_run_frame();
+
+        if (touch_dpad_active()) {
+            uint8_t dpad = touch_get_dpad_visual();
+            int16_t sdx = 0, sdy = 0;
+            touch_get_dpad_stick(&sdx, &sdy);
+            if (dpad != last_dpad || abs(sdx - last_sdx) > 1 || abs(sdy - last_sdy) > 1) {
+                display_update_dpad(dpad, sdx, sdy);
+                last_dpad = dpad;
+                last_sdx = sdx;
+                last_sdy = sdy;
+            }
+        } else if (last_dpad || last_sdx || last_sdy) {
+            display_update_dpad(0, 0, 0);
+            last_dpad = 0;
+            last_sdx = last_sdy = 0;
+        }
+
+        uint32_t now = millis();
+        if (now - fps_t > 1000) {
+            fps_t = now;
+            display_update_status_fps(emu_get_fps());
+        }
 
         if (menu_req) {
             menu_req = false;
@@ -74,17 +117,11 @@ void run_emu() {
                 case 0: break;
                 case 1:
                     save_ram();
-                    tft.fillRect(SCREEN_CX-80,80,160,40,TFT_BLACK);
-                    tft.setTextDatum(MC_DATUM); tft.setTextColor(TFT_GREEN);
-                    tft.drawString("SAVED!",SCREEN_CX,100,4);
-                    delay(700);
+                    toast(tr(STR_SAVED), ui_theme_get()->menu_primary);
                     break;
                 case 2:
                     load_ram(); emu_reset(); load_ram();
-                    tft.fillRect(SCREEN_CX-80,80,160,40,TFT_BLACK);
-                    tft.setTextDatum(MC_DATUM); tft.setTextColor(0x07FF);
-                    tft.drawString("LOADED!",SCREEN_CX,100,4);
-                    delay(700);
+                    toast(tr(STR_LOADED), ui_theme_get()->accent);
                     break;
                 case 3:
                     emu_on=false; save_ram(); return;
@@ -93,14 +130,13 @@ void run_emu() {
                 case 5:
                     launcher_settings_menu(); break;
             }
-            display_clear(TFT_BLACK);
-            display_draw_controls();
+            redraw_game_ui();
+            last_dpad = 0;
+            last_sdx = last_sdy = 0;
         }
 
-
-        uint32_t n=millis();
-        if(n-ft>3000){
-            ft=n;
+        if(now-ft>3000){
+            ft=now;
             char lbl[48];
             touch_format_buttons(touch_get_buttons(), lbl, sizeof(lbl));
             Serial.printf("[G] FPS:%u btn:%s\n", emu_get_fps(), lbl);
@@ -113,6 +149,7 @@ void run_emu() {
 void setup() {
     Serial.begin(115200); delay(200);
     Serial.println("\n=== CYD-GB ===");
+    i18n_set_lang(LANG_EN);
     pinMode(LED_R_PIN,OUTPUT); pinMode(LED_G_PIN,OUTPUT); pinMode(LED_B_PIN,OUTPUT);
     digitalWrite(LED_R_PIN,HIGH); digitalWrite(LED_G_PIN,HIGH); digitalWrite(LED_B_PIN,HIGH);
 
@@ -121,25 +158,36 @@ void setup() {
     tt_start();
 
     if(!sd_init()) {
-        tft.fillScreen(TFT_BLACK); tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TFT_RED); tft.drawString("SD Card Error!",SCREEN_CX,120,4);
-        tft.setTextColor(0x7BEF); tft.drawString("Insert FAT32 SD & reset",SCREEN_CX,160,2);
+        const UiTheme* th = ui_theme_get();
+        tft.fillScreen(th->bg);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(th->menu_danger);
+        tft.drawString(tr(STR_SD_ERROR), SCREEN_CX, 120, 4);
+        tft.setTextColor(th->text_mute);
+        tft.drawString(tr(STR_SD_HINT), SCREEN_CX, 160, 2);
         while(true) delay(1000);
     }
 
-
-    tft.fillScreen(TFT_BLACK); tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(0x07E0); tft.drawString("CYD-GB",SCREEN_CX,120,4);
-    tft.setTextColor(0x7BEF); tft.drawString("Game Boy Emulator",SCREEN_CX,160,2);
+    {
+        const UiTheme* th = ui_theme_get();
+        tft.fillScreen(th->bg);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(th->accent);
+        tft.drawString("CYD-GB", SCREEN_CX, 120, 4);
+        tft.setTextColor(th->text_mute);
+        tft.drawString(tr(STR_SPLASH_SUB), SCREEN_CX, 160, 2);
+    }
     delay(1200);
 
-    uint8_t s_pal, s_fs, s_bl;
-    if (touch_load_storage(&s_pal, &s_fs, &s_bl)) {
+    uint8_t s_pal, s_fs, s_bl, s_lang;
+    if (touch_load_storage(&s_pal, &s_fs, &s_bl, &s_lang)) {
+        i18n_set_lang(s_lang);
         emu_set_palette(s_pal);
         emu_set_frame_skip(s_fs);
         display_set_backlight(s_bl);
-        Serial.printf("[INIT] Settings from SD: pal=%d fs=%d bl=%d\n", s_pal, s_fs, s_bl);
+        Serial.printf("[INIT] Settings from SD: pal=%d fs=%d bl=%d lang=%u\n", s_pal, s_fs, s_bl, s_lang);
     } else {
+        i18n_set_lang(LANG_EN);
         Serial.println("[INIT] No config on SD — defaults");
     }
 
@@ -155,23 +203,27 @@ void loop() {
     if(sel<0||sel>=rcnt) return;
 
     strncpy(cur_path,roms[sel].full_path,79);
+    strncpy(cur_title, roms[sel].filename, 31);
+    char* d = strrchr(cur_title, '.');
+    if (d) *d = 0;
 
-
-    tft.fillScreen(TFT_BLACK); tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(0x07E0); tft.drawString("Loading...",SCREEN_CX,120,4);
-    char nm[30]; strncpy(nm,roms[sel].filename,28); nm[28]=0;
-    char* d=strrchr(nm,'.'); if(d)*d=0;
-    tft.setTextColor(TFT_WHITE); tft.drawString(nm,SCREEN_CX,160,2);
+    tft.fillScreen(ui_theme_get()->bg);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(ui_theme_get()->accent);
+    tft.drawString(tr(STR_LOADING), SCREEN_CX, 120, 4);
+    tft.setTextColor(ui_theme_get()->text_hi);
+    tft.drawString(cur_title, SCREEN_CX, 160, 2);
 
     if(!emu_open_rom(cur_path)){
-        tft.setTextColor(TFT_RED); tft.drawString("Open failed!",SCREEN_CX,200,2); delay(2000); return;
+        tft.setTextColor(ui_theme_get()->menu_danger);
+        tft.drawString(tr(STR_OPEN_FAILED), SCREEN_CX, 200, 2); delay(2000); return;
     }
     if(!emu_init(0,0)){
-        tft.setTextColor(TFT_RED); tft.drawString("Init failed!",SCREEN_CX,200,2); delay(2000); emu_close_rom(); return;
+        tft.setTextColor(ui_theme_get()->menu_danger);
+        tft.drawString(tr(STR_INIT_FAILED), SCREEN_CX, 200, 2); delay(2000); emu_close_rom(); return;
     }
 
     load_ram();
-    emu_set_frame_skip(0);
     digitalWrite(LED_G_PIN,LOW);
     run_emu();
     digitalWrite(LED_G_PIN,HIGH);

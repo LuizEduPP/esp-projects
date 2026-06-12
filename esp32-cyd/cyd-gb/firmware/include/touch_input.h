@@ -25,12 +25,15 @@ uint16_t touch_get_buttons();
 bool touch_is_pressed();
 int16_t touch_get_x();
 int16_t touch_get_y();
+uint8_t touch_get_dpad_visual();
+bool touch_get_dpad_stick(int16_t* dx, int16_t* dy);
+bool touch_dpad_active();
 void touch_format_buttons(uint16_t btn, char* buf, size_t buflen);
 void touch_set_calibration(CydTouchCal cal);
 CydTouchCal touch_get_default_calibration();
 void touch_run_calibration();
 
 
-void touch_save_settings(uint8_t palette, uint8_t fskip, uint8_t brightness);
-bool touch_load_settings(uint8_t* palette, uint8_t* fskip, uint8_t* brightness);
-bool touch_load_storage(uint8_t* palette, uint8_t* fskip, uint8_t* brightness);
+void touch_save_settings(uint8_t palette, uint8_t fskip, uint8_t brightness, uint8_t lang);
+bool touch_load_settings(uint8_t* palette, uint8_t* fskip, uint8_t* brightness, uint8_t* lang);
+bool touch_load_storage(uint8_t* palette, uint8_t* fskip, uint8_t* brightness, uint8_t* lang);

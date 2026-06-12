@@ -18,6 +18,7 @@ struct CydGbConfig {
     uint8_t palette;
     uint8_t frame_skip;
     uint8_t brightness;
+    uint8_t language;
     bool    cal_valid;
     int16_t cal_xmin;
     int16_t cal_xmax;
