@@ -11,6 +11,7 @@ Board docs and pin map: [witnessmenow/ESP32-Cheap-Yellow-Display](https://github
 | Project | Description | Docs |
 |---------|-------------|------|
 | [**cyd-gb/**](cyd-gb/) | Game Boy / GBC emulator with SD ROM launcher, 52 palettes, BMP covers, and touch controls | [README](cyd-gb/README.md) |
+| [**cyd-arcade/**](cyd-arcade/) | Casual games (Snake, Flappy, Arkanoid) — LVGL launcher, no SD required | [README](cyd-arcade/README.md) |
 
 ### cyd-gb highlights
 

@@ -10,6 +10,10 @@
     "cyd-gb:flash": "yarn --cwd esp32-cyd/cyd-gb fw:flash",
     "cyd-gb:install": "yarn --cwd esp32-cyd/cyd-gb fw:install",
     "cyd-gb:monitor": "yarn --cwd esp32-cyd/cyd-gb fw:monitor",
-    "cyd-gb:icons": "yarn --cwd esp32-cyd/cyd-gb icons"
+    "cyd-gb:icons": "yarn --cwd esp32-cyd/cyd-gb icons",
+    "cyd-arcade:build": "yarn --cwd esp32-cyd/cyd-arcade fw:build",
+    "cyd-arcade:flash": "yarn --cwd esp32-cyd/cyd-arcade fw:flash",
+    "cyd-arcade:install": "yarn --cwd esp32-cyd/cyd-arcade fw:install",
+    "cyd-arcade:monitor": "yarn --cwd esp32-cyd/cyd-arcade fw:monitor"
   }
 }
