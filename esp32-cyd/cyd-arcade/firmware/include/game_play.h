@@ -11,13 +11,17 @@ typedef enum {
 
 #define GAME_LIVES_DEFAULT 3
 
-#define HUD_TIER_FASE  'F'
-#define HUD_TIER_NIVEL 'N'
-#define HUD_TIER_CPU   'C'
+typedef enum {
+    HUD_TIER_NONE = 0,
+    HUD_TIER_FASE,
+    HUD_TIER_NIVEL,
+    HUD_TIER_CPU,
+} HudTierKind;
 
 typedef struct {
     char engine[16];
     char best_name[SCORE_NAME_LEN + 1];
+    char score_tag[8];
     int score;
     int best;
     int tier;
@@ -27,13 +31,14 @@ typedef struct {
     bool resume_redraw;
     bool tier_show_zero;
     uint32_t pause_after_ms;
-    char tier_prefix;
+    HudTierKind tier_kind;
 } GameHud;
 
 GameHud* game_hud_begin(const char* engine);
 void game_hud_end(GameHud* hud);
 void game_hud_set_score(GameHud* hud, int score);
-void game_hud_set_tier_mode(GameHud* hud, char prefix, bool show_at_zero);
+void game_hud_set_score_tag(GameHud* hud, const char* tag);
+void game_hud_set_tier_mode(GameHud* hud, HudTierKind kind, bool show_at_zero);
 void game_hud_set_tier(GameHud* hud, int value);
 void game_hud_set_lives(GameHud* hud, int lives, int max_lives);
 void game_play_toast(const char* title, const char* sub, uint16_t stroke, uint16_t bg);

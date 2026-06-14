@@ -224,6 +224,7 @@ void game_velha_run(const GameEntry* cfg) {
     waiting = false;
     velha_reset_board();
     game_hud_set_tier_mode(hud, HUD_TIER_CPU, true);
+    game_hud_set_score_tag(hud, "Vit");
     game_hud_set_tier(hud, 0);
     game_hud_set_score(hud, 0);
 

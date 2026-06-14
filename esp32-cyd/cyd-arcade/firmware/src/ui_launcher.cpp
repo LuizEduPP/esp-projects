@@ -102,20 +102,14 @@ static void draw_list_row_content(const GameEntry* game, int cx, int cy, bool se
     if (sel)
         tft.drawRoundRect(cx, cy, UI_LIST_ROW_W, UI_LIST_ROW_H, 8, TH->accent);
 
-    tft.fillRoundRect(cx + 4, cy + 5, 5, UI_LIST_ROW_H - 10, 2, ui_theme_brick_color(idx));
-
-    const int icon_x = cx + 14;
-    const int icon_y = cy + (UI_LIST_ROW_H - UI_LIST_ICON) / 2;
-    const uint16_t icon_bg = ui_theme_brick_color(idx);
-    tft.fillRoundRect(icon_x, icon_y, UI_LIST_ICON, UI_LIST_ICON, 8, icon_bg);
-    tft.drawRoundRect(icon_x, icon_y, UI_LIST_ICON, UI_LIST_ICON, 8, TH->border);
-    ui_icon_draw(icon_x + 8, icon_y + 8, UI_LIST_ICON - 16, UI_ICON_CART, TH->icon);
+    tft.fillRoundRect(cx + 4, cy + 5, UI_LIST_STRIPE_W, UI_LIST_ROW_H - 10, 2,
+                      ui_theme_brick_color(idx));
 
     char title[24];
-    label_fit(game->title, title, sizeof(title), 80);
+    label_fit(game->title, title, sizeof(title), UI_LIST_ROW_W - 96);
     tft.setTextDatum(ML_DATUM);
     tft.setTextColor(TH->text_hi, bg);
-    tft.drawString(title, icon_x + UI_LIST_ICON + 8, cy + UI_LIST_ROW_H / 2, 2);
+    tft.drawString(title, cx + 4 + UI_LIST_STRIPE_W + 10, cy + UI_LIST_ROW_H / 2, 2);
 
     const int best = score_store_get(game->engine);
     if (best > 0) {

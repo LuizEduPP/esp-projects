@@ -26,12 +26,16 @@
 #define UI_CONTENT_W     (SCREEN_W - UI_PAD * 2)
 
 #define STATUS_H         28
-#define HUD_LIVES_X      28
-#define HUD_LIVES_W      52
-#define HUD_SCORE_X      154
-#define HUD_SCORE_W      50
-#define HUD_PAUSE_X      210
+#define HUD_LIVES_X      4
+#define HUD_LIVES_W      44
+#define HUD_TIER_X       52
+#define HUD_TIER_W       60
+#define HUD_SCORE_X      116
+#define HUD_SCORE_W      64
+#define HUD_PAUSE_X      186
 #define HUD_PAUSE_W      26
+
+#define UI_LIST_STRIPE_W 5
 
 #define UI_SCROLLBAR_W   8
 #define UI_SCROLLBAR_X   (SCREEN_W - UI_SCROLLBAR_W - 4)
@@ -39,9 +43,8 @@
 #define UI_HDR_H         44
 #define UI_LIST_TOP      (UI_HDR_H + 8)
 #define UI_LIST_ROW_H    50
-#define UI_LIST_ROW_W    (UI_CONTENT_W - UI_SCROLLBAR_W - 8)
+#define UI_LIST_ROW_W    (UI_CONTENT_W - UI_SCROLLBAR_W - 4)
 #define UI_LIST_GAP      6
-#define UI_LIST_ICON     40
 #define UI_LIST_ROW_STEP (UI_LIST_ROW_H + UI_LIST_GAP)
 #define UI_LIST_VIEW_H   (SCREEN_H - UI_LIST_TOP - 4)
 #define UI_LIST_BOT      SCREEN_H

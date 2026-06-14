@@ -16,7 +16,6 @@
 
 #define TH ui_theme_get()
 
-#define COL_LIFE_PANEL 0x001F
 #define COL_LIFE       0xFFE0
 #define COL_LIFE_OFF   0x2949
 #define COL_LIFE_DOT   0xF800
@@ -27,9 +26,9 @@ static void draw_lives_in_status(GameHud* hud) {
     if (!hud || hud->lives_max <= 0) return;
     const int y = 4;
     const int h = STATUS_H - 8;
-    tft.fillRoundRect(HUD_LIVES_X, y, HUD_LIVES_W, h, 4, COL_LIFE_PANEL);
+    tft.fillRoundRect(HUD_LIVES_X, y, HUD_LIVES_W, h, 4, TH->card);
     for (int i = 0; i < hud->lives_max; i++) {
-        const int cx = HUD_LIVES_X + 10 + i * 14;
+        const int cx = HUD_LIVES_X + 8 + i * 12;
         const int cy = y + h / 2;
         const bool on = i < hud->lives;
         tft.fillCircle(cx, cy, 4, on ? COL_LIFE : COL_LIFE_OFF);
@@ -38,40 +37,74 @@ static void draw_lives_in_status(GameHud* hud) {
     }
 }
 
-static void draw_tier_badge(GameHud* hud) {
-    if (!hud) return;
-    const char prefix = hud->tier_prefix ? hud->tier_prefix : HUD_TIER_FASE;
-    if (hud->tier <= 0) {
-        if (!hud->tier_show_zero || prefix != HUD_TIER_CPU) return;
+static const char* tier_label(HudTierKind kind) {
+    switch (kind) {
+    case HUD_TIER_FASE:  return "Fase";
+    case HUD_TIER_NIVEL: return "Niv";
+    case HUD_TIER_CPU:   return "CPU";
+    default: return nullptr;
     }
-    char buf[8];
-    snprintf(buf, sizeof(buf), "%c%d", prefix, hud->tier);
+}
+
+static bool tier_visible(const GameHud* hud) {
+    if (!hud || hud->tier_kind == HUD_TIER_NONE) return false;
+    if (hud->tier > 0) return true;
+    return hud->tier_show_zero;
+}
+
+static int hud_tier_x(const GameHud* hud) {
+    return (hud && hud->lives_max > 0) ? HUD_TIER_X : HUD_LIVES_X;
+}
+
+static int hud_score_x(const GameHud* hud) {
+    if (hud && hud->lives_max <= 0 && !tier_visible(hud))
+        return HUD_LIVES_X;
+    if (hud && hud->lives_max <= 0)
+        return HUD_TIER_X + HUD_TIER_W + 4;
+    if (!tier_visible(hud))
+        return HUD_TIER_X;
+    return HUD_SCORE_X;
+}
+
+static void draw_tier_badge(GameHud* hud) {
+    if (!tier_visible(hud)) return;
+    const char* word = tier_label(hud->tier_kind);
+    if (!word) return;
+
+    char buf[12];
+    snprintf(buf, sizeof(buf), "%s %d", word, hud->tier);
+    const int x = hud_tier_x(hud);
+    tft.fillRoundRect(x, 4, HUD_TIER_W, 20, 4, TH->card);
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TH->accent, TH->bg);
-    tft.drawString(buf, SCREEN_CX, STATUS_H / 2, 2);
+    tft.setTextColor(TH->accent, TH->card);
+    tft.drawString(buf, x + HUD_TIER_W / 2, STATUS_H / 2, 1);
 }
 
 static void draw_score_badge(GameHud* hud) {
     if (!hud) return;
     char sc[16];
-    snprintf(sc, sizeof(sc), "%d", hud->score);
-    tft.fillRoundRect(HUD_SCORE_X, 4, HUD_SCORE_W, 20, 4, TH->card);
+    if (hud->score_tag[0])
+        snprintf(sc, sizeof(sc), "%s %d", hud->score_tag, hud->score);
+    else
+        snprintf(sc, sizeof(sc), "%d", hud->score);
+
+    const int x = hud_score_x(hud);
+    tft.fillRoundRect(x, 4, HUD_SCORE_W, 20, 4, TH->card);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(TH->pal[1], TH->card);
-    tft.drawString(sc, HUD_SCORE_X + HUD_SCORE_W / 2, STATUS_H / 2, 2);
+    tft.drawString(sc, x + HUD_SCORE_W / 2, STATUS_H / 2, 1);
 }
 
 static void draw_status_bar(GameHud* hud) {
     tft.fillRect(0, 0, SCREEN_W, STATUS_H, TH->bg);
-    tft.fillRect(0, STATUS_H - 2, SCREEN_W, 2, TH->border);
+    tft.fillRect(0, STATUS_H - 1, SCREEN_W, 1, TH->border);
 
-    tft.fillCircle(14, STATUS_H / 2, 5, TH->accent);
     draw_lives_in_status(hud);
     draw_tier_badge(hud);
     draw_score_badge(hud);
 
     tft.fillRoundRect(HUD_PAUSE_X, 4, HUD_PAUSE_W, 20, 4, TH->card);
-    ui_icon_draw(HUD_PAUSE_X + 4, 2, 20, UI_ICON_PAUSE, TH->text_hi);
+    ui_icon_draw(HUD_PAUSE_X + 3, 2, 20, UI_ICON_PAUSE, TH->text_hi);
 }
 
 static bool clip_play_rect(int* x, int* y, int* w, int* h) {
@@ -159,7 +192,8 @@ GameHud* game_hud_begin(const char* engine) {
     if (!hud) return nullptr;
 
     strncpy(hud->engine, engine, sizeof(hud->engine) - 1);
-    hud->tier_prefix = HUD_TIER_FASE;
+    strncpy(hud->score_tag, "Pts", sizeof(hud->score_tag));
+    hud->tier_kind = HUD_TIER_FASE;
     hud->best = score_store_get(engine);
     score_store_get_name(engine, hud->best_name, sizeof(hud->best_name));
     hud->pause_after_ms = millis() + 450;
@@ -184,9 +218,16 @@ void game_hud_set_score(GameHud* hud, int score) {
     draw_status_bar(hud);
 }
 
-void game_hud_set_tier_mode(GameHud* hud, char prefix, bool show_at_zero) {
+void game_hud_set_score_tag(GameHud* hud, const char* tag) {
+    if (!hud || !tag) return;
+    strncpy(hud->score_tag, tag, sizeof(hud->score_tag) - 1);
+    hud->score_tag[sizeof(hud->score_tag) - 1] = '\0';
+    draw_status_bar(hud);
+}
+
+void game_hud_set_tier_mode(GameHud* hud, HudTierKind kind, bool show_at_zero) {
     if (!hud) return;
-    hud->tier_prefix = prefix ? prefix : HUD_TIER_FASE;
+    hud->tier_kind = kind;
     hud->tier_show_zero = show_at_zero;
     draw_status_bar(hud);
 }
