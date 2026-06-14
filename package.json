@@ -14,6 +14,7 @@
     "cyd-arcade:build": "yarn --cwd esp32-cyd/cyd-arcade fw:build",
     "cyd-arcade:flash": "yarn --cwd esp32-cyd/cyd-arcade fw:flash",
     "cyd-arcade:install": "yarn --cwd esp32-cyd/cyd-arcade fw:install",
-    "cyd-arcade:monitor": "yarn --cwd esp32-cyd/cyd-arcade fw:monitor"
+    "cyd-arcade:monitor": "yarn --cwd esp32-cyd/cyd-arcade fw:monitor",
+    "cyd-arcade:preview": "yarn --cwd esp32-cyd/cyd-arcade preview:circus"
   }
 }

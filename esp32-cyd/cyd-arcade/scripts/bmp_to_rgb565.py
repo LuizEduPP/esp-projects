@@ -4,9 +4,16 @@ import struct
 import sys
 from pathlib import Path
 
+# Escala WinAPI → CYD (448 px originais → 288 px de jogo)
+S = 288 / 448
+
 
 def rgb565(r: int, g: int, b: int) -> int:
     return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+
+
+def sz(v: float) -> int:
+    return max(1, int(round(v)))
 
 
 def load_bmp(path: Path):
@@ -32,21 +39,17 @@ def load_bmp(path: Path):
     return w, h_abs, pixels
 
 
-def scale_down(w, h, pixels, div):
-    if div <= 1:
-        return w, h, pixels
-    nw, nh = max(1, w // div), max(1, h // div)
+def resize_nn(w, h, pixels, tw, th):
     out = []
-    for y in range(nh):
-        for x in range(nw):
-            sx = min(w - 1, x * div + div // 2)
-            sy = min(h - 1, y * div + div // 2)
+    for y in range(th):
+        sy = min(h - 1, y * h // th)
+        for x in range(tw):
+            sx = min(w - 1, x * w // tw)
             out.append(pixels[sy * w + sx])
-    return nw, nh, out
+    return tw, th, out
 
 
 def apply_chroma(w, h, pixels, key=(0, 0, 0), tol=8):
-    key565 = rgb565(*key)
     out = []
     for c in pixels:
         r = ((c >> 11) & 0x1F) << 3
@@ -83,18 +86,35 @@ def main():
     assets = Path(sys.argv[1])
     out_path = Path(sys.argv[2])
 
+    mag = (255, 0, 255)
+    blk = (0, 0, 0)
+    pw, ph = sz(66 * S), sz(63 * S)
+    jw, jh = sz(50 * S), sz(50 * S)
+    rlw, rrh = sz(26 * S), sz(132 * 1.1 * S)
+    rrw = sz(23 * S)
+    cw, ch = sz(25 * S), sz(26 * S)
+    aw, ah = sz(65 * 1.3 * S), sz(64 * 1.3 * S)
+    dw, dh = sz(66 * 1.3 * S), sz(67 * 1.3 * S)
+    fw, fh = sz(67 * 1.25 * S), sz(92)
+    mw, mh = sz(86 * S), sz(30 * S)
+
+    # (nome, arquivo, largura, altura, chroma)
     specs = [
-        ("player0", "player0.bmp", 2, (0, 0, 0)),
-        ("player1", "player1.bmp", 2, (0, 0, 0)),
-        ("player2", "player2.bmp", 2, (0, 0, 0)),
-        ("jar0", "front.bmp", 2, (0, 0, 0)),
-        ("jar1", "front2.bmp", 2, (0, 0, 0)),
-        ("ring_l0", "enemy_b.bmp", 3, (0, 0, 0)),
-        ("ring_l1", "enemy_1b.bmp", 3, (0, 0, 0)),
-        ("ring_r0", "enemy_f.bmp", 3, (0, 0, 0)),
-        ("ring_r1", "enemy_1f.bmp", 3, (0, 0, 0)),
-        ("cash", "cash.bmp", 1, (0, 0, 0)),
-        ("bg_tile", "back_normal.bmp", 2, (0, 0, 0)),
+        ("player0", "player0.bmp", pw, ph, mag),
+        ("player1", "player1.bmp", pw, ph, mag),
+        ("player2", "player2.bmp", pw, ph, mag),
+        ("jar0", "front.bmp", jw, jh, mag),
+        ("jar1", "front2.bmp", jw, jh, mag),
+        ("ring_l0", "enemy_b.bmp", rlw, rrh, mag),
+        ("ring_l1", "enemy_1b.bmp", rlw, rrh, mag),
+        ("ring_r0", "enemy_f.bmp", rrw, rrh, mag),
+        ("ring_r1", "enemy_1f.bmp", rrw, rrh, mag),
+        ("cash", "cash.bmp", cw, ch, mag),
+        ("bg_tile", "back_normal.bmp", aw, ah, blk),
+        ("bg_tile2", "back_normal2.bmp", aw, ah, blk),
+        ("bg_deco", "back_deco.bmp", dw, dh, blk),
+        ("field_way", "back.bmp", fw, fh, blk),
+        ("miter", "miter.bmp", mw, mh, blk),
     ]
 
     with out_path.open("w", encoding="utf-8") as out:
@@ -107,13 +127,13 @@ def main():
         out.write("#define CIRCUS_CHROMA 0x0001\n\n")
 
         names = []
-        for name, fname, div, key in specs:
+        for name, fname, tw, th, key in specs:
             path = assets / fname
             if not path.exists():
                 print(f"skip missing {fname}")
                 continue
             w, h, px = load_bmp(path)
-            w, h, px = scale_down(w, h, px, div)
+            w, h, px = resize_nn(w, h, px, tw, th)
             px = apply_chroma(w, h, px, key)
             emit_c(name, w, h, px, out)
             names.append(name)
