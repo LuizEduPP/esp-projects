@@ -40,6 +40,23 @@ static int lane_w() { return PLAY_W / LANES; }
 static int lane_cx(int lane) { return lane * lane_w() + lane_w() / 2; }
 static int car_y() { return PLAY_H - CAR_Y_OFF; }
 
+static void restore_road_patch(int px, int py, int pw, int ph) {
+    if (pw <= 0 || ph <= 0) return;
+    game_play_fill_rect(px, py, pw, ph, COL_ROAD);
+    for (int i = 1; i < LANES; i++) {
+        const int lx = i * lane_w();
+        if (lx + 1 < px || lx - 1 > px + pw) continue;
+        for (int y = (py / 16) * 16; y < py + ph; y += 16) {
+            const int dash_y = y;
+            if (dash_y + 8 <= py || dash_y >= py + ph) continue;
+            const int clip_y = dash_y < py ? py : dash_y;
+            const int clip_h = min(dash_y + 8, py + ph) - clip_y;
+            if (clip_h > 0)
+                game_play_fill_rect(lx - 1, clip_y, 2, clip_h, COL_DASH);
+        }
+    }
+}
+
 static void draw_road() {
     game_play_clear(COL_ROAD);
     game_play_fill_rect(0, 0, 6, PLAY_H, COL_EDGE);
@@ -75,8 +92,12 @@ static void draw_coin(int cx, int y) {
     game_play_fill_rect(cx - 2, y + CAR_H / 2 - 5, 4, 10, COL_COIN);
 }
 
+static bool obs_on_screen(int y) {
+    return y + CAR_H + 4 >= 0 && y < PLAY_H;
+}
+
 static void draw_obs(int i) {
-    if (!obs_on[i]) return;
+    if (!obs_on[i] || !obs_on_screen(obs_y[i])) return;
     if (obs_coin[i]) {
         draw_coin(lane_cx(obs_lane[i]), obs_y[i]);
         return;
@@ -85,9 +106,15 @@ static void draw_obs(int i) {
 }
 
 static void erase_obs(int i) {
-    if (!obs_on[i]) return;
+    if (!obs_on[i] || !obs_on_screen(obs_y[i])) return;
     const int cx = lane_cx(obs_lane[i]);
-    game_play_fill_rect(cx - CAR_W / 2 - 1, obs_y[i] - 1, CAR_W + 2, CAR_H + 4, COL_ROAD);
+    restore_road_patch(cx - CAR_W / 2 - 1, obs_y[i] - 1, CAR_W + 2, CAR_H + 4);
+}
+
+static void erase_car_lane(int lane) {
+    const int cx = lane_cx(lane);
+    const int y = car_y();
+    restore_road_patch(cx - CAR_W / 2 - 1, y - 1, CAR_W + 2, CAR_H + 4);
 }
 
 static void spawn_obs() {
@@ -107,7 +134,6 @@ static bool rects_hit(int ax, int ay, int aw, int ah, int bx, int by, int bw, in
 }
 
 static bool step_game() {
-    game_frame_draw_now();
     for (int i = 0; i < OBS_MAX; i++) {
         if (!obs_on[i]) continue;
         erase_obs(i);
@@ -205,9 +231,7 @@ void game_dodge_run(const GameEntry* cfg) {
             }
 
             if (car_lane != prev_lane) {
-                game_frame_draw_now();
-                draw_road();
-                for (int i = 0; i < OBS_MAX; i++) draw_obs(i);
+                erase_car_lane(prev_lane);
                 draw_car();
                 prev_lane = car_lane;
             }
@@ -234,10 +258,10 @@ void game_dodge_run(const GameEntry* cfg) {
                 const int new_phase = score / 100 + 1;
                 if (new_phase != phase) {
                     phase = new_phase;
-                    if (game_hud_advance_tier(hud, phase))
-                        dodge_redraw();
+                    game_hud_advance_tier(hud, phase);
                 }
-                game_hud_set_score(hud, score);
+                if (score != hud->score)
+                    game_hud_set_score(hud, score);
             }
             game_frame_delay();
         }

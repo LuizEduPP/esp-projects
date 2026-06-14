@@ -300,6 +300,10 @@ static void clear_launch_hint() {
     redraw_bricks_in_rect(0, 2, PLAY_W, 28);
 }
 
+static bool waiting_to_launch() {
+    return live_ball_count() == 0 && !ball_stuck;
+}
+
 static void draw_launch_hint() {
     const int hy = 6;
     const int bw = 156;
@@ -313,8 +317,17 @@ static void draw_launch_hint() {
     tft.drawString("TOQUE P/ LANCAR", PLAY_X + PLAY_W / 2, PLAY_Y + hy + 11, 1);
 }
 
-static bool waiting_to_launch() {
-    return live_ball_count() == 0 && !ball_stuck;
+static void show_launch_hint_if_needed() {
+    if (!waiting_to_launch()) {
+        if (hint_visible) {
+            clear_launch_hint();
+            hint_visible = false;
+        }
+        return;
+    }
+    if (hint_visible) return;
+    draw_launch_hint();
+    hint_visible = true;
 }
 
 static void breakout_redraw(GameHud* hud) {
@@ -327,8 +340,8 @@ static void breakout_redraw(GameHud* hud) {
     if (waiting_to_launch())
         draw_ball_at((int)balls[0].x, (int)balls[0].y);
     draw_capsule();
-    if (waiting_to_launch())
-        draw_launch_hint();
+    hint_visible = false;
+    show_launch_hint_if_needed();
     (void)hud;
 }
 
@@ -666,9 +679,6 @@ void game_breakout_run(const GameEntry* cfg) {
             if (waiting_to_launch()) {
                 balls[0].x = (float)pad_x;
                 balls[0].y = (float)(pad_y() - BALL_R - 4);
-            } else if (hint_visible) {
-                clear_launch_hint();
-                hint_visible = false;
             }
 
             if (millis() - last_phys >= PHYS_MS && !waiting_to_launch()) {
@@ -699,8 +709,7 @@ void game_breakout_run(const GameEntry* cfg) {
 
             sync_draw(&prev_pad, prev_bx, prev_by);
 
-            if (waiting_to_launch())
-                draw_launch_hint();
+            show_launch_hint_if_needed();
 
             if (score != hud->score)
                 game_hud_set_score(hud, score);

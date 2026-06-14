@@ -127,8 +127,11 @@ static bool clip_play_rect(int* x, int* y, int* w, int* h) {
     return *w > 0 && *h > 0;
 }
 
-static void refresh_status_if_clipped(bool clipped_top) {
-    if (clipped_top && s_active_hud)
+static void refresh_status_if_overlap(int play_y, int play_h) {
+    if (!s_active_hud || play_h <= 0) return;
+    const int screen_y0 = PLAY_Y + play_y;
+    const int screen_y1 = screen_y0 + play_h;
+    if (screen_y1 > 0 && screen_y0 < STATUS_H)
         draw_status_bar(s_active_hud);
 }
 
@@ -483,32 +486,23 @@ void game_play_clear(uint16_t color) {
 
 void game_play_fill_rect(int x, int y, int w, int h, uint16_t color) {
     if (!game_frame_draw_on()) return;
-    const bool clipped_top = (y < 0);
-    if (!clip_play_rect(&x, &y, &w, &h)) {
-        refresh_status_if_clipped(clipped_top);
-        return;
-    }
+    if (!clip_play_rect(&x, &y, &w, &h)) return;
     tft.fillRect(PLAY_X + x, PLAY_Y + y, w, h, color);
-    refresh_status_if_clipped(clipped_top);
+    refresh_status_if_overlap(y, h);
 }
 
 void game_play_fill_round_rect(int x, int y, int w, int h, int r, uint16_t color) {
     if (!game_frame_draw_on()) return;
-    const bool clipped_top = (y < 0);
-    if (!clip_play_rect(&x, &y, &w, &h)) {
-        refresh_status_if_clipped(clipped_top);
-        return;
-    }
+    if (!clip_play_rect(&x, &y, &w, &h)) return;
     tft.fillRoundRect(PLAY_X + x, PLAY_Y + y, w, h, r, color);
-    refresh_status_if_clipped(clipped_top);
+    refresh_status_if_overlap(y, h);
 }
 
 void game_play_fill_circle(int cx, int cy, int r, uint16_t color) {
     if (!game_frame_draw_on()) return;
     if (r <= 0) return;
-    const bool clipped_top = (cy - r < 0);
     tft.fillCircle(PLAY_X + cx, PLAY_Y + cy, r, color);
-    refresh_status_if_clipped(clipped_top);
+    refresh_status_if_overlap(cy - r, r * 2);
 }
 
 void game_play_hint(const char* msg, uint16_t fg, uint16_t bg) {
