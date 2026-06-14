@@ -166,9 +166,10 @@ static void draw_modal_scrim() {
     tft.fillRect(0, PLAY_Y, SCREEN_W, PLAY_H, scrim);
 }
 
-static void draw_modal_shell(int ox, int oy, int ow, int oh, uint16_t ring_col) {
+static void draw_modal_shell(int ox, int oy, int ow, int oh, uint16_t ring_col, bool bordered) {
     tft.fillRoundRect(ox + 2, oy + 4, ow, oh, UI_MODAL_R, ui_tint565(TH->bg, -70));
     tft.fillRoundRect(ox, oy, ow, oh, UI_MODAL_R, TH->card);
+    if (!bordered) return;
     tft.drawRoundRect(ox, oy, ow, oh, UI_MODAL_R, TH->border);
     tft.drawRoundRect(ox + 1, oy + 1, ow - 2, oh - 2, UI_MODAL_R - 1, ring_col);
 }
@@ -232,7 +233,7 @@ static bool show_pause_menu() {
     const int ox = (SCREEN_W - ow) / 2;
     const int oy = PLAY_Y + (PLAY_H - oh) / 2;
 
-    draw_modal_shell(ox, oy, ow, oh, TH->accent);
+    draw_modal_shell(ox, oy, ow, oh, TH->accent, false);
     draw_modal_header(ox, oy, ow, UI_ICON_PAUSE, TH->accent_hi,
                       "Pausado", "Toque para retomar");
 
@@ -434,7 +435,7 @@ GameEndAction game_hud_end_game(GameHud* hud, int score, bool won) {
     const int oy = PLAY_Y + (PLAY_H - oh) / 2;
     const uint16_t ring = show_record ? TH->accent_hi : (won ? TH->ok : TH->danger);
 
-    draw_modal_shell(ox, oy, ow, oh, ring);
+    draw_modal_shell(ox, oy, ow, oh, ring, false);
     draw_modal_header(ox, oy, ow,
                       won ? UI_ICON_CHECK : UI_ICON_X,
                       won ? TH->ok : TH->danger,

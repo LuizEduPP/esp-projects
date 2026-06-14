@@ -22,6 +22,7 @@ static const EngineEntry k_engines[] = {
     {"ballz",    "hi_ballz",  ENGINE_BALLZ,    game_ballz_run},
     {"sandbox",  "hi_sand",   ENGINE_SANDBOX,   game_sandbox_run},
     {"paint",    "hi_paint",  ENGINE_PAINT,    game_paint_run},
+    {"circus",   "hi_circus", ENGINE_CIRCUS,   game_circus_run},
 };
 
 EngineId engine_id(const char* engine) {

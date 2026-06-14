@@ -17,6 +17,7 @@ static const char* name_key_for(const char* engine) {
     case ENGINE_VELHA: return "nm_velha";
     case ENGINE_MEMORIA: return "nm_mem";
     case ENGINE_BALLZ: return "nm_ballz";
+    case ENGINE_CIRCUS: return "nm_circus";
     default: return nullptr;
     }
 }

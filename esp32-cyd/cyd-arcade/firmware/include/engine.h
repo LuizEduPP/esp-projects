@@ -14,6 +14,7 @@ typedef enum {
     ENGINE_BALLZ,
     ENGINE_SANDBOX,
     ENGINE_PAINT,
+    ENGINE_CIRCUS,
     ENGINE_UNKNOWN,
 } EngineId;
 

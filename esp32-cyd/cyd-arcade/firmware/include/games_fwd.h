@@ -13,3 +13,4 @@ void game_memoria_run(const GameEntry* cfg);
 void game_ballz_run(const GameEntry* cfg);
 void game_sandbox_run(const GameEntry* cfg);
 void game_paint_run(const GameEntry* cfg);
+void game_circus_run(const GameEntry* cfg);

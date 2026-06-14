@@ -78,8 +78,13 @@ static bool hint_visible;
 static uint32_t last_phys;
 static uint32_t laser_flash_until;
 static int laser_flash_x;
+static bool laser_flash_on;
+static uint16_t power_mask;
 
 static GameHud* g_hud;
+
+static void sync_power_strip();
+static void tick_laser_flash();
 
 static int cap_type;
 static float cap_x, cap_y;
@@ -208,6 +213,8 @@ static void reset_powers() {
     laser_shots = 0;
     brick_combo = 0;
     combo_until = 0;
+    power_mask = 0xFFFF;
+    laser_flash_on = false;
 }
 
 static void reset_powers_on_death() {
@@ -568,6 +575,8 @@ static void breakout_redraw(GameHud* hud) {
     draw_capsule();
     hint_visible = false;
     show_launch_hint_if_needed();
+    power_mask = 0xFFFF;
+    sync_power_strip();
     (void)hud;
 }
 
@@ -708,6 +717,7 @@ static void apply_capsule(int type) {
         break;
     }
     buzzer_play(SFX_RECORD);
+    power_mask = 0xFFFF;
 }
 
 static void fire_laser() {
@@ -720,13 +730,20 @@ static void fire_laser() {
     if (col >= COLS) col = COLS - 1;
 
     laser_flash_x = col * bw + bw / 2;
-    laser_flash_until = millis() + 120;
+    laser_flash_until = millis() + 100;
+    laser_flash_on = true;
 
     for (int r = 0; r < ROWS; r++)
         damage_brick_at(r, col, nullptr);
 
+    const int y0 = brick_top();
+    const int lh = pad_y() - y0;
+    if (lh > 0)
+        game_play_fill_rect(laser_flash_x - 2, y0, 4, lh, 0xF800);
+
     buzzer_play(SFX_SHOOT);
     draw_pad(pad_x);
+    power_mask = 0xFFFF;
 }
 
 static void launch_ball() {
@@ -958,12 +975,27 @@ static bool pad_near_any_ball() {
     return false;
 }
 
-static void draw_laser_flash() {
-    if ((int32_t)(millis() - laser_flash_until) >= 0) return;
+static void tick_laser_flash() {
+    if (!laser_flash_on) return;
+    if ((int32_t)(millis() - laser_flash_until) < 0) return;
+
+    laser_flash_on = false;
     const int y0 = brick_top();
-    const int h = pad_y() - y0;
-    if (h <= 0) return;
-    game_play_fill_rect(laser_flash_x - 2, y0, 4, h, 0xF800);
+    const int lh = pad_y() - y0;
+    if (lh > 0) {
+        game_play_fill_rect(laser_flash_x - 2, y0, 4, lh, COL_BG);
+        redraw_bricks_in_rect(laser_flash_x - 2, y0, 4, lh);
+    }
+    draw_pad(pad_x);
+}
+
+static uint16_t build_power_mask() {
+    uint16_t m = 0;
+    if (wide_pad && millis() < wide_until) m |= 1;
+    if (slow_ball && millis() < slow_until) m |= 2;
+    if (catch_armed) m |= 4;
+    if (laser_shots > 0) m |= (uint16_t)(8 | ((laser_shots & 0xF) << 8));
+    return m;
 }
 
 static void draw_power_chip(int* x, int y, uint16_t col, const char* lab) {
@@ -974,11 +1006,14 @@ static void draw_power_chip(int* x, int y, uint16_t col, const char* lab) {
     *x += 16;
 }
 
-static void draw_power_strip() {
-    const int y = 2;
+static void sync_power_strip() {
+    const uint16_t m = build_power_mask();
+    if (m == power_mask) return;
+    power_mask = m;
+
+    const int y = pad_y() - 18;
     const int strip_w = 96;
     game_play_fill_rect(0, y, strip_w, 14, COL_BG);
-    redraw_bricks_in_rect(0, y, strip_w, 14);
 
     int x = 4;
     if (wide_pad && millis() < wide_until) draw_power_chip(&x, y, 0x07E0, "E");
@@ -1032,8 +1067,8 @@ static void sync_draw(int* prev_pad, int prev_px[], int prev_py[]) {
         }
     }
 
-    draw_power_strip();
-    draw_laser_flash();
+    tick_laser_flash();
+    sync_power_strip();
 }
 
 static void breakout_init(GameHud* hud) {
