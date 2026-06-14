@@ -48,8 +48,26 @@ static void spawn_food() {
     }
 }
 
-static void draw_seg(int x, int y, uint16_t col) {
-    game_play_fill_rect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2, col);
+static void draw_seg(int x, int y, uint16_t col, bool head) {
+    const int cx = x * CELL + CELL / 2;
+    const int cy = y * CELL + CELL / 2;
+    const int r = head ? CELL / 2 - 1 : CELL / 2 - 2;
+    game_play_fill_circle(cx, cy, r, col);
+    if (head) {
+        game_play_fill_circle(cx - 3, cy - 2, 2, 0x0000);
+        game_play_fill_circle(cx + 3, cy - 2, 2, 0x0000);
+        game_play_fill_circle(cx - 3, cy - 2, 1, 0xFFFF);
+        game_play_fill_circle(cx + 3, cy - 2, 1, 0xFFFF);
+    }
+}
+
+static void draw_body_link(int x0, int y0, int x1, int y1, uint16_t col) {
+    const int cx0 = x0 * CELL + CELL / 2;
+    const int cy0 = y0 * CELL + CELL / 2;
+    const int cx1 = x1 * CELL + CELL / 2;
+    const int cy1 = y1 * CELL + CELL / 2;
+    const int r = CELL / 2 - 2;
+    game_play_fill_circle((cx0 + cx1) / 2, (cy0 + cy1) / 2, r, col);
 }
 
 static void draw_apple() {
@@ -64,8 +82,10 @@ static void clear_cell(int x, int y) {
 
 static void snake_redraw_all() {
     game_play_clear(COL_BG);
+    for (int i = len - 1; i >= 1; i--)
+        draw_body_link(body_x[i], body_y[i], body_x[i - 1], body_y[i - 1], COL_BODY);
     for (int i = len - 1; i >= 0; i--)
-        draw_seg(body_x[i], body_y[i], i == 0 ? COL_HEAD : COL_BODY);
+        draw_seg(body_x[i], body_y[i], i == 0 ? COL_HEAD : COL_BODY, i == 0);
     draw_apple();
 }
 
@@ -181,22 +201,27 @@ void game_snake_run(const GameEntry* cfg) {
                 body_x[0] = hx;
                 body_y[0] = hy;
 
-                if (len > 1) draw_seg(body_x[1], body_y[1], COL_BODY);
-                draw_seg(hx, hy, COL_HEAD);
+                if (len > 1) {
+                    draw_body_link(body_x[0], body_y[0], body_x[1], body_y[1], COL_BODY);
+                    draw_seg(body_x[1], body_y[1], COL_BODY, false);
+                }
+                draw_seg(hx, hy, COL_HEAD, true);
 
                 if (ate) {
                     len++;
                     body_x[len - 1] = tail_x;
                     body_y[len - 1] = tail_y;
-                    draw_seg(tail_x, tail_y, COL_BODY);
+                    if (len > 1)
+                        draw_body_link(tail_x, tail_y, body_x[len - 2], body_y[len - 2], COL_BODY);
+                    draw_seg(tail_x, tail_y, COL_BODY, false);
                     score += 10;
                     buzzer_play(SFX_SCORE);
-                    const int new_phase = score / 50 + 1;
+                    const int new_phase = score / 60 + 1;
                     if (new_phase != phase) {
                         phase = new_phase;
-                        game_hud_set_tier(hud, phase);
-                        buzzer_play(SFX_LEVEL);
-                        if (step_ms > 90) step_ms -= 6;
+                        if (game_hud_advance_tier(hud, phase))
+                            snake_redraw_all();
+                        if (step_ms > 85) step_ms -= 5;
                     }
                     spawn_food();
                     draw_apple();

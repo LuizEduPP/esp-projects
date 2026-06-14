@@ -21,54 +21,63 @@
 #define BUZZER_LEDC_CH   4
 #define BUZZER_LEDC_BITS 10
 
-/* Layout UI */
+/* Layout UI — tokens compartilhados */
 #define UI_PAD           12
 #define UI_CONTENT_W     (SCREEN_W - UI_PAD * 2)
+#define UI_CARD_R        8
+#define UI_MODAL_R       10
+#define UI_BADGE_H       22
+#define UI_BADGE_R       6
+#define UI_BTN_H         44
 
-#define STATUS_H         28
-#define HUD_LIVES_X      4
-#define HUD_LIVES_W      44
-#define HUD_TIER_X       52
-#define HUD_TIER_W       60
-#define HUD_SCORE_X      116
-#define HUD_SCORE_W      64
-#define HUD_PAUSE_X      186
-#define HUD_PAUSE_W      26
+#define STATUS_H         32
+#define HUD_BADGE_Y      ((STATUS_H - UI_BADGE_H) / 2)
+#define HUD_LIVES_X      6
+#define HUD_LIVES_W      50
+#define HUD_TIER_X       60
+#define HUD_TIER_W       66
+#define HUD_SCORE_X      130
+#define HUD_SCORE_W      66
+#define HUD_PAUSE_X      202
+#define HUD_PAUSE_W      30
 
-#define UI_LIST_STRIPE_W 5
+#define UI_LIST_STRIPE_W 4
 
 #define UI_SCROLLBAR_W   8
 #define UI_SCROLLBAR_X   (SCREEN_W - UI_SCROLLBAR_W - 4)
 
-#define UI_HDR_H         44
-#define UI_LIST_TOP      (UI_HDR_H + 8)
-#define UI_LIST_ROW_H    50
+#define UI_HDR_H         48
+#define UI_LIST_TOP      (UI_HDR_H + 6)
+#define UI_LIST_ROW_H    48
 #define UI_LIST_ROW_W    (UI_CONTENT_W - UI_SCROLLBAR_W - 4)
-#define UI_LIST_GAP      6
+#define UI_LIST_GAP      8
 #define UI_LIST_ROW_STEP (UI_LIST_ROW_H + UI_LIST_GAP)
-#define UI_LIST_VIEW_H   (SCREEN_H - UI_LIST_TOP - 4)
+#define UI_LIST_VIEW_H   (SCREEN_H - UI_LIST_TOP - UI_PAD)
 #define UI_LIST_BOT      SCREEN_H
 
 #define SPLASH_MS            800
-#define SPLASH_BAR_Y         252
+#define SPLASH_BAR_Y         (SCREEN_H - UI_PAD - 8)
 
 #define UI_HDR_GEAR_X        (SCREEN_W - 44)
 #define UI_HDR_GEAR_ZONE_X   (SCREEN_W - 52)
 #define UI_HDR_GEAR_ZONE_W   52
 
-#define PLAY_X   0
-#define PLAY_Y   STATUS_H
-#define PLAY_W   SCREEN_W
-#define PLAY_H   (SCREEN_H - STATUS_H)
+#define PLAY_X       0
+#define PLAY_Y       STATUS_H
+#define PLAY_W       SCREEN_W
+#define PLAY_H       (SCREEN_H - STATUS_H)
+#define PLAY_MARGIN  8
 
-/* Tetris: 10x20, celulas 20x14, tabuleiro 200x280, Prox 30px */
-#define TETRIS_CELL_W    20
-#define TETRIS_CELL_H    14
+/* Tetris — células quadradas (evita peças “esticadas”) */
+#define TETRIS_CELL        13
+#define TETRIS_CELL_W      TETRIS_CELL
+#define TETRIS_CELL_H      TETRIS_CELL
 #define TETRIS_BW          10
 #define TETRIS_BH          20
 #define TETRIS_BOARD_W     (TETRIS_BW * TETRIS_CELL_W)
 #define TETRIS_BOARD_H     (TETRIS_BH * TETRIS_CELL_H)
-#define TETRIS_OFF_X       2
+#define TETRIS_PROX_W      36
+#define TETRIS_GROUP_W     (TETRIS_BOARD_W + 8 + TETRIS_PROX_W)
+#define TETRIS_OFF_X       ((PLAY_W - TETRIS_GROUP_W) / 2)
 #define TETRIS_OFF_Y       ((PLAY_H - TETRIS_BOARD_H) / 2)
-#define TETRIS_PROX_X      (TETRIS_OFF_X + TETRIS_BOARD_W + 6)
-#define TETRIS_PROX_W      30
+#define TETRIS_PROX_X      (TETRIS_OFF_X + TETRIS_BOARD_W + 8)

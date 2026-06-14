@@ -119,6 +119,7 @@ void buzzer_play(BuzzerSfx sfx) {
     static const BuzzerNote lose[]      = {{740, 120, 20}, {620, 120, 20}, {520, 200, 0}};
     static const BuzzerNote record[]    = {{1175, 65, 15}, {1568, 65, 15}, {1760, 150, 0}};
     static const BuzzerNote startup[]   = {{880, 55, 12}, {988, 55, 12}, {1175, 70, 12}, {1568, 100, 0}};
+    static const BuzzerNote bomb[]      = {{220, 55, 0}, {160, 65, 8}, {110, 75, 8}, {70, 110, 0}};
 
     switch (sfx) {
     case SFX_TICK:    play_notes(tick, 1); break;
@@ -133,5 +134,6 @@ void buzzer_play(BuzzerSfx sfx) {
     case SFX_LOSE:    play_notes(lose, 3); break;
     case SFX_RECORD:  play_notes(record, 3); break;
     case SFX_STARTUP: play_notes(startup, 4); break;
+    case SFX_BOMB:    play_notes(bomb, 4); break;
     }
 }

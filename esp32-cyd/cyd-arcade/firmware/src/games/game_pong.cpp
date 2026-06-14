@@ -6,32 +6,47 @@
 #include <Arduino.h>
 #include <math.h>
 
+#define COL_BG   0x0000
+#define COL_LINE 0x4208
+#define COL_PAD  0xFFFF
+#define COL_BALL 0xFFFF
+
 #define PAD_W      56
 #define PAD_H      8
 #define BALL_R     5
 #define PHYS_MS    16
-#define BALL_SPD   2.6f
-#define CPU_SPD    1.0f
-#define WIN_SCORE  5
+#define BALL_SPD   2.4f
+#define CPU_SPD    0.75f
+#define GOALS_FASE 3
 
-static const uint16_t COL_BG   = 0x0000;
-static const uint16_t COL_LINE = 0x4208;
-static const uint16_t COL_PAD  = 0xFFFF;
-static const uint16_t COL_BALL = 0xFFFF;
-
-enum { PONG_OK = 0, PONG_LOST, PONG_WON };
+enum { PONG_OK = 0, PONG_LOST };
 
 static int pad_p, pad_c;
 static float ball_x, ball_y, ball_dx, ball_dy;
-static int score, cpu_score;
+static int score;
 static int lives;
+static int phase;
 static bool serving;
 static uint32_t last_phys, serve_until;
 static int prev_bx, prev_by, prev_px, prev_cx;
-static int last_hud_cpu;
+static bool pad_dragging;
+static int pad_drag_off;
 
 static int cpu_y() { return 14; }
 static int player_y() { return PLAY_H - PAD_H - 14; }
+
+static float ball_speed() {
+    return BALL_SPD + (phase - 1) * 0.28f;
+}
+
+static float cpu_speed() {
+    return CPU_SPD + (phase - 1) * 0.20f;
+}
+
+static int cpu_error_pct() {
+    int err = 42 - phase * 5;
+    return err < 3 ? 3 : err;
+}
 
 static void draw_center_line() {
     for (int y = 10; y < PLAY_H - 10; y += 12)
@@ -100,11 +115,11 @@ static void serve_ball(bool toward_player) {
     ball_x = PLAY_W / 2.0f;
     ball_y = PLAY_H / 2.0f;
     const float angle = (random(-35, 36) * 3.14159f) / 180.0f;
-    ball_dx = sinf(angle) * BALL_SPD;
-    ball_dy = (toward_player ? 1.0f : -1.0f) * cosf(angle) * BALL_SPD;
+    ball_dx = sinf(angle) * ball_speed();
+    ball_dy = (toward_player ? 1.0f : -1.0f) * cosf(angle) * ball_speed();
     if (fabsf(ball_dy) < 0.8f)
         ball_dy = (toward_player ? 1.0f : -1.0f) * 0.8f;
-    normalize_ball(BALL_SPD + (score / 8) * 0.1f);
+    normalize_ball(ball_speed());
     serving = true;
     serve_until = millis() + 600;
     pong_redraw();
@@ -113,13 +128,73 @@ static void serve_ball(bool toward_player) {
 static void pong_init(GameHud* hud) {
     pad_p = PLAY_W / 2;
     pad_c = PLAY_W / 2;
+    pad_dragging = false;
+    pad_drag_off = 0;
     score = 0;
-    cpu_score = 0;
+    phase = 1;
     lives = GAME_LIVES_DEFAULT;
-    last_hud_cpu = -1;
     last_phys = millis();
     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
+    game_hud_set_tier(hud, phase);
     serve_ball(true);
+}
+
+static void update_player_pad(const GameInput* in) {
+    const int zone_top = PLAY_Y + (int)(PLAY_H * 0.42f);
+
+    if (in->just_pressed && in->y >= zone_top) {
+        pad_dragging = true;
+        pad_drag_off = pad_p - (int)in->play_x;
+    }
+    if (!in->down) {
+        pad_dragging = false;
+        return;
+    }
+    if (!pad_dragging || in->y < zone_top) return;
+
+    const int px = (int)in->play_x + pad_drag_off;
+    pad_p = constrain(px, PAD_W / 2, PLAY_W - PAD_W / 2);
+}
+
+static float predict_cpu_target() {
+    const float cpu_line = (float)cpu_y() + PAD_H * 0.5f;
+
+    if (ball_dy >= 0 || ball_y > PLAY_H * 0.62f)
+        return (float)PLAY_W / 2.0f;
+
+    float target = ball_x;
+    if (fabsf(ball_dy) > 0.05f) {
+        const float t = (cpu_line - ball_y) / ball_dy;
+        if (t > 0.0f && t < 260.0f)
+            target = ball_x + ball_dx * t;
+    }
+
+    for (int bounce = 0; bounce < 4; bounce++) {
+        if (target >= BALL_R && target <= PLAY_W - BALL_R) break;
+        if (target < BALL_R)
+            target = 2.0f * BALL_R - target;
+        else
+            target = 2.0f * (PLAY_W - BALL_R) - target;
+    }
+    return target;
+}
+
+static void cpu_step() {
+    if (serving) return;
+
+    float target = predict_cpu_target();
+    if (random(0, 100) < cpu_error_pct())
+        target += (random(0, 2) ? 1.0f : -1.0f) * random(10, 22 + phase * 3);
+
+    const float spd = cpu_speed();
+    if (pad_c < (int)target - 2) {
+        const float next = (float)pad_c + spd;
+        pad_c = (next < target) ? (int)next : (int)target;
+    } else if (pad_c > (int)target + 2) {
+        const float next = (float)pad_c - spd;
+        pad_c = (next > target) ? (int)next : (int)target;
+    }
+    pad_c = constrain(pad_c, PAD_W / 2, PLAY_W - PAD_W / 2);
 }
 
 static bool paddle_hit(int pad_x, int pad_top, bool from_above) {
@@ -133,7 +208,7 @@ static bool paddle_hit(int pad_x, int pad_top, bool from_above) {
             ball_dy = -fabsf(ball_dy);
             const float hit = (bx - pad_x) / (PAD_W * 0.5f);
             ball_dx = hit * 2.8f;
-            normalize_ball(BALL_SPD + (score / 8) * 0.1f);
+            normalize_ball(ball_speed());
             buzzer_play(SFX_HIT);
             return true;
         }
@@ -143,7 +218,7 @@ static bool paddle_hit(int pad_x, int pad_top, bool from_above) {
             ball_dy = fabsf(ball_dy);
             const float hit = (bx - pad_x) / (PAD_W * 0.5f);
             ball_dx = hit * 2.8f;
-            normalize_ball(BALL_SPD + (score / 8) * 0.1f);
+            normalize_ball(ball_speed());
             buzzer_play(SFX_HIT);
             return true;
         }
@@ -169,14 +244,11 @@ static int physics_step() {
     if (ball_y < -BALL_R) {
         score++;
         buzzer_play(SFX_SCORE);
-        if (score >= WIN_SCORE)
-            return PONG_WON;
         serve_ball(true);
         return PONG_OK;
     }
     if (ball_y > PLAY_H + BALL_R) {
         lives--;
-        cpu_score++;
         buzzer_play(SFX_ERROR);
         if (lives <= 0)
             return PONG_LOST;
@@ -212,7 +284,7 @@ static void sync_draw() {
 void game_pong_run(const GameEntry* cfg) {
     GameHud* hud = game_hud_begin(cfg->engine);
     if (!hud) return;
-    game_hud_set_tier_mode(hud, HUD_TIER_CPU, true);
+    game_hud_set_tier_mode(hud, HUD_TIER_FASE, false);
 
     bool retry = false;
     for (;;) {
@@ -220,12 +292,9 @@ void game_pong_run(const GameEntry* cfg) {
         retry = true;
         pong_init(hud);
         game_hud_set_score(hud, 0);
-        game_hud_set_tier(hud, 0);
-        last_hud_cpu = 0;
 
         GameInput in;
         bool dead = false;
-        bool won = false;
 
         while (!dead) {
             game_frame_tick();
@@ -237,35 +306,19 @@ void game_pong_run(const GameEntry* cfg) {
             if (game_hud_consume_resume_redraw(hud))
                 pong_redraw();
 
-            if (in.down && in.y >= PLAY_Y)
-                pad_p = constrain((int)in.play_x, PAD_W / 2, PLAY_W - PAD_W / 2);
-
-            if (!serving && ball_dy < 0 && ball_y < PLAY_H * 0.45f) {
-                float target = ball_x;
-                if (random(0, 100) < 25)
-                    target += (random(0, 2) ? 1 : -1) * random(20, 50);
-                if (pad_c < target - 2)
-                    pad_c = (int)min((float)pad_c + CPU_SPD, target);
-                else if (pad_c > target + 2)
-                    pad_c = (int)max((float)pad_c - CPU_SPD, target);
-            }
-            pad_c = constrain(pad_c, PAD_W / 2, PLAY_W - PAD_W / 2);
+            update_player_pad(&in);
+            cpu_step();
 
             if (serving) {
                 if (in.just_pressed || millis() >= serve_until) {
                     serving = false;
+                    pad_dragging = false;
                     last_phys = millis();
                 }
             } else if (millis() - last_phys >= PHYS_MS) {
                 last_phys = millis();
-                const int res = physics_step();
-                if (res == PONG_LOST) {
+                if (physics_step() == PONG_LOST)
                     dead = true;
-                    won = false;
-                } else if (res == PONG_WON) {
-                    dead = true;
-                    won = true;
-                }
                 if (lives != hud->lives)
                     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
             }
@@ -273,16 +326,23 @@ void game_pong_run(const GameEntry* cfg) {
             game_frame_draw_now();
             sync_draw();
 
-            if (score != hud->score)
+            if (score != hud->score) {
                 game_hud_set_score(hud, score);
-            if (cpu_score != last_hud_cpu) {
-                game_hud_set_tier(hud, cpu_score);
-                last_hud_cpu = cpu_score;
+                const int new_phase = score / GOALS_FASE + 1;
+                if (new_phase > phase) {
+                    phase = new_phase;
+                    if (game_hud_advance_tier(hud, phase))
+                        pong_redraw();
+                    else
+                        game_hud_set_tier(hud, phase);
+                    if (!serving)
+                        normalize_ball(ball_speed());
+                }
             }
             game_frame_delay();
         }
 
-        if (game_hud_end_game(hud, score, won) == GAME_END_MENU) break;
+        if (game_hud_end_game(hud, score, false) == GAME_END_MENU) break;
     }
     game_hud_end(hud);
 }

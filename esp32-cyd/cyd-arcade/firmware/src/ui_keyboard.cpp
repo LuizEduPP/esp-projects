@@ -91,11 +91,11 @@ static void draw_keys(int highlight) {
 
 static void draw_header(const char* title, int score) {
     tft.setTextDatum(TC_DATUM);
-    tft.setTextColor(TH->accent_hi, TH->play_bg);
+    tft.setTextColor(TH->accent_hi, TH->play_field);
     tft.drawString(title, SCREEN_CX, PLAY_Y + 12, 2);
     char buf[24];
     snprintf(buf, sizeof(buf), "Pontos: %d", score);
-    tft.setTextColor(TH->text_hi, TH->play_bg);
+    tft.setTextColor(TH->text_hi, TH->play_field);
     tft.drawString(buf, SCREEN_CX, PLAY_Y + 32, 1);
 }
 
@@ -115,7 +115,7 @@ static void draw_name_field(const char* name) {
 }
 
 static void draw_screen_init(const char* title, int score, const char* name) {
-    tft.fillRect(0, PLAY_Y, SCREEN_W, PLAY_H, TH->play_bg);
+    tft.fillRect(0, PLAY_Y, SCREEN_W, PLAY_H, TH->play_field);
     draw_header(title, score);
     draw_name_field(name);
     draw_keys(-1);

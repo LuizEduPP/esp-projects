@@ -3,6 +3,7 @@
 #include "hw_config.h"
 #include "score_store.h"
 #include "touch_input.h"
+#include "ui_draw.h"
 #include "ui_icons.h"
 #include "ui_theme.h"
 #include <Arduino.h>
@@ -76,40 +77,30 @@ static void list_viewport_end(bool repair_gap) {
 }
 
 void launcher_draw_header(int count) {
-    tft.fillRect(0, 0, SCREEN_W, UI_HDR_H, TH->bg);
-    tft.drawFastHLine(0, UI_HDR_H - 1, SCREEN_W, TH->border);
-
-    ui_icon_draw(UI_PAD, 10, 24, UI_ICON_GRID, TH->icon);
-    tft.setTextDatum(TL_DATUM);
-    tft.setTextColor(TH->text_hi, TH->bg);
-    tft.drawString("ARCADE", UI_PAD + 32, 10, 2);
     char sub[24];
     snprintf(sub, sizeof(sub), "%d jogos", count);
-    tft.setTextColor(TH->text_mute, TH->bg);
-    tft.drawString(sub, UI_PAD + 32, 28, 1);
-
-    tft.fillRoundRect(UI_HDR_GEAR_X, 8, 36, 28, 6, TH->card);
-    ui_icon_draw(UI_HDR_GEAR_X + 6, 10, 24, UI_ICON_GEAR, TH->icon);
+    ui_draw_app_header_btn(UI_ICON_GRID, "Arcade", sub, UI_ICON_GEAR, UI_HDR_GEAR_X);
     repair_header_gap();
 }
 
 /* cy relativo ao topo da lista (UI_LIST_TOP) */
 static void draw_list_row_content(const GameEntry* game, int cx, int cy, bool sel, int idx) {
+    (void)idx;
     if (cy + UI_LIST_ROW_H <= 0 || cy >= UI_LIST_VIEW_H) return;
 
     const uint16_t bg = TH->card;
-    tft.fillRoundRect(cx, cy, UI_LIST_ROW_W, UI_LIST_ROW_H, 8, bg);
+    tft.fillRoundRect(cx, cy, UI_LIST_ROW_W, UI_LIST_ROW_H, UI_CARD_R, bg);
     if (sel)
-        tft.drawRoundRect(cx, cy, UI_LIST_ROW_W, UI_LIST_ROW_H, 8, TH->accent);
+        tft.drawRoundRect(cx, cy, UI_LIST_ROW_W, UI_LIST_ROW_H, UI_CARD_R, TH->accent);
 
-    tft.fillRoundRect(cx + 4, cy + 5, UI_LIST_STRIPE_W, UI_LIST_ROW_H - 10, 2,
-                      ui_theme_brick_color(idx));
+    tft.fillRoundRect(cx + 8, cy + 6, UI_LIST_STRIPE_W, UI_LIST_ROW_H - 12, 2,
+                      ui_theme_game_color(game->color));
 
     char title[24];
     label_fit(game->title, title, sizeof(title), UI_LIST_ROW_W - 96);
     tft.setTextDatum(ML_DATUM);
     tft.setTextColor(TH->text_hi, bg);
-    tft.drawString(title, cx + 4 + UI_LIST_STRIPE_W + 10, cy + UI_LIST_ROW_H / 2, 2);
+    tft.drawString(title, cx + 8 + UI_LIST_STRIPE_W + 10, cy + UI_LIST_ROW_H / 2, 2);
 
     const int best = score_store_get(game->engine);
     if (best > 0) {
@@ -124,9 +115,9 @@ static void draw_list_row_content(const GameEntry* game, int cx, int cy, bool se
         const int badge_w = (int)tft.textWidth(rec, 1) + 12;
         const int badge_x = cx + UI_LIST_ROW_W - badge_w - 8;
         const int badge_y = cy + (UI_LIST_ROW_H - 20) / 2;
-        tft.fillRoundRect(badge_x, badge_y, badge_w, 20, 4, TH->card);
+        tft.fillRoundRect(badge_x, badge_y, badge_w, 20, 4, TH->surface);
         tft.drawRoundRect(badge_x, badge_y, badge_w, 20, 4, TH->border);
-        tft.setTextColor(TH->accent, TH->card);
+        tft.setTextColor(TH->accent, TH->surface);
         tft.setTextDatum(MC_DATUM);
         tft.drawString(rec, badge_x + badge_w / 2, badge_y + 10, 1);
     }

@@ -9,7 +9,8 @@
 
 #define GW 12
 #define GH 16
-#define MINES 18
+#define MINES 16
+#define COL_BG 0x0000
 
 static const uint16_t COL_COVER = 0xC618;
 static const uint16_t COL_OPEN  = 0xDEFB;
@@ -85,7 +86,7 @@ static void draw_cell(int x, int y) {
 }
 
 static void mines_redraw() {
-    game_play_clear(COL_OPEN);
+    game_play_clear(COL_BG);
     for (int y = 0; y < GH; y++)
         for (int x = 0; x < GW; x++)
             draw_cell(x, y);
@@ -112,11 +113,18 @@ static void mines_reset_board() {
     mines_redraw();
 }
 
-static void mines_init(GameHud* hud) {
-    CELL = PLAY_W / GW;
-    OFF_X = 0;
+static void mines_layout() {
+    const int cw = PLAY_W / GW;
+    const int ch = PLAY_H / GH;
+    CELL = cw < ch ? cw : ch;
+    if (CELL < 12) CELL = 12;
+    OFF_X = (PLAY_W - GW * CELL) / 2;
     OFF_Y = (PLAY_H - GH * CELL) / 2;
-    if (OFF_Y < 0) OFF_Y = 0;
+    if (OFF_Y < PLAY_MARGIN) OFF_Y = PLAY_MARGIN;
+}
+
+static void mines_init(GameHud* hud) {
+    mines_layout();
     score = 0;
     mines_reset_board();
     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
@@ -165,7 +173,7 @@ void game_mines_run(const GameEntry* cfg) {
                 if (board[y][x] == -1) {
                     state[y][x] = ST_MINE;
                     draw_cell(x, y);
-                    buzzer_play(SFX_ERROR);
+                    buzzer_play(SFX_BOMB);
                     lives--;
                     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
                     if (lives <= 0) {

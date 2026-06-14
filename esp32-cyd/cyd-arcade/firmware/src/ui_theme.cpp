@@ -3,26 +3,16 @@
 
 static ArcadeTheme s_theme;
 
-/* Paleta Boreal — ardósia azul + joias (teal, lima, coral, âmbar) */
-#define BOR_BG        0x08A4   /* #0D1520 fundo        */
-#define BOR_SURFACE   0x10E5   /* #161F2E painéis      */
-#define BOR_CARD      0x2188   /* #252F42 cartões      */
-#define BOR_BORDER    0x394F   /* #3D5A80 aço           */
-#define BOR_TEAL      0x4E78   /* #4ECDC4 destaque      */
-#define BOR_CORAL     0xFB6D   /* #FF6B6B destaque 2    */
-#define BOR_TEXT      0xEFF7   /* #E8EDF4 texto         */
-#define BOR_MUTE      0x8CD6   /* #8B9CB3 texto sec.    */
-#define BOR_LIME      0x9C6D   /* #95E06C ok / vida     */
-#define BOR_AMBER     0xFEA0   /* #FFB347 recorde       */
-#define BOR_RED       0xF986   /* #FF4757 perigo        */
-#define BOR_SKY       0x5B99   /* #5B6FC8 faixa lista   */
-
-static const uint16_t BOR_JEWELS[UI_THEME_BRICK_COUNT] = {
-    BOR_TEAL, BOR_LIME, BOR_AMBER, BOR_CORAL, BOR_SKY,
-};
+static uint16_t pal565(uint32_t rgb) {
+    return tft.color565((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+}
 
 uint16_t ui_rgb565(uint32_t rgb) {
-    return tft.color565((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+    return pal565(rgb);
+}
+
+uint16_t ui_theme_game_color(uint32_t rgb) {
+    return pal565(rgb);
 }
 
 const ArcadeTheme* ui_theme_get() {
@@ -30,24 +20,32 @@ const ArcadeTheme* ui_theme_get() {
 }
 
 uint16_t ui_theme_brick_color(int index) {
+    static const uint32_t jewels[UI_THEME_BRICK_COUNT] = {
+        0x5B8DF2, 0x7B68EE, 0x9B59B6, 0x6A5ACD, 0x4169E1,
+    };
     if (index < 0) index = 0;
-    return BOR_JEWELS[index % UI_THEME_BRICK_COUNT];
+    return pal565(jewels[index % UI_THEME_BRICK_COUNT]);
 }
 
+/* UI roxo + azul — jogos usam paletas clássicas próprias */
 void ui_theme_init() {
-    s_theme.bg        = BOR_BG;
-    s_theme.surface   = BOR_SURFACE;
-    s_theme.card      = BOR_CARD;
-    s_theme.border    = BOR_BORDER;
-    s_theme.accent    = BOR_TEAL;
-    s_theme.accent_hi = BOR_CORAL;
-    s_theme.text_hi   = BOR_TEXT;
-    s_theme.text_mute = BOR_MUTE;
-    s_theme.icon      = BOR_TEAL;
-    s_theme.play_bg   = BOR_BG;
-    s_theme.ok        = BOR_LIME;
-    s_theme.danger    = BOR_RED;
-    s_theme.pal[0]    = BOR_LIME;
-    s_theme.pal[1]    = BOR_AMBER;
-    s_theme.pal[2]    = BOR_CORAL;
+    s_theme.bg         = pal565(0x1E1040u);
+    s_theme.surface    = pal565(0x2A1860u);
+    s_theme.card       = pal565(0x362070u);
+    s_theme.border     = pal565(0x6B5CAEu);
+    s_theme.accent     = pal565(0x5B8DF2u);
+    s_theme.accent_hi  = pal565(0xB57BFFu);
+    s_theme.text_hi    = pal565(0xF0EEF8u);
+    s_theme.text_mute  = pal565(0xA89CC8u);
+    s_theme.icon       = pal565(0x7B9FFFu);
+    s_theme.play_bg    = pal565(0x1E1040u);
+    s_theme.play_field = 0x0000;
+    s_theme.play_grid  = pal565(0x4A4080u);
+    s_theme.life_on    = pal565(0x5B8DF2u);
+    s_theme.life_off   = pal565(0x4A4080u);
+    s_theme.ok         = pal565(0x5B8DF2u);
+    s_theme.danger     = pal565(0xE879F9u);
+    s_theme.pal[0]     = pal565(0x5B8DF2u);
+    s_theme.pal[1]     = pal565(0xB57BFFu);
+    s_theme.pal[2]     = pal565(0x7B9FFFu);
 }

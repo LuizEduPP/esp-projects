@@ -203,7 +203,8 @@ static void end_round(GameHud* hud, const char* title, uint16_t col,
         buzzer_play(SFX_WIN);
     } else if (cpu_won) {
         cpu_wins++;
-        game_hud_set_tier(hud, cpu_wins);
+        if (game_hud_advance_tier(hud, cpu_wins))
+            draw_grid();
         buzzer_play(SFX_ERROR);
     } else {
         buzzer_play(SFX_WIN);

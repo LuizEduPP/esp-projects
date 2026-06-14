@@ -40,6 +40,7 @@ void game_hud_set_score(GameHud* hud, int score);
 void game_hud_set_score_tag(GameHud* hud, const char* tag);
 void game_hud_set_tier_mode(GameHud* hud, HudTierKind kind, bool show_at_zero);
 void game_hud_set_tier(GameHud* hud, int value);
+bool game_hud_advance_tier(GameHud* hud, int new_tier);
 void game_hud_set_lives(GameHud* hud, int lives, int max_lives);
 void game_play_toast(const char* title, const char* sub, uint16_t stroke, uint16_t bg);
 void game_hud_reset_play(GameHud* hud);
@@ -53,3 +54,5 @@ void game_play_fill_round_rect(int x, int y, int w, int h, int r, uint16_t color
 void game_play_fill_circle(int cx, int cy, int r, uint16_t color);
 void game_play_hint(const char* msg, uint16_t fg, uint16_t bg);
 void game_play_clear_hint(uint16_t bg);
+
+uint16_t game_play_field_bg(void);

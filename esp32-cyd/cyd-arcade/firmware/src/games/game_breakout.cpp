@@ -18,9 +18,9 @@
 #define LIVES_MAX GAME_LIVES_DEFAULT
 #define PHYS_MS 16
 
-static const uint16_t COL_BG = 0x0000;
 static const uint16_t COL_BALL = 0xFFFF;
-static const uint16_t COL_PAD = 0xDEFB;
+static const uint16_t COL_PAD  = 0xDEFB;
+#define COL_BG 0x0000
 
 static const uint16_t ROW_COLORS[ROWS] = {
     0xF800, 0xFD20, 0xFFE0, 0x07E0, 0x001F,
@@ -36,13 +36,14 @@ static bool hint_visible;
 static uint32_t last_phys;
 
 static int brick_w() { return PLAY_W / COLS; }
-static int brick_h() { return 14; }
-static int pad_y() { return PLAY_H - 18; }
+static int brick_h() { return 12 + (level > 3 ? 1 : 0); }
+static int brick_top() { return PLAY_MARGIN + 8 + (level - 1) * 2; }
+static int pad_y() { return PLAY_H - PLAY_MARGIN - PAD_H - 4; }
 
 static void brick_rect(int r, int c, int* x, int* y, int* w, int* h) {
     const int bw = brick_w(), bh = brick_h();
     *x = c * bw + 2;
-    *y = r * bh + 20;
+    *y = r * bh + brick_top();
     *w = bw - 4;
     *h = bh - 2;
 }
@@ -51,25 +52,45 @@ static bool rects_overlap(int ax, int ay, int aw, int ah, int bx, int by, int bw
     return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 }
 
-static void init_level() {
-    for (int r = 0; r < ROWS; r++)
-        for (int c = 0; c < COLS; c++)
-            bricks[r][c] = true;
-    pad_x = PLAY_W / 2;
-    ball_x = (float)pad_x;
-    ball_y = (float)(pad_y() - BALL_R - 4);
-    const float spd = 2.4f + level * 0.12f;
-    ball_dx = spd * 0.6f;
-    ball_dy = -spd;
-    ball_live = false;
-    hint_visible = false;
-}
-
 static bool bricks_left() {
     for (int r = 0; r < ROWS; r++)
         for (int c = 0; c < COLS; c++)
             if (bricks[r][c]) return true;
     return false;
+}
+
+static void init_level() {
+    for (int r = 0; r < ROWS; r++)
+        for (int c = 0; c < COLS; c++)
+            bricks[r][c] = true;
+
+    if (level >= 2) {
+        for (int r = 0; r < ROWS; r++)
+            for (int c = 0; c < COLS; c++)
+                if ((r + c + level) % 2 == 0)
+                    bricks[r][c] = false;
+    }
+    if (level >= 4) {
+        for (int c = 0; c < COLS; c++)
+            bricks[0][c] = (c % 2 == 0);
+    }
+    if (level >= 6) {
+        for (int r = 1; r < ROWS - 1; r++)
+            bricks[r][COLS / 2] = false;
+    }
+    if (!bricks_left()) {
+        for (int c = 0; c < COLS; c++)
+            bricks[ROWS / 2][c] = true;
+    }
+
+    pad_x = PLAY_W / 2;
+    ball_x = (float)pad_x;
+    ball_y = (float)(pad_y() - BALL_R - 4);
+    const float spd = 2.1f + level * 0.20f;
+    ball_dx = spd * 0.6f;
+    ball_dy = -spd;
+    ball_live = false;
+    hint_visible = false;
 }
 
 static void draw_brick(int r, int c) {
@@ -134,7 +155,7 @@ static void launch_ball() {
     ball_x = (float)pad_x;
     ball_y = (float)(pad_y() - BALL_R - 4);
     const float angle = random(-20, 21) * 0.01745f;
-    const float spd = 2.5f + level * 0.1f;
+    const float spd = 2.1f + level * 0.20f;
     ball_dx = sinf(angle) * spd;
     ball_dy = -cosf(angle) * spd;
 }
@@ -186,6 +207,12 @@ static void physics_step() {
         const float hit = (ball_x - pad_x) / (PAD_W * 0.5f);
         ball_dx = hit * 3.2f;
         if (fabsf(ball_dx) < 0.6f) ball_dx = ball_dx < 0 ? -0.6f : 0.6f;
+        const float cap = 2.1f + level * 0.20f;
+        const float cur = sqrtf(ball_dx * ball_dx + ball_dy * ball_dy);
+        if (cur > cap) {
+            ball_dx = ball_dx / cur * cap;
+            ball_dy = ball_dy / cur * cap;
+        }
     }
 
     if (ball_y > PLAY_H + BALL_R) {
@@ -201,8 +228,7 @@ static void physics_step() {
 
     if (ball_live && !bricks_left()) {
         level++;
-        score += 100 * level;
-        buzzer_play(SFX_LEVEL);
+        score += 80 * level;
         init_level();
         level_cleared = true;
     }
@@ -262,7 +288,7 @@ void game_breakout_run(const GameEntry* cfg) {
                 ball_x = (float)pad_x;
                 ball_y = (float)(pad_y() - BALL_R - 4);
                 if (!hint_visible) {
-                    game_play_hint("TOQUE P/ LANCAR", TH->pal[1], COL_BG);
+                    game_play_hint("TOQUE P/ LANCAR", TH->accent, COL_BG);
                     hint_visible = true;
                 }
             } else if (millis() - last_phys >= PHYS_MS) {
@@ -277,7 +303,7 @@ void game_breakout_run(const GameEntry* cfg) {
                     prev_lives = lives;
                 }
                 if (level_cleared) {
-                    game_hud_set_tier(hud, level);
+                    game_hud_advance_tier(hud, level);
                     breakout_redraw(hud);
                     prev_lives = lives;
                     prev_pad = pad_x;

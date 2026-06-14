@@ -12,6 +12,10 @@ struct ArcadeTheme {
     uint16_t text_mute;
     uint16_t icon;
     uint16_t play_bg;
+    uint16_t play_field;
+    uint16_t play_grid;
+    uint16_t life_on;
+    uint16_t life_off;
     uint16_t ok;
     uint16_t danger;
     uint16_t pal[3];
@@ -23,3 +27,4 @@ void ui_theme_init();
 const ArcadeTheme* ui_theme_get();
 uint16_t ui_rgb565(uint32_t rgb);
 uint16_t ui_theme_brick_color(int index);
+uint16_t ui_theme_game_color(uint32_t rgb);

@@ -3,15 +3,17 @@
 #include "game_input.h"
 #include "buzzer.h"
 #include "hw_config.h"
+#include "ui_draw.h"
+#include "ui_theme.h"
 #include <Arduino.h>
 
+#define TH ui_theme_get()
 #define LANES     3
-#define CAR_W     30
-#define CAR_H     18
-#define OBS_W     32
-#define OBS_H     20
+#define CAR_W     28
+#define CAR_H     22
 #define OBS_MAX   5
 #define CAR_Y_OFF 28
+#define COL_BG 0x0000
 
 static const uint16_t COL_ROAD  = 0x3186;
 static const uint16_t COL_EDGE  = 0x0320;
@@ -28,6 +30,7 @@ static bool obs_on[OBS_MAX];
 static uint16_t obs_col[OBS_MAX];
 static int score;
 static int lives;
+static int phase;
 static uint32_t last_step, step_ms, last_spawn;
 
 static int lane_w() { return PLAY_W / LANES; }
@@ -45,24 +48,33 @@ static void draw_road() {
     }
 }
 
+static void draw_car_sprite(int cx, int y, uint16_t body, bool player) {
+    const int x = cx - CAR_W / 2;
+    game_play_fill_round_rect(x + 1, y + 2, CAR_W, CAR_H, 4, 0x2104);
+    game_play_fill_round_rect(x, y, CAR_W, CAR_H, 4, body);
+    game_play_fill_rect(x + 4, y + 3, CAR_W - 8, 7, player ? 0x0310 : 0x0000);
+    game_play_fill_rect(x + 6, y + 10, CAR_W - 12, 5, player ? 0xFC60 : 0x4208);
+    game_play_fill_circle(x + 6, y + CAR_H - 3, 3, 0x3186);
+    game_play_fill_circle(x + CAR_W - 6, y + CAR_H - 3, 3, 0x3186);
+    if (player) {
+        game_play_fill_rect(x + CAR_W / 2 - 3, y + 5, 6, 3, 0xFF80);
+        game_play_fill_circle(x + CAR_W / 2, y + CAR_H - 6, 2, 0xF800);
+    }
+}
+
 static void draw_car() {
-    const int cx = lane_cx(car_lane);
-    const int y = car_y();
-    game_play_fill_round_rect(cx - CAR_W / 2, y, CAR_W, CAR_H, 4, COL_CAR);
-    game_play_fill_rect(cx - CAR_W / 2 + 4, y + 4, CAR_W - 8, 6, 0xFC60);
+    draw_car_sprite(lane_cx(car_lane), car_y(), COL_CAR, true);
 }
 
 static void draw_obs(int i) {
     if (!obs_on[i]) return;
-    const int cx = lane_cx(obs_lane[i]);
-    game_play_fill_round_rect(cx - OBS_W / 2, obs_y[i], OBS_W, OBS_H, 3, obs_col[i]);
-    game_play_fill_rect(cx - OBS_W / 2 + 4, obs_y[i] + 4, OBS_W - 8, OBS_H - 10, 0x0000);
+    draw_car_sprite(lane_cx(obs_lane[i]), obs_y[i], obs_col[i], false);
 }
 
 static void erase_obs(int i) {
     if (!obs_on[i]) return;
     const int cx = lane_cx(obs_lane[i]);
-    game_play_fill_rect(cx - OBS_W / 2 - 1, obs_y[i] - 1, OBS_W + 2, OBS_H + 2, COL_ROAD);
+    game_play_fill_rect(cx - CAR_W / 2 - 1, obs_y[i] - 1, CAR_W + 2, CAR_H + 4, COL_ROAD);
 }
 
 static void spawn_obs() {
@@ -70,7 +82,7 @@ static void spawn_obs() {
         if (obs_on[i]) continue;
         obs_on[i] = true;
         obs_lane[i] = random(0, LANES);
-        obs_y[i] = -OBS_H;
+        obs_y[i] = -CAR_H;
         obs_col[i] = (random(0, 2) == 0) ? COL_OBS_A : COL_OBS_B;
         return;
     }
@@ -85,7 +97,7 @@ static bool step_game() {
     for (int i = 0; i < OBS_MAX; i++) {
         if (!obs_on[i]) continue;
         erase_obs(i);
-        obs_y[i] += 5 + score / 40;
+        obs_y[i] += 3 + score / 45 + phase;
         if (obs_y[i] > PLAY_H) {
             obs_on[i] = false;
             score += 10;
@@ -96,7 +108,7 @@ static bool step_game() {
         const int cx = lane_cx(obs_lane[i]);
         if (obs_lane[i] == car_lane &&
             rects_hit(lane_cx(car_lane) - CAR_W / 2, car_y(), CAR_W, CAR_H,
-                      cx - OBS_W / 2, obs_y[i], OBS_W, OBS_H))
+                      cx - CAR_W / 2, obs_y[i], CAR_W, CAR_H))
             return false;
     }
     return true;
@@ -122,6 +134,7 @@ static void dodge_init(const GameEntry* cfg, GameHud* hud) {
     prev_lane = 1;
     score = 0;
     lives = GAME_LIVES_DEFAULT;
+    phase = 1;
     for (int i = 0; i < OBS_MAX; i++) obs_on[i] = false;
     step_ms = cfg->speed > 0 ? cfg->speed : 80;
     last_step = millis();
@@ -142,6 +155,7 @@ void game_dodge_run(const GameEntry* cfg) {
         retry = true;
         dodge_init(cfg, hud);
         game_hud_set_score(hud, 0);
+        game_hud_set_tier(hud, phase);
 
         GameInput in;
         bool dead = false;
@@ -177,8 +191,8 @@ void game_dodge_run(const GameEntry* cfg) {
                 prev_lane = car_lane;
             }
 
-            const uint32_t spawn_ms = 900 - (score / 25) * 20;
-            if (millis() - last_spawn > (spawn_ms < 400 ? 400 : spawn_ms)) {
+            const uint32_t spawn_ms = 950 - (score / 30) * 25;
+            if (millis() - last_spawn > (spawn_ms < 450 ? 450 : spawn_ms)) {
                 last_spawn = millis();
                 spawn_obs();
             }
@@ -195,6 +209,12 @@ void game_dodge_run(const GameEntry* cfg) {
                     }
                     dodge_reset_after_hit();
                     continue;
+                }
+                const int new_phase = score / 100 + 1;
+                if (new_phase != phase) {
+                    phase = new_phase;
+                    if (game_hud_advance_tier(hud, phase))
+                        dodge_redraw();
                 }
                 game_hud_set_score(hud, score);
             }

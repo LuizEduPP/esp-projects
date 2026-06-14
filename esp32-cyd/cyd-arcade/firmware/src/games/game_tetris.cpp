@@ -18,10 +18,11 @@
 #define OFF_X TETRIS_OFF_X
 #define OFF_Y TETRIS_OFF_Y
 
-static const uint16_t COL_PLAY  = 0x0000;
-static const uint16_t COL_FRAME = 0x4A49;
-static const uint16_t COL_BOARD = 0x1084;
-static const uint16_t COL_PANEL = 0x2949;
+#define TH ui_theme_get()
+#define COL_PLAY  0x0000
+#define COL_FRAME 0x4A49
+#define COL_BOARD 0x1084
+#define COL_PANEL 0x2949
 
 static uint8_t grid[BH][BW];
 static int cur_x, cur_y, cur_type, cur_rot;
@@ -118,12 +119,11 @@ static void draw_next_preview() {
     const int ph = 108;
     game_play_fill_round_rect(px, py, pw, ph, 4, COL_PANEL);
     tft.setTextDatum(TC_DATUM);
-    tft.setTextColor(ui_theme_get()->accent_hi, COL_PANEL);
+    tft.setTextColor(TH->accent, COL_PANEL);
     tft.drawString("Prox", PLAY_X + px + pw / 2, PLAY_Y + py + 8, 1);
     if (next_type < 0) return;
 
-    const int cs_w = 7;
-    const int cs_h = 5;
+    const int cs = 6;
     const uint16_t col = cell_color((uint8_t)(next_type + 1));
     int cells[4][2];
     piece_cells(next_type, 0, 0, 0, cells);
@@ -134,14 +134,14 @@ static void draw_next_preview() {
         if (cells[i][0] > maxx) maxx = cells[i][0];
         if (cells[i][1] > maxy) maxy = cells[i][1];
     }
-    const int bw = (maxx - minx + 1) * cs_w;
+    const int bw = (maxx - minx + 1) * cs;
     const int sx = px + (pw - bw) / 2;
     const int sy = py + 22;
     game_play_fill_rect(px + 1, py + 18, pw - 2, ph - 20, COL_PANEL);
     for (int i = 0; i < 4; i++) {
-        const int bx = sx + (cells[i][0] - minx) * cs_w;
-        const int by = sy + (cells[i][1] - miny) * cs_h;
-        draw_mini_cell(bx, by, cs_w, cs_h, col);
+        const int bx = sx + (cells[i][0] - minx) * cs;
+        const int by = sy + (cells[i][1] - miny) * cs;
+        draw_mini_cell(bx, by, cs, cs, col);
     }
 }
 
@@ -221,12 +221,12 @@ static int clear_lines() {
 }
 
 static void update_level(GameHud* hud) {
-    const int nl = lines / 10 + 1;
-    if (nl != level) {
-        level = nl;
-        game_hud_set_tier(hud, level);
-        buzzer_play(SFX_LEVEL);
-    }
+    const int nl = lines / 12 + 1;
+    if (nl == level) return;
+    if (game_hud_advance_tier(hud, nl))
+        tetris_redraw_play();
+    level = nl;
+    if (drop_ms > 180) drop_ms -= 25;
 }
 
 static void lock_piece(GameHud* hud) {
@@ -246,7 +246,7 @@ static void lock_piece(GameHud* hud) {
         score += pts[n < 5 ? n : 4];
         lines += n;
         update_level(hud);
-        if (drop_ms > 200) drop_ms -= (uint32_t)n * 15;
+        if (drop_ms > 180) drop_ms -= (uint32_t)n * 12;
     } else {
         buzzer_play(SFX_DROP);
     }

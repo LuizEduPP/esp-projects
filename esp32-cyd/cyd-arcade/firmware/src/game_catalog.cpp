@@ -1,13 +1,14 @@
 #include "game_catalog.h"
 #include <string.h>
 
+/* color = faixa lateral no launcher (identidade visual de cada jogo) */
 static const GameEntry k_builtin[] = {
-    {"Snake",       "snake",    0x00FF00, 150},
-    {"Arkanoid",    "breakout", 0xFF6600, 100},
-    {"Tetris",      "tetris",   0x00F0F0, 600},
+    {"Snake",       "snake",    0x00FF00, 140},
+    {"Arkanoid",    "breakout", 0xFF6600, 95},
+    {"Tetris",      "tetris",   0x00F0F0, 520},
     {"Pong",        "pong",     0xFFFFFF, 80},
-    {"Dodge",       "dodge",    0xFFE000, 80},
-    {"Simon",       "simon",    0xFF0000, 500},
+    {"Dodge",       "dodge",    0xFFE000, 85},
+    {"Simon",       "simon",    0xFF0000, 480},
     {"Minesweeper", "mines",    0xC0C0C0, 0},
     {"Velha",       "velha",    0x00D4FF, 0},
 };

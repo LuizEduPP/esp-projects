@@ -3,6 +3,7 @@
 #include "display.h"
 #include "hw_config.h"
 #include "touch_input.h"
+#include "ui_draw.h"
 #include "ui_icons.h"
 #include "ui_theme.h"
 #include <Arduino.h>
@@ -80,14 +81,10 @@ static void draw_sound_toggle() {
 
 static void draw_screen() {
     tft.fillScreen(TH->bg);
-    tft.drawFastHLine(0, UI_HDR_H - 1, SCREEN_W, TH->border);
-
-    ui_icon_draw(UI_PAD, 10, 24, UI_ICON_SLIDERS, TH->icon);
-    tft.setTextDatum(TL_DATUM);
-    tft.setTextColor(TH->text_hi, TH->bg);
-    tft.drawString("Ajustes", UI_PAD + 32, 14, 2);
+    ui_draw_app_header(UI_ICON_SLIDERS, "Ajustes", "Som e display");
 
     ui_icon_draw(UI_PAD, 64, 24, UI_ICON_SUN, TH->accent);
+    tft.setTextDatum(TL_DATUM);
     tft.setTextColor(TH->text_hi, TH->bg);
     tft.drawString("Brilho", UI_PAD + 32, 70, 2);
 
@@ -97,8 +94,8 @@ static void draw_screen() {
     for (int i = 0; i < s_btn_count; i++) {
         const SettingsBtn* b = &s_btns[i];
         const uint16_t bg = TH->card;
-        tft.fillRoundRect(b->x, b->y, b->w, b->h, 8, bg);
-        tft.drawRoundRect(b->x, b->y, b->w, b->h, 8, TH->border);
+        tft.fillRoundRect(b->x, b->y, b->w, b->h, UI_CARD_R, bg);
+        tft.drawRoundRect(b->x, b->y, b->w, b->h, UI_CARD_R, TH->border);
         tft.setTextDatum(MC_DATUM);
         if (b->id == BTN_BRI_MINUS) {
             tft.setTextColor(TH->text_hi, bg);

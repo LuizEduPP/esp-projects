@@ -15,6 +15,7 @@ typedef enum {
     SFX_LOSE,
     SFX_RECORD,
     SFX_STARTUP,
+    SFX_BOMB,
 } BuzzerSfx;
 
 void buzzer_init();

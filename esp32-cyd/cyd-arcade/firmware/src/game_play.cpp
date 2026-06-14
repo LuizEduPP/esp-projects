@@ -16,24 +16,32 @@
 
 #define TH ui_theme_get()
 
-#define COL_LIFE       0xFFE0
-#define COL_LIFE_OFF   0x2949
-#define COL_LIFE_DOT   0xF800
-
 static GameHud* s_active_hud;
+
+uint16_t game_play_field_bg(void) {
+    return TH->play_field;
+}
+
+static void fill_play_field(void) {
+    tft.fillRect(PLAY_X, PLAY_Y, PLAY_W, PLAY_H, TH->play_field);
+    if (PLAY_MARGIN > 0) {
+        tft.drawRect(PLAY_X + PLAY_MARGIN - 1, PLAY_Y + PLAY_MARGIN - 1,
+                     PLAY_W - (PLAY_MARGIN - 1) * 2, PLAY_H - (PLAY_MARGIN - 1) * 2,
+                     TH->play_grid);
+    }
+}
 
 static void draw_lives_in_status(GameHud* hud) {
     if (!hud || hud->lives_max <= 0) return;
-    const int y = 4;
-    const int h = STATUS_H - 8;
-    tft.fillRoundRect(HUD_LIVES_X, y, HUD_LIVES_W, h, 4, TH->card);
+    tft.fillRoundRect(HUD_LIVES_X, HUD_BADGE_Y, HUD_LIVES_W, UI_BADGE_H, UI_BADGE_R, TH->card);
+    tft.drawRoundRect(HUD_LIVES_X, HUD_BADGE_Y, HUD_LIVES_W, UI_BADGE_H, UI_BADGE_R, TH->border);
     for (int i = 0; i < hud->lives_max; i++) {
-        const int cx = HUD_LIVES_X + 8 + i * 12;
-        const int cy = y + h / 2;
+        const int cx = HUD_LIVES_X + 10 + i * 12;
+        const int cy = HUD_BADGE_Y + UI_BADGE_H / 2;
         const bool on = i < hud->lives;
-        tft.fillCircle(cx, cy, 4, on ? COL_LIFE : COL_LIFE_OFF);
+        tft.fillCircle(cx, cy, 5, on ? TH->life_on : TH->life_off);
         if (on)
-            tft.fillCircle(cx, cy, 2, COL_LIFE_DOT);
+            tft.drawCircle(cx, cy, 5, TH->text_hi);
     }
 }
 
@@ -74,10 +82,11 @@ static void draw_tier_badge(GameHud* hud) {
     char buf[12];
     snprintf(buf, sizeof(buf), "%s %d", word, hud->tier);
     const int x = hud_tier_x(hud);
-    tft.fillRoundRect(x, 4, HUD_TIER_W, 20, 4, TH->card);
+    tft.fillRoundRect(x, HUD_BADGE_Y, HUD_TIER_W, UI_BADGE_H, UI_BADGE_R, TH->card);
+    tft.drawRoundRect(x, HUD_BADGE_Y, HUD_TIER_W, UI_BADGE_H, UI_BADGE_R, TH->border);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(TH->accent, TH->card);
-    tft.drawString(buf, x + HUD_TIER_W / 2, STATUS_H / 2, 1);
+    tft.drawString(buf, x + HUD_TIER_W / 2, STATUS_H / 2, 2);
 }
 
 static void draw_score_badge(GameHud* hud) {
@@ -89,22 +98,24 @@ static void draw_score_badge(GameHud* hud) {
         snprintf(sc, sizeof(sc), "%d", hud->score);
 
     const int x = hud_score_x(hud);
-    tft.fillRoundRect(x, 4, HUD_SCORE_W, 20, 4, TH->card);
+    tft.fillRoundRect(x, HUD_BADGE_Y, HUD_SCORE_W, UI_BADGE_H, UI_BADGE_R, TH->card);
+    tft.drawRoundRect(x, HUD_BADGE_Y, HUD_SCORE_W, UI_BADGE_H, UI_BADGE_R, TH->border);
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TH->pal[1], TH->card);
-    tft.drawString(sc, x + HUD_SCORE_W / 2, STATUS_H / 2, 1);
+    tft.setTextColor(TH->text_hi, TH->card);
+    tft.drawString(sc, x + HUD_SCORE_W / 2, STATUS_H / 2, 2);
 }
 
 static void draw_status_bar(GameHud* hud) {
-    tft.fillRect(0, 0, SCREEN_W, STATUS_H, TH->bg);
-    tft.fillRect(0, STATUS_H - 1, SCREEN_W, 1, TH->border);
+    tft.fillRect(0, 0, SCREEN_W, STATUS_H, TH->surface);
+    tft.drawFastHLine(0, STATUS_H - 1, SCREEN_W, TH->border);
 
     draw_lives_in_status(hud);
     draw_tier_badge(hud);
     draw_score_badge(hud);
 
-    tft.fillRoundRect(HUD_PAUSE_X, 4, HUD_PAUSE_W, 20, 4, TH->card);
-    ui_icon_draw(HUD_PAUSE_X + 3, 2, 20, UI_ICON_PAUSE, TH->text_hi);
+    tft.fillRoundRect(HUD_PAUSE_X, HUD_BADGE_Y, HUD_PAUSE_W, UI_BADGE_H, UI_BADGE_R, TH->card);
+    tft.drawRoundRect(HUD_PAUSE_X, HUD_BADGE_Y, HUD_PAUSE_W, UI_BADGE_H, UI_BADGE_R, TH->border);
+    ui_icon_draw(HUD_PAUSE_X + 5, HUD_BADGE_Y, 20, UI_ICON_PAUSE, TH->text_hi);
 }
 
 static bool clip_play_rect(int* x, int* y, int* w, int* h) {
@@ -121,8 +132,7 @@ static void refresh_status_if_clipped(bool clipped_top) {
         draw_status_bar(s_active_hud);
 }
 
-static bool wait_pause_choice(int btn1_y, int btn2_y, int btn_w, int btn_h) {
-    const int bx = UI_PAD;
+static bool wait_modal_choice(int btn_x, int btn1_y, int btn2_y, int btn_w, int btn_h) {
     touch_wait_release();
     for (;;) {
         touch_poll();
@@ -133,7 +143,7 @@ static bool wait_pause_choice(int btn1_y, int btn2_y, int btn_w, int btn_h) {
         const int16_t tx = touch_get_x();
         const int16_t ty = touch_get_y();
         touch_wait_release();
-        if (tx >= bx && tx < bx + btn_w) {
+        if (tx >= btn_x && tx < btn_x + btn_w) {
             if (ty >= btn1_y && ty < btn1_y + btn_h) return false;
             if (ty >= btn2_y && ty < btn2_y + btn_h) return true;
         }
@@ -141,50 +151,93 @@ static bool wait_pause_choice(int btn1_y, int btn2_y, int btn_w, int btn_h) {
     }
 }
 
-static bool show_pause_menu() {
-    const int ox = UI_PAD;
-    const int ow = UI_CONTENT_W;
-    const int oy = PLAY_Y + PLAY_H / 2 - 72;
-    const int btn_h = 40;
-    const int btn1_y = oy + 56;
-    const int btn2_y = oy + 104;
-
-    tft.fillRoundRect(ox, oy, ow, 148, 10, TH->card);
-    tft.drawRoundRect(ox, oy, ow, 148, 10, TH->border);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TH->text_hi, TH->card);
-    tft.drawString("Pausado", SCREEN_CX, oy + 24, 2);
-
-    tft.fillRoundRect(ox, btn1_y, ow, btn_h, 8, TH->accent);
-    tft.setTextColor(TH->bg, TH->accent);
-    tft.drawString("Continuar", SCREEN_CX, btn1_y + btn_h / 2, 2);
-
-    tft.fillRoundRect(ox, btn2_y, ow, btn_h, 8, TH->surface);
-    tft.drawRoundRect(ox, btn2_y, ow, btn_h, 8, TH->border);
-    tft.setTextColor(TH->text_hi, TH->surface);
-    tft.drawString("Voltar", SCREEN_CX, btn2_y + btn_h / 2, 2);
-
-    return wait_pause_choice(btn1_y, btn2_y, ow, btn_h);
+static GameEndAction wait_end_choice(int btn_x, int btn1_y, int btn2_y, int btn_w, int btn_h) {
+    return wait_modal_choice(btn_x, btn1_y, btn2_y, btn_w, btn_h)
+               ? GAME_END_MENU
+               : GAME_END_RETRY;
 }
 
-static GameEndAction wait_end_choice(int btn1_y, int btn2_y, int btn_w, int btn1_h, int btn2_h) {
-    const int bx = UI_PAD;
-    touch_wait_release();
-    for (;;) {
-        touch_poll();
-        if (!touch_is_pressed()) {
-            delay(10);
-            continue;
-        }
-        const int16_t tx = touch_get_x();
-        const int16_t ty = touch_get_y();
-        touch_wait_release();
-        if (tx >= bx && tx < bx + btn_w) {
-            if (ty >= btn1_y && ty < btn1_y + btn1_h) return GAME_END_RETRY;
-            if (ty >= btn2_y && ty < btn2_y + btn2_h) return GAME_END_MENU;
-        }
-        delay(10);
+static void draw_modal_scrim() {
+    const uint16_t scrim = ui_tint565(TH->bg, -48);
+    tft.fillRect(0, 0, SCREEN_W, STATUS_H, ui_tint565(TH->surface, -30));
+    tft.fillRect(0, PLAY_Y, SCREEN_W, PLAY_H, scrim);
+}
+
+static void draw_modal_shell(int ox, int oy, int ow, int oh, uint16_t ring_col) {
+    tft.fillRoundRect(ox + 2, oy + 4, ow, oh, UI_MODAL_R, ui_tint565(TH->bg, -70));
+    tft.fillRoundRect(ox, oy, ow, oh, UI_MODAL_R, TH->card);
+    tft.drawRoundRect(ox, oy, ow, oh, UI_MODAL_R, TH->border);
+    tft.drawRoundRect(ox + 1, oy + 1, ow - 2, oh - 2, UI_MODAL_R - 1, ring_col);
+}
+
+static void draw_modal_header(int ox, int oy, int ow, UiIcon icon, uint16_t icon_col,
+                              const char* title, const char* subtitle) {
+    const int hdr_h = 52;
+    tft.fillRoundRect(ox, oy, ow, hdr_h + UI_MODAL_R, UI_MODAL_R, TH->surface);
+    tft.fillRect(ox, oy + hdr_h, ow, UI_MODAL_R, TH->surface);
+    tft.drawFastHLine(ox + UI_MODAL_R, oy + hdr_h, ow - UI_MODAL_R * 2, TH->border);
+    ui_icon_draw(ox + 14, oy + 14, 24, icon, icon_col);
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextColor(TH->text_hi, TH->surface);
+    tft.drawString(title, ox + 46, oy + 14, 2);
+    if (subtitle && subtitle[0]) {
+        tft.setTextColor(TH->text_mute, TH->surface);
+        tft.drawString(subtitle, ox + 46, oy + 34, 1);
     }
+}
+
+static void draw_modal_btn(int x, int y, int w, int h, UiIcon icon,
+                           const char* label, uint16_t fill, uint16_t stroke,
+                           uint16_t fg, uint16_t icon_col) {
+    tft.fillRoundRect(x, y, w, h, UI_CARD_R, fill);
+    if (stroke != fill)
+        tft.drawRoundRect(x, y, w, h, UI_CARD_R, stroke);
+    ui_icon_draw(x + 12, y + (h - 20) / 2, 20, icon, icon_col);
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(fg, fill);
+    tft.drawString(label, x + 40, y + h / 2, 2);
+}
+
+static void draw_modal_actions(int ox, int oy, int ow, int oh,
+                               const char* btn1, UiIcon icon1,
+                               const char* btn2, UiIcon icon2,
+                               int* out_btn_x, int* out_btn1_y, int* out_btn2_y,
+                               int* out_btn_w, int* out_btn_h) {
+    const int btn_w = ow - 28;
+    const int btn_h = UI_BTN_H;
+    const int btn_x = ox + 14;
+    const int btn2_y = oy + oh - 16 - btn_h;
+    const int btn1_y = btn2_y - btn_h - 10;
+
+    draw_modal_btn(btn_x, btn1_y, btn_w, btn_h, icon1, btn1,
+                   TH->accent, TH->accent, TH->bg, TH->bg);
+    draw_modal_btn(btn_x, btn2_y, btn_w, btn_h, icon2, btn2,
+                   TH->surface, TH->border, TH->text_hi, TH->text_mute);
+
+    *out_btn_x = btn_x;
+    *out_btn1_y = btn1_y;
+    *out_btn2_y = btn2_y;
+    *out_btn_w = btn_w;
+    *out_btn_h = btn_h;
+}
+
+static bool show_pause_menu() {
+    draw_modal_scrim();
+
+    const int ow = 204;
+    const int oh = 168;
+    const int ox = (SCREEN_W - ow) / 2;
+    const int oy = PLAY_Y + (PLAY_H - oh) / 2;
+
+    draw_modal_shell(ox, oy, ow, oh, TH->accent);
+    draw_modal_header(ox, oy, ow, UI_ICON_PAUSE, TH->accent_hi,
+                      "Pausado", "Toque para retomar");
+
+    int btn_x, btn1_y, btn2_y, btn_w, btn_h;
+    draw_modal_actions(ox, oy, ow, oh, "Continuar", UI_ICON_PLAY, "Menu", UI_ICON_EXIT,
+                       &btn_x, &btn1_y, &btn2_y, &btn_w, &btn_h);
+
+    return wait_modal_choice(btn_x, btn1_y, btn2_y, btn_w, btn_h);
 }
 
 GameHud* game_hud_begin(const char* engine) {
@@ -200,7 +253,7 @@ GameHud* game_hud_begin(const char* engine) {
 
     s_active_hud = hud;
     ui_fill_screen_bg();
-    tft.fillRect(PLAY_X, PLAY_Y, PLAY_W, PLAY_H, TH->play_bg);
+    fill_play_field();
     draw_status_bar(hud);
     touch_wait_release();
 
@@ -238,6 +291,43 @@ void game_hud_set_tier(GameHud* hud, int value) {
     draw_status_bar(hud);
 }
 
+bool game_hud_advance_tier(GameHud* hud, int new_tier) {
+    if (!hud || hud->tier == new_tier) return false;
+
+    const char* word = tier_label(hud->tier_kind);
+    if (!word) word = "Fase";
+
+    const int strips = 4;
+    for (int i = 0; i < strips; i++) {
+        const int sh = PLAY_H / strips + 1;
+        const int sy = i * (PLAY_H / strips);
+        game_play_fill_rect(0, sy, PLAY_W, sh, ui_tint565(TH->surface, (int8_t)(8 + i * 4)));
+        delay(14);
+    }
+
+    char buf[14];
+    snprintf(buf, sizeof(buf), "%s %d", word, new_tier);
+
+    const int bw = 140;
+    const int bh = 50;
+    const int bx = (PLAY_W - bw) / 2;
+    const int by = PLAY_H / 2 - bh / 2;
+    game_play_fill_round_rect(bx, by, bw, bh, UI_CARD_R, TH->card);
+    tft.drawRoundRect(PLAY_X + bx, PLAY_Y + by, bw, bh, UI_CARD_R, TH->accent);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(TH->text_hi, TH->card);
+    tft.drawString(buf, PLAY_X + PLAY_W / 2, PLAY_Y + by + bh / 2, 2);
+
+    buzzer_play(SFX_LEVEL);
+    delay(1300);
+    touch_wait_release();
+
+    hud->tier = new_tier;
+    draw_status_bar(hud);
+    game_play_clear(game_play_field_bg());
+    return true;
+}
+
 void game_hud_set_lives(GameHud* hud, int lives, int max_lives) {
     if (!hud) return;
     if (max_lives < 0) max_lives = 0;
@@ -254,7 +344,7 @@ void game_hud_reset_play(GameHud* hud) {
     hud->tier = 0;
     hud->lives = 0;
     hud->lives_max = 0;
-    tft.fillRect(PLAY_X, PLAY_Y, PLAY_W, PLAY_H, TH->play_bg);
+    fill_play_field();
     draw_status_bar(hud);
     touch_wait_release();
 }
@@ -311,55 +401,51 @@ GameEndAction game_hud_end_game(GameHud* hud, int score, bool won) {
         hud->best = score_store_get(hud->engine);
     }
 
-    tft.fillRect(PLAY_X, PLAY_Y, PLAY_W, PLAY_H, TH->play_bg);
+    fill_play_field();
+    draw_modal_scrim();
 
-    const int ox = UI_PAD;
-    const int oy = PLAY_Y + 32;
-    const int ow = UI_CONTENT_W;
-    const int oh = 116;
-    const int btn_w = UI_CONTENT_W;
-    const int btn1_y = PLAY_Y + 164;
-    const int btn1_h = 44;
-    const int btn2_y = PLAY_Y + 216;
-    const int btn2_h = 40;
+    const bool show_best = hud->best > 0;
+    const bool show_record = record && score > 0;
+    const int ow = 204;
+    const int oh = show_record ? 218 : (show_best ? 206 : 192);
+    const int ox = (SCREEN_W - ow) / 2;
+    const int oy = PLAY_Y + (PLAY_H - oh) / 2;
+    const uint16_t ring = show_record ? TH->accent_hi : (won ? TH->ok : TH->danger);
 
-    tft.fillRoundRect(ox, oy, ow, oh, 10, TH->card);
-    if (record)
-        tft.drawRoundRect(ox, oy, ow, oh, 10, TH->pal[1]);
-
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(won ? TH->ok : TH->danger, TH->card);
-    tft.drawString(won ? "Vitoria!" : "Fim de jogo", SCREEN_CX, oy + 26, 2);
+    draw_modal_shell(ox, oy, ow, oh, ring);
+    draw_modal_header(ox, oy, ow,
+                      won ? UI_ICON_CHECK : UI_ICON_X,
+                      won ? TH->ok : TH->danger,
+                      won ? "Vitoria!" : "Fim de jogo",
+                      won ? "Boa partida!" : "Tente outra vez");
 
     char buf[32];
+    int body_y = oy + 64;
+    tft.setTextDatum(MC_DATUM);
     snprintf(buf, sizeof(buf), "Pontos %d", score);
     tft.setTextColor(TH->text_hi, TH->card);
-    tft.drawString(buf, SCREEN_CX, oy + 54, 2);
+    tft.drawString(buf, SCREEN_CX, body_y, 2);
 
-    if (record && score > 0) {
-        tft.setTextColor(TH->pal[1], TH->card);
-        tft.drawString("Novo recorde!", SCREEN_CX, oy + 74, 1);
+    if (show_record) {
+        body_y += 18;
+        tft.setTextColor(TH->accent_hi, TH->card);
+        tft.drawString("Novo recorde!", SCREEN_CX, body_y, 1);
     }
-
-    if (hud->best > 0) {
+    if (show_best) {
+        body_y += 18;
         if (hud->best_name[0])
             snprintf(buf, sizeof(buf), "%s %d", hud->best_name, hud->best);
         else
             snprintf(buf, sizeof(buf), "Recorde %d", hud->best);
         tft.setTextColor(TH->text_mute, TH->card);
-        tft.drawString(buf, SCREEN_CX, oy + 94, 1);
+        tft.drawString(buf, SCREEN_CX, body_y, 1);
     }
 
-    tft.fillRoundRect(ox, btn1_y, btn_w, btn1_h, 8, TH->accent);
-    tft.setTextColor(TH->bg, TH->accent);
-    tft.drawString("Novamente", SCREEN_CX, btn1_y + btn1_h / 2, 2);
+    int btn_x, btn1_y, btn2_y, btn_w, btn_h;
+    draw_modal_actions(ox, oy, ow, oh, "Novamente", UI_ICON_PLAY, "Menu", UI_ICON_EXIT,
+                       &btn_x, &btn1_y, &btn2_y, &btn_w, &btn_h);
 
-    tft.fillRoundRect(ox, btn2_y, btn_w, btn2_h, 8, TH->card);
-    tft.drawRoundRect(ox, btn2_y, btn_w, btn2_h, 8, TH->border);
-    tft.setTextColor(TH->text_hi, TH->card);
-    tft.drawString("Menu", SCREEN_CX, btn2_y + btn2_h / 2, 2);
-
-    return wait_end_choice(btn1_y, btn2_y, btn_w, btn1_h, btn2_h);
+    return wait_end_choice(btn_x, btn1_y, btn2_y, btn_w, btn_h);
 }
 
 void game_play_toast(const char* title, const char* sub, uint16_t stroke, uint16_t bg) {
@@ -370,12 +456,13 @@ void game_play_toast(const char* title, const char* sub, uint16_t stroke, uint16
     const int y = PLAY_H / 2 - h / 2;
     game_play_fill_rect(x, y, w, h, bg);
     tft.fillRoundRect(PLAY_X + x, PLAY_Y + y, w, h, 6, TH->card);
+    tft.drawRoundRect(PLAY_X + x, PLAY_Y + y, w, h, 6, TH->accent);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(TH->text_hi, TH->card);
-    tft.drawString(title, PLAY_X + x + w / 2, PLAY_Y + y + (sub && sub[0] ? h / 2 - 6 : h / 2), 2);
+    tft.drawString(title, PLAY_X + x + w / 2, PLAY_Y + y + (sub && sub[0] ? h / 2 - 8 : h / 2), 2);
     if (sub && sub[0]) {
-        tft.setTextColor(TH->text_mute, TH->card);
-        tft.drawString(sub, PLAY_X + x + w / 2, PLAY_Y + y + h / 2 + 10, 1);
+        tft.setTextColor(TH->accent, TH->card);
+        tft.drawString(sub, PLAY_X + x + w / 2, PLAY_Y + y + h / 2 + 12, 2);
     }
 }
 
@@ -420,8 +507,9 @@ void game_play_hint(const char* msg, uint16_t fg, uint16_t bg) {
     (void)fg;
     game_play_fill_rect(0, PLAY_H / 2 - 20, PLAY_W, 40, bg);
     tft.fillRoundRect(PLAY_X + UI_PAD, PLAY_Y + PLAY_H / 2 - 18, UI_CONTENT_W, 36, 6, TH->card);
+    tft.drawRoundRect(PLAY_X + UI_PAD, PLAY_Y + PLAY_H / 2 - 18, UI_CONTENT_W, 36, 6, TH->accent);
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TH->pal[1], TH->card);
+    tft.setTextColor(TH->text_hi, TH->card);
     tft.drawString(msg, SCREEN_CX, PLAY_Y + PLAY_H / 2, 2);
 }
 

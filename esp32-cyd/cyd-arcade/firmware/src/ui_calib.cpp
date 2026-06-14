@@ -3,6 +3,7 @@
 #include "display.h"
 #include "hw_config.h"
 #include "ui_draw.h"
+#include "ui_icons.h"
 #include "ui_theme.h"
 #include <Arduino.h>
 #include <math.h>
@@ -44,18 +45,13 @@ static void draw_target(int step) {
 
 static void draw_calib_screen(int step) {
     tft.fillScreen(TH->bg);
-    tft.fillRect(0, 0, SCREEN_W, 52, TH->bg);
-    tft.drawFastHLine(0, 52, SCREEN_W, TH->border);
-    tft.fillRect(0, 50, SCREEN_W, 2, TH->border);
+    char sub[24];
+    snprintf(sub, sizeof(sub), "Alvo %d de 5", step + 1);
+    ui_draw_app_header(UI_ICON_TARGET, "Calibrar toque", sub);
 
     tft.setTextDatum(TC_DATUM);
-    tft.setTextColor(TH->text_hi, TH->bg);
-    tft.drawString("Calibrar touch", SCREEN_CX, 14, 2);
-
-    char buf[24];
-    snprintf(buf, sizeof(buf), "Alvo %d de 5", step + 1);
     tft.setTextColor(TH->text_mute, TH->bg);
-    tft.drawString(buf, SCREEN_CX, 68, 2);
+    tft.drawString("Toque no centro de cada alvo", SCREEN_CX, 68, 2);
 
     for (int i = 0; i < 5; i++) {
         const int dx = SCREEN_CX - 40 + i * 20;

@@ -7,11 +7,11 @@
 #include <Arduino.h>
 
 #define BTN_GAP    6
-#define FLASH_ON   550
-#define FLASH_GAP  300
-#define ROUND_WAIT 1400
+#define FLASH_ON   480
+#define FLASH_GAP  260
+#define ROUND_WAIT 1200
+#define COL_BG     0x1084
 
-static const uint16_t COL_BG = 0x1084;
 static const uint16_t COL_OFF[4] = {0x6000, 0x0300, 0x6200, 0x0008};
 static const uint16_t COL_ON[4]  = {0xF800, 0x07E0, 0xFFE0, 0x001F};
 
@@ -26,6 +26,7 @@ static bool waiting_input;
 static uint32_t flash_until;
 static int flash_btn;
 static int flash_phase;
+static int s_flash_on = FLASH_ON;
 
 enum { PH_WAIT = 0, PH_LIT, PH_GAP };
 
@@ -96,7 +97,7 @@ static void simon_init(GameHud* hud) {
     flash_btn = -1;
     simon_redraw();
     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
-    game_play_hint("Preste atencao...", ui_theme_get()->accent_hi, COL_BG);
+    game_play_hint("Preste atencao...", ui_theme_get()->accent, COL_BG);
     delay(ROUND_WAIT);
     game_play_clear_hint(COL_BG);
     start_round();
@@ -111,7 +112,7 @@ static void advance_sequence() {
         game_frame_draw_now();
         draw_btn(flash_btn, true);
         buzzer_simon_tone(flash_btn);
-        flash_until = millis() + FLASH_ON;
+        flash_until = millis() + (uint32_t)s_flash_on;
         return;
     }
 
@@ -137,19 +138,20 @@ static void advance_sequence() {
         game_frame_draw_now();
         draw_btn(flash_btn, true);
         buzzer_simon_tone(flash_btn);
-        flash_until = millis() + FLASH_ON;
+        flash_until = millis() + (uint32_t)s_flash_on;
     }
 }
 
 void game_simon_run(const GameEntry* cfg) {
-    (void)cfg;
     GameHud* hud = game_hud_begin(cfg->engine);
     if (!hud) return;
+    game_hud_set_tier_mode(hud, HUD_TIER_FASE, false);
 
     bool retry = false;
     for (;;) {
         if (retry) game_hud_reset_play(hud);
         retry = true;
+        s_flash_on = cfg->speed > 0 ? (int)cfg->speed : FLASH_ON;
         simon_init(hud);
         game_hud_set_score(hud, 0);
 
@@ -193,8 +195,9 @@ void game_simon_run(const GameEntry* cfg) {
                 if (input_idx >= seq_len) {
                     score = seq_len;
                     game_hud_set_score(hud, score);
-                    buzzer_play(SFX_LEVEL);
-                    delay(500);
+                    if (game_hud_advance_tier(hud, seq_len))
+                        simon_redraw();
+                    delay(350);
                     start_round();
                 }
             }
