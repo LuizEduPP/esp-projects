@@ -21,6 +21,7 @@ static int step_idx;
 static int input_idx;
 static int score;
 static int lives;
+static int streak;
 static bool playing_seq;
 static bool waiting_input;
 static uint32_t flash_until;
@@ -92,6 +93,7 @@ static void simon_restart_round() {
 static void simon_init(GameHud* hud) {
     seq_len = 0;
     score = 0;
+    streak = 0;
     lives = GAME_LIVES_DEFAULT;
     playing_seq = false;
     waiting_input = false;
@@ -183,6 +185,7 @@ void game_simon_run(const GameEntry* cfg) {
                 draw_btn(b, false);
                 if (b != seq[input_idx]) {
                     buzzer_play(SFX_ERROR);
+                    streak = 0;
                     lives--;
                     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
                     if (lives <= 0) {
@@ -194,8 +197,11 @@ void game_simon_run(const GameEntry* cfg) {
                 }
                 input_idx++;
                 if (input_idx >= seq_len) {
-                    score = seq_len;
+                    streak++;
+                    score = seq_len + streak * 3;
                     game_hud_set_score(hud, score);
+                    if (streak >= 3) buzzer_play(SFX_RECORD);
+                    else buzzer_play(SFX_SCORE);
                     if (game_hud_advance_tier(hud, seq_len))
                         simon_redraw();
                     delay(350);

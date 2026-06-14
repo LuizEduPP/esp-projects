@@ -11,12 +11,13 @@
 #include <string.h>
 
 #define COLS       8
-#define MAX_ROWS   9
+#define MAX_ROWS   8
 #define MAX_BALLS  24
-#define BALL_R     5
-#define LAUNCH_Y   (PLAY_H - 20)
-#define DANGER_R   (MAX_ROWS - 2)
-#define LAUNCH_GAP 65
+#define BALL_R     6
+#define START_BALLS 3
+#define LAUNCH_Y   (PLAY_H - 22)
+#define DANGER_R   (MAX_ROWS - 1)
+#define LAUNCH_GAP 52
 #define COL_BG     0x0000
 #define COL_BALL   0xFFFF
 #define COL_BONUS  0xFFE0
@@ -40,6 +41,7 @@ static bool volley_active;
 static bool aiming;
 static int aim_px, aim_py;
 static int score, level, lives;
+static int volley_combo;
 static uint32_t last_phys;
 
 static int cell_w() { return PLAY_W / COLS; }
@@ -61,15 +63,17 @@ static int live_ball_count() {
 
 static void spawn_row(int row) {
     for (int c = 0; c < COLS; c++) {
-        if (random(0, 100) < 28) {
+        if (random(0, 100) < 32) {
             grid[row][c] = 0;
             bonus[row][c] = false;
             continue;
         }
-        int hp = random(1, 4) + level / 2;
+        const int base = 1 + (level - 1) / 2;
+        int hp = base + random(0, 2);
         if (hp > 9) hp = 9;
         grid[row][c] = (int8_t)hp;
-        bonus[row][c] = (random(0, 100) < 14);
+        const int bonus_chance = level <= 2 ? 10 : (level <= 5 ? 14 : 18);
+        bonus[row][c] = (random(0, 100) < bonus_chance);
     }
 }
 
@@ -94,6 +98,25 @@ static bool any_blocks_left() {
     return false;
 }
 
+static void draw_danger_line() {
+    const int y = DANGER_R * cell_h() + 2;
+    for (int x = 4; x < PLAY_W - 4; x += 10)
+        game_play_fill_rect(x, y, 6, 2, 0xF800);
+}
+
+static bool overlaps_danger_line(int py, int r) {
+    const int ly = DANGER_R * cell_h() + 2;
+    return py + r >= ly && py - r <= ly + 2;
+}
+
+static void clear_danger_rows() {
+    for (int r = DANGER_R - 1; r < MAX_ROWS; r++) {
+        for (int c = 0; c < COLS; c++) {
+            grid[r][c] = 0;
+            bonus[r][c] = false;
+        }
+    }
+}
 static void draw_block(int c, int r) {
     const int hp = grid[r][c];
     if (hp <= 0) return;
@@ -117,18 +140,31 @@ static void draw_block(int c, int r) {
 
 static void draw_stock() {
     const int cx = PLAY_W / 2;
-    const int y = LAUNCH_Y + 10;
-    const int show = ball_stock > 8 ? 8 : ball_stock;
-    const int start_x = cx - (show * 10) / 2;
-    for (int i = 0; i < show; i++)
-        game_play_fill_circle(start_x + i * 10 + 5, y, 4, COL_BALL);
-    if (ball_stock > 8) {
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(COL_BALL, COL_BG);
-        char buf[8];
-        snprintf(buf, sizeof(buf), "+%d", ball_stock - 8);
-        tft.drawString(buf, PLAY_X + cx + show * 5 + 8, PLAY_Y + y, 1);
+    const int y = LAUNCH_Y + 14;
+    const int row_w = PLAY_W - 24;
+    const int max_show = 14;
+    const int show = ball_stock > max_show ? max_show : ball_stock;
+    const int spacing = show > 0 ? min(row_w / show, 14) : 14;
+    const int total_w = show * spacing;
+    const int start_x = cx - total_w / 2 + spacing / 2;
+
+    game_play_fill_rect(0, LAUNCH_Y + 2, PLAY_W, PLAY_H - LAUNCH_Y - 2, COL_BG);
+    game_play_fill_round_rect(cx - 42, y - 10, 84, 28, 6, ui_tint565(0x2949, 10));
+
+    for (int i = 0; i < show; i++) {
+        const int bx = start_x + i * spacing;
+        game_play_fill_circle(bx, y, 5, ui_tint565(COL_BALL, -30));
+        game_play_fill_circle(bx, y, 4, COL_BALL);
     }
+
+    char buf[12];
+    if (ball_stock > max_show)
+        snprintf(buf, sizeof(buf), "x%d +%d", max_show, ball_stock - max_show);
+    else
+        snprintf(buf, sizeof(buf), "x%d", ball_stock);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(COL_BALL, ui_tint565(0x2949, 10));
+    tft.drawString(buf, PLAY_X + cx, PLAY_Y + y + 16, 2);
 }
 
 static void draw_aim_line() {
@@ -150,10 +186,12 @@ static void draw_aim_line() {
 
 static void ballz_redraw() {
     game_play_clear(COL_BG);
+    draw_danger_line();
     for (int r = 0; r < MAX_ROWS; r++)
         for (int c = 0; c < COLS; c++)
             draw_block(c, r);
-    game_play_fill_circle(PLAY_W / 2, LAUNCH_Y, 7, ui_tint565(0xFFFF, -50));
+    game_play_fill_circle(PLAY_W / 2, LAUNCH_Y, 9, ui_tint565(0xFFFF, -40));
+    game_play_fill_circle(PLAY_W / 2, LAUNCH_Y, 6, COL_BALL);
     draw_stock();
     for (int i = 0; i < MAX_BALLS; i++)
         if (balls[i].live)
@@ -168,7 +206,7 @@ static void ballz_redraw() {
 static void spawn_ball(float dx, float dy) {
     for (int i = 0; i < MAX_BALLS; i++) {
         if (balls[i].live) continue;
-        const float spd = 3.2f + level * 0.22f;
+        const float spd = 2.8f + (level - 1) * 0.16f;
         balls[i].x = (float)(PLAY_W / 2);
         balls[i].y = (float)LAUNCH_Y;
         balls[i].dx = dx * spd;
@@ -199,6 +237,7 @@ static void begin_volley() {
     launch_left = ball_stock;
     next_launch_ms = millis();
     volley_active = true;
+    volley_combo = 0;
     aiming = false;
     buzzer_play(SFX_SHOOT);
 }
@@ -214,13 +253,18 @@ static bool hit_block(Ball* b, int c, int r) {
         return false;
 
     grid[r][c] = (int8_t)(hp - 1);
-    score += 10;
-    buzzer_play(SFX_HIT);
+    score += 10 + volley_combo;
+    volley_combo++;
+    if (volley_combo > 0 && volley_combo % 6 == 0)
+        buzzer_play(SFX_RECORD);
+    else if (grid[r][c] <= 0)
+        buzzer_play(SFX_HIT);
     if (grid[r][c] <= 0) {
         if (bonus[r][c]) {
             ball_stock++;
             bonus[r][c] = false;
             buzzer_play(SFX_SCORE);
+            draw_stock();
         }
         game_play_fill_rect(x - 1, y - 1, w + 2, h + 2, COL_BG);
     } else {
@@ -260,19 +304,17 @@ static void end_turn() {
         if (blocks_in_danger()) {
             lives--;
             buzzer_play(SFX_ERROR);
-            memset(grid, 0, sizeof(grid));
-            memset(bonus, 0, sizeof(bonus));
-            for (int i = 0; i < 3 + level / 2; i++)
-                spawn_row(i);
-            ball_stock = 1;
+            clear_danger_rows();
+            if (ball_stock < START_BALLS)
+                ball_stock = START_BALLS;
         }
     } else {
         level++;
-        score += 100 * level;
+        score += 80 * level;
         buzzer_play(SFX_LEVEL);
         memset(grid, 0, sizeof(grid));
         memset(bonus, 0, sizeof(bonus));
-        for (int i = 0; i < 3 + level / 2; i++)
+        for (int i = 0; i < 2 + level / 3; i++)
             spawn_row(i);
     }
     ballz_redraw();
@@ -301,6 +343,8 @@ static void sync_balls_draw() {
         const int by = (int)b->y;
         if (bx == b->prev_x && by == b->prev_y) continue;
         game_play_fill_circle(b->prev_x, b->prev_y, BALL_R + 1, COL_BG);
+        if (overlaps_danger_line(b->prev_y, BALL_R + 1))
+            draw_danger_line();
         for (int r = 0; r < MAX_ROWS; r++)
             for (int c = 0; c < COLS; c++)
                 if (grid[r][c] > 0) {
@@ -320,7 +364,7 @@ static void ballz_init(GameHud* hud) {
     score = 0;
     level = 1;
     lives = GAME_LIVES_DEFAULT;
-    ball_stock = 1;
+    ball_stock = START_BALLS;
     launch_left = 0;
     volley_active = false;
     aiming = false;
@@ -328,7 +372,7 @@ static void ballz_init(GameHud* hud) {
     memset(grid, 0, sizeof(grid));
     memset(bonus, 0, sizeof(bonus));
     memset(balls, 0, sizeof(balls));
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 3; i++)
         spawn_row(i);
     ballz_redraw();
     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
@@ -340,6 +384,7 @@ void game_ballz_run(const GameEntry* cfg) {
     GameHud* hud = game_hud_begin(cfg->engine);
     if (!hud) return;
     game_hud_set_tier_mode(hud, HUD_TIER_NIVEL, false);
+    game_hud_set_score_tag(hud, "Pts");
 
     bool retry = false;
     for (;;) {
@@ -383,18 +428,19 @@ void game_ballz_run(const GameEntry* cfg) {
             if (volley_active && millis() - last_phys >= PHYS_MS) {
                 last_phys = millis();
                 physics_step();
-                if (lives <= 0) {
-                    dead = true;
-                    break;
-                }
-                if (lives != hud->lives)
-                    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
-                if (level != hud->tier) {
-                    if (game_hud_advance_tier(hud, level))
-                        ballz_redraw();
-                    else
-                        game_hud_set_tier(hud, level);
-                }
+            }
+
+            if (lives <= 0) {
+                dead = true;
+                break;
+            }
+            if (lives != hud->lives)
+                game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
+            if (level != hud->tier) {
+                if (game_hud_advance_tier(hud, level))
+                    ballz_redraw();
+                else
+                    game_hud_set_tier(hud, level);
             }
 
             if (volley_active) {
@@ -407,7 +453,8 @@ void game_ballz_run(const GameEntry* cfg) {
             game_frame_delay();
         }
 
-        if (game_hud_end_game(hud, score, false) == GAME_END_MENU) break;
+        const bool good_run = level >= 3 || score >= 300;
+        if (game_hud_end_game(hud, score, good_run) == GAME_END_MENU) break;
     }
     game_hud_end(hud);
 }

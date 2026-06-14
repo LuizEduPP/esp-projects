@@ -171,24 +171,64 @@ static void draw_piece(int type, int rot, int px, int py) {
         draw_block(cells[i][0], cells[i][1], col);
 }
 
-static void erase_piece(int type, int rot, int px, int py) {
+static void restore_cell(int x, int y) {
+    if (y >= 0 && y < BH && x >= 0 && x < BW && grid[y][x])
+        draw_block(x, y, cell_color(grid[y][x]));
+    else
+        clear_cell(x, y);
+}
+
+static void erase_cells(int type, int rot, int px, int py) {
     int cells[4][2];
     piece_cells(type, rot, px, py, cells);
-    for (int i = 0; i < 4; i++) {
-        const int x = cells[i][0];
-        const int y = cells[i][1];
-        if (y >= 0 && y < BH && x >= 0 && x < BW && grid[y][x])
-            draw_block(x, y, cell_color(grid[y][x]));
-        else
-            clear_cell(x, y);
-    }
-    (void)type;
-    (void)rot;
+    for (int i = 0; i < 4; i++)
+        restore_cell(cells[i][0], cells[i][1]);
+}
+
+static int ghost_at(int type, int rot, int px, int py) {
+    int gy = py;
+    while (!blocked(type, rot, px, gy + 1))
+        gy++;
+    return gy;
+}
+
+static void erase_floating_piece() {
+    const int gy = ghost_at(cur_type, cur_rot, cur_x, cur_y);
+    if (gy != cur_y)
+        erase_cells(cur_type, cur_rot, cur_x, gy);
+    erase_cells(cur_type, cur_rot, cur_x, cur_y);
+}
+
+static void draw_ghost_cell(int gx, int gy, uint16_t col) {
+    if (gx < 0 || gx >= BW || gy < 0 || gy >= BH) return;
+    const int px = OFF_X + gx * CELL_W + 1;
+    const int py = OFF_Y + gy * CELL_H + 1;
+    const int bw = CELL_W - 2;
+    const int bh = CELL_H - 2;
+    game_play_fill_rect(px, py, bw, 1, col);
+    game_play_fill_rect(px, py + bh - 1, bw, 1, col);
+    game_play_fill_rect(px, py, 1, bh, col);
+    game_play_fill_rect(px + bw - 1, py, 1, bh, col);
+}
+
+static void draw_ghost(int type, int rot, int px, int py) {
+    if (py < 0 || py == cur_y) return;
+    int cells[4][2];
+    piece_cells(type, rot, px, py, cells);
+    const uint16_t col = ui_tint565(cell_color((uint8_t)(type + 1)), -20);
+    for (int i = 0; i < 4; i++)
+        draw_ghost_cell(cells[i][0], cells[i][1], col);
+}
+
+static void draw_active_piece() {
+    const int gy = ghost_at(cur_type, cur_rot, cur_x, cur_y);
+    draw_ghost(cur_type, cur_rot, cur_x, gy);
+    draw_piece(cur_type, cur_rot, cur_x, cur_y);
 }
 
 static void tetris_redraw_play() {
     draw_board();
-    draw_piece(cur_type, cur_rot, cur_x, cur_y);
+    draw_active_piece();
 }
 
 static int clear_lines() {
@@ -259,17 +299,17 @@ static bool spawn_piece() {
     cur_x = 3;
     cur_y = 0;
     if (blocked(cur_type, cur_rot, cur_x, cur_y)) return false;
-    draw_piece(cur_type, cur_rot, cur_x, cur_y);
+    draw_active_piece();
     draw_next_preview();
     return true;
 }
 
 static bool move_piece(int dx, int dy) {
     if (!blocked(cur_type, cur_rot, cur_x + dx, cur_y + dy)) {
-        erase_piece(cur_type, cur_rot, cur_x, cur_y);
+        erase_floating_piece();
         cur_x += dx;
         cur_y += dy;
-        draw_piece(cur_type, cur_rot, cur_x, cur_y);
+        draw_active_piece();
         return true;
     }
     return false;
@@ -281,10 +321,10 @@ static bool rotate_piece() {
     for (int i = 0; i < 5; i++) {
         const int tx = cur_x + kicks[i];
         if (blocked(cur_type, nr, tx, cur_y)) continue;
-        erase_piece(cur_type, cur_rot, cur_x, cur_y);
+        erase_floating_piece();
         cur_x = tx;
         cur_rot = nr;
-        draw_piece(cur_type, cur_rot, cur_x, cur_y);
+        draw_active_piece();
         return true;
     }
     return false;
@@ -313,6 +353,17 @@ static bool step_down(GameHud* hud) {
     return true;
 }
 
+static bool hard_drop(GameHud* hud) {
+    erase_floating_piece();
+    const int dist = ghost_at(cur_type, cur_rot, cur_x, cur_y) - cur_y;
+    cur_y += dist;
+    score += dist * 2;
+    lock_piece(hud);
+    draw_board();
+    if (!spawn_piece()) return false;
+    return true;
+}
+
 static bool handle_input(GameHud* hud, GameInput* in, GameDrag* drag, uint32_t* last_soft) {
     if (in->just_pressed && in->y >= PLAY_Y)
         game_drag_begin(drag, in);
@@ -326,15 +377,22 @@ static bool handle_input(GameHud* hud, GameInput* in, GameDrag* drag, uint32_t* 
         const int sv = game_drag_step_v(drag, in, 22);
         if (sv < 0) {
             if (rotate_piece()) buzzer_play(SFX_SELECT);
-        } else if (sv > 0 && millis() - *last_soft > 80) {
+        } else if (sv > 0 && millis() - *last_soft > 110) {
             *last_soft = millis();
             if (!step_down(hud)) return false;
             game_hud_set_score(hud, score);
         }
     }
 
-    if (in->just_released && drag->active)
+    if (in->just_released && drag->active) {
+        const int sv = game_drag_swipe_v(drag);
+        if (sv > 0 && drag->total_dy > 72) {
+            if (!hard_drop(hud))
+                return false;
+            game_hud_set_score(hud, score);
+        }
         drag->active = false;
+    }
     return true;
 }
 

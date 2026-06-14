@@ -14,12 +14,14 @@ static const uint16_t COL_BG    = 0x0000;
 static const uint16_t COL_BODY  = 0x9D86;
 static const uint16_t COL_HEAD  = 0xBEE7;
 static const uint16_t COL_APPLE = 0xF800;
+static const uint16_t COL_STAR  = 0xFFE0;
 
 static int8_t body_x[GW * GH];
 static int8_t body_y[GW * GH];
 static int len;
 static int8_t dir, ndir;
 static int8_t food_x, food_y;
+static bool food_star;
 static uint32_t last_step;
 static uint32_t step_ms;
 static int score;
@@ -46,6 +48,7 @@ static void spawn_food() {
             if (body_x[i] == food_x && body_y[i] == food_y) hit = true;
         if (!hit) break;
     }
+    food_star = random(0, 100) < 16;
 }
 
 static void draw_seg(int x, int y, uint16_t col, bool head) {
@@ -73,7 +76,12 @@ static void draw_body_link(int x0, int y0, int x1, int y1, uint16_t col) {
 static void draw_apple() {
     const int cx = food_x * CELL + CELL / 2;
     const int cy = food_y * CELL + CELL / 2;
-    game_play_fill_circle(cx, cy, CELL / 2 - 2, COL_APPLE);
+    const uint16_t col = food_star ? COL_STAR : COL_APPLE;
+    game_play_fill_circle(cx, cy, CELL / 2 - 2, col);
+    if (food_star) {
+        game_play_fill_circle(cx - 3, cy - 3, 2, 0xFFFF);
+        game_play_fill_circle(cx + 3, cy + 3, 2, 0xFFFF);
+    }
 }
 
 static void clear_cell(int x, int y) {
@@ -211,11 +219,18 @@ void game_snake_run(const GameEntry* cfg) {
                     len++;
                     body_x[len - 1] = tail_x;
                     body_y[len - 1] = tail_y;
+                    if (food_star) {
+                        len++;
+                        body_x[len - 1] = tail_x;
+                        body_y[len - 1] = tail_y;
+                        score += 30;
+                    } else {
+                        score += 10;
+                    }
                     if (len > 1)
                         draw_body_link(tail_x, tail_y, body_x[len - 2], body_y[len - 2], COL_BODY);
                     draw_seg(tail_x, tail_y, COL_BODY, false);
-                    score += 10;
-                    buzzer_play(SFX_SCORE);
+                    buzzer_play(food_star ? SFX_RECORD : SFX_SCORE);
                     const int new_phase = score / 60 + 1;
                     if (new_phase != phase) {
                         phase = new_phase;

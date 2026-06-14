@@ -26,11 +26,16 @@ static float ball_x, ball_y, ball_dx, ball_dy;
 static int score;
 static int lives;
 static int phase;
+static int rally_hits;
 static bool serving;
 static uint32_t last_phys, serve_until;
 static int prev_bx, prev_by, prev_px, prev_cx;
 static bool pad_dragging;
-static int pad_drag_off;
+static int last_play_x;
+
+static int player_zone_top() {
+    return (int)(PLAY_H * 0.38f);
+}
 
 static int cpu_y() { return 14; }
 static int player_y() { return PLAY_H - PAD_H - 14; }
@@ -114,6 +119,7 @@ static void pong_redraw() {
 static void serve_ball(bool toward_player) {
     ball_x = PLAY_W / 2.0f;
     ball_y = PLAY_H / 2.0f;
+    rally_hits = 0;
     const float angle = (random(-35, 36) * 3.14159f) / 180.0f;
     ball_dx = sinf(angle) * ball_speed();
     ball_dy = (toward_player ? 1.0f : -1.0f) * cosf(angle) * ball_speed();
@@ -129,7 +135,7 @@ static void pong_init(GameHud* hud) {
     pad_p = PLAY_W / 2;
     pad_c = PLAY_W / 2;
     pad_dragging = false;
-    pad_drag_off = 0;
+    last_play_x = 0;
     score = 0;
     phase = 1;
     lives = GAME_LIVES_DEFAULT;
@@ -140,20 +146,28 @@ static void pong_init(GameHud* hud) {
 }
 
 static void update_player_pad(const GameInput* in) {
-    const int zone_top = PLAY_Y + (int)(PLAY_H * 0.42f);
+    const int zone_top = player_zone_top();
 
-    if (in->just_pressed && in->y >= zone_top) {
-        pad_dragging = true;
-        pad_drag_off = pad_p - (int)in->play_x;
-    }
     if (!in->down) {
         pad_dragging = false;
         return;
     }
-    if (!pad_dragging || in->y < zone_top) return;
 
-    const int px = (int)in->play_x + pad_drag_off;
-    pad_p = constrain(px, PAD_W / 2, PLAY_W - PAD_W / 2);
+    if (!pad_dragging) {
+        if (!in->just_pressed || in->play_y < zone_top)
+            return;
+        pad_dragging = true;
+        last_play_x = (int)in->play_x;
+        return;
+    }
+
+    const int px = (int)in->play_x;
+    const int dx = px - last_play_x;
+    if (dx == 0)
+        return;
+
+    pad_p = constrain(pad_p + dx, PAD_W / 2, PLAY_W - PAD_W / 2);
+    last_play_x = px;
 }
 
 static float predict_cpu_target() {
@@ -209,7 +223,13 @@ static bool paddle_hit(int pad_x, int pad_top, bool from_above) {
             const float hit = (bx - pad_x) / (PAD_W * 0.5f);
             ball_dx = hit * 2.8f;
             normalize_ball(ball_speed());
-            buzzer_play(SFX_HIT);
+            rally_hits++;
+            if (rally_hits >= 4 && rally_hits % 4 == 0) {
+                score += 2;
+                buzzer_play(SFX_SCORE);
+            } else {
+                buzzer_play(SFX_HIT);
+            }
             return true;
         }
     } else {
@@ -219,7 +239,13 @@ static bool paddle_hit(int pad_x, int pad_top, bool from_above) {
             const float hit = (bx - pad_x) / (PAD_W * 0.5f);
             ball_dx = hit * 2.8f;
             normalize_ball(ball_speed());
-            buzzer_play(SFX_HIT);
+            rally_hits++;
+            if (rally_hits >= 4 && rally_hits % 4 == 0) {
+                score += 2;
+                buzzer_play(SFX_SCORE);
+            } else {
+                buzzer_play(SFX_HIT);
+            }
             return true;
         }
     }
@@ -311,7 +337,6 @@ void game_pong_run(const GameEntry* cfg) {
             if (serving) {
                 if (in.just_pressed || millis() >= serve_until) {
                     serving = false;
-                    pad_dragging = false;
                     last_phys = millis();
                 }
             } else if (millis() - last_phys >= PHYS_MS) {

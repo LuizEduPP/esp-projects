@@ -16,10 +16,14 @@
 #define COL_BG 0x0000
 #define LOCK_MS 750
 
-/* Cores bem separadas no matiz + símbolo único por par */
-static const uint32_t PAIR_RGB[PAIRS] = {
+/* Fundo do cartão + símbolo em alto contraste (pares complementares) */
+static const uint32_t PAIR_BG_RGB[PAIRS] = {
     0xFF3B30u, 0x34C759u, 0x007AFFu, 0xFF9500u,
     0xAF52DEu, 0x00C7BEu, 0xFFCC00u, 0xFF2D55u,
+};
+static const uint32_t PAIR_FG_RGB[PAIRS] = {
+    0xFFFFFFu, 0x1A1A1Au, 0xFFE566u, 0x1E3A8Au,
+    0xFFE066u, 0xFF2D55u, 0x1A1A1Au, 0x00D4FFu,
 };
 
 static uint8_t deck[COLS * ROWS];
@@ -28,12 +32,17 @@ static bool solved[COLS * ROWS];
 static int first_pick;
 static int second_pick;
 static int moves;
+static int match_streak;
 static bool input_lock;
 static uint32_t lock_until;
 static int card_w, card_h;
 
-static uint16_t pair_col(int id) {
-    return ui_rgb565(PAIR_RGB[id % PAIRS]);
+static uint16_t pair_bg(int id) {
+    return ui_rgb565(PAIR_BG_RGB[id % PAIRS]);
+}
+
+static uint16_t pair_fg(int id) {
+    return ui_rgb565(PAIR_FG_RGB[id % PAIRS]);
 }
 
 static int idx(int c, int r) { return r * COLS + c; }
@@ -87,7 +96,7 @@ static void draw_pair_symbol(int id, int cx, int cy, int sz, uint16_t fg, uint16
         break;
     case 6:
         game_play_fill_circle(cx, cy, s, fg);
-        game_play_fill_circle(cx, cy, s - 3, COL_BG);
+        game_play_fill_circle(cx, cy, s - 3, bg);
         break;
     default:
         game_play_fill_circle(cx - s / 2, cy, s - 1, fg);
@@ -104,14 +113,16 @@ static void draw_card(int c, int r, bool highlight) {
 
     if (face_up) {
         const int pid = deck[i];
-        const uint16_t col = pair_col(pid);
-        const uint16_t bg = ui_tint565(col, -70);
+        const uint16_t bg = pair_bg(pid);
+        const uint16_t fg = pair_fg(pid);
+        const uint16_t border = ui_tint565(bg, -40);
         game_play_fill_round_rect(x, y, card_w, card_h, 6, bg);
-        tft.drawRoundRect(PLAY_X + x, PLAY_Y + y, card_w, card_h, 6, col);
+        tft.drawRoundRect(PLAY_X + x, PLAY_Y + y, card_w, card_h, 6, border);
         if (highlight)
-            game_play_fill_round_rect(x + 2, y + 2, card_w - 4, card_h - 4, 5, ui_tint565(col, 15));
+            game_play_fill_round_rect(x + 2, y + 2, card_w - 4, card_h - 4, 5,
+                                      ui_tint565(bg, 22));
         const int sym_sz = card_w < card_h ? card_w / 2 : card_h / 2;
-        draw_pair_symbol(pid, x + card_w / 2, y + card_h / 2, sym_sz, col, bg);
+        draw_pair_symbol(pid, x + card_w / 2, y + card_h / 2, sym_sz, fg, bg);
     } else {
         const uint16_t back = ui_rgb565(0x3D2E6Bu);
         const uint16_t back_hi = ui_rgb565(0x5240A0u);
@@ -147,6 +158,7 @@ static void memoria_reset(GameHud* hud) {
     first_pick = -1;
     second_pick = -1;
     moves = 0;
+    match_streak = 0;
     input_lock = false;
     memoria_redraw();
     game_hud_set_score(hud, 0);
@@ -211,7 +223,8 @@ void game_memoria_run(const GameEntry* cfg) {
                     game_hud_set_score(hud, moves);
                     second_pick = pick;
                     if (deck[first_pick] == deck[pick]) {
-                        buzzer_play(SFX_MATCH);
+                        match_streak++;
+                        buzzer_play(match_streak >= 3 ? SFX_RECORD : SFX_MATCH);
                         solved[first_pick] = solved[pick] = true;
                         open[first_pick] = open[pick] = false;
                         first_pick = -1;
@@ -225,6 +238,7 @@ void game_memoria_run(const GameEntry* cfg) {
                             buzzer_play(SFX_WIN);
                         }
                     } else {
+                        match_streak = 0;
                         buzzer_play(SFX_MISS);
                         input_lock = true;
                         lock_until = millis() + LOCK_MS;

@@ -1,7 +1,6 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
-#include "score_store.h"
 #include "buzzer.h"
 #include "ui_theme.h"
 #include "display.h"
@@ -11,6 +10,7 @@
 
 #define GRID 3
 #define MODE_H 32
+#define ROUND_MS 900
 
 #define COL_BG   ui_rgb565(0x0B0F1A)
 #define COL_GRID ui_rgb565(0x3D4F66)
@@ -20,11 +20,15 @@
 static int8_t board[GRID][GRID];
 static int wins;
 static int cpu_wins;
+static int lives;
 static int CELL, OFF_X, OFF_Y;
 static bool two_player;
 static int8_t turn;
-static bool waiting;
+static bool round_wait;
 static uint32_t wait_until;
+static bool round_won;
+static bool round_lost;
+static bool round_draw;
 
 static int check_winner() {
     for (int i = 0; i < GRID; i++) {
@@ -76,6 +80,64 @@ static void random_move(int* out_r, int* out_c) {
     const int pick = empty[random(0, n)];
     *out_r = pick / GRID;
     *out_c = pick % GRID;
+}
+
+static int minimax_score(int player, int depth, int alpha, int beta);
+
+static void cpu_move_strong() {
+    int best_score = -1000;
+    int br = -1, bc = -1;
+    for (int r = 0; r < GRID; r++) {
+        for (int c = 0; c < GRID; c++) {
+            if (board[r][c]) continue;
+            board[r][c] = 2;
+            const int s = minimax_score(1, 0, -1000, 1000);
+            board[r][c] = 0;
+            if (s > best_score) {
+                best_score = s;
+                br = r;
+                bc = c;
+            }
+        }
+    }
+    if (br >= 0) board[br][bc] = 2;
+}
+
+static int minimax_score(int player, int depth, int alpha, int beta) {
+    const int w = check_winner();
+    if (w == 2) return 10 - depth;
+    if (w == 1) return depth - 10;
+    if (board_full()) return 0;
+
+    if (player == 2) {
+        int best = -1000;
+        for (int r = 0; r < GRID; r++) {
+            for (int c = 0; c < GRID; c++) {
+                if (board[r][c]) continue;
+                board[r][c] = 2;
+                best = max(best, minimax_score(1, depth + 1, alpha, beta));
+                board[r][c] = 0;
+                alpha = max(alpha, best);
+                if (beta <= alpha) break;
+            }
+            if (beta <= alpha) break;
+        }
+        return best;
+    }
+
+    int best = 1000;
+    for (int r = 0; r < GRID; r++) {
+        for (int c = 0; c < GRID; c++) {
+            if (board[r][c]) continue;
+            board[r][c] = 1;
+            best = min(best, minimax_score(2, depth + 1, alpha, beta));
+            board[r][c] = 0;
+            beta = min(beta, best);
+            if (beta <= alpha) break;
+        }
+        if (beta <= alpha) break;
+    }
+    return best;
 }
 
 static void cpu_move_weak() {
@@ -179,39 +241,56 @@ static bool hit_mode_toggle(int16_t tx, int16_t ty) {
     return false;
 }
 
-static void velha_reset_board() {
-    memset(board, 0, sizeof(board));
-    turn = 1;
+static void layout_grid() {
     const int grid_sz = min(PLAY_W - 24, PLAY_H - MODE_H - 20);
     CELL = grid_sz / GRID;
     OFF_X = (PLAY_W - CELL * GRID) / 2;
     OFF_Y = (PLAY_H - CELL * GRID - MODE_H - 8) / 2;
     if (OFF_Y < 4) OFF_Y = 4;
+}
+
+static void velha_reset_board() {
+    memset(board, 0, sizeof(board));
+    turn = 1;
+    layout_grid();
     draw_grid();
 }
 
-static void end_round(GameHud* hud, const char* title, uint16_t col,
-                      bool player_won, bool cpu_won) {
-    (void)col;
-    if (strcmp(title, "Empate") == 0) {
+static void begin_round_wait(bool won, bool lost, bool draw) {
+    round_won = won;
+    round_lost = lost;
+    round_draw = draw;
+    round_wait = true;
+    wait_until = millis() + ROUND_MS;
+
+    if (draw) {
         buzzer_play(SFX_SELECT);
-    } else if (player_won) {
+    } else if (won && !two_player) {
+        wins++;
+        buzzer_play(SFX_WIN);
+    } else if (won) {
+        buzzer_play(SFX_WIN);
+    } else if (lost) {
         if (!two_player) {
-            wins++;
-            game_hud_set_score(hud, wins);
+            lives--;
+            cpu_wins++;
         }
-        buzzer_play(SFX_WIN);
-    } else if (cpu_won) {
-        cpu_wins++;
-        if (game_hud_advance_tier(hud, cpu_wins))
-            draw_grid();
         buzzer_play(SFX_ERROR);
-    } else {
-        buzzer_play(SFX_WIN);
     }
-    game_play_toast(title, "Toque p/ continuar", col, COL_BG);
-    waiting = true;
-    wait_until = millis() + 1200;
+}
+
+static void velha_init(GameHud* hud) {
+    wins = 0;
+    cpu_wins = 0;
+    lives = GAME_LIVES_DEFAULT;
+    two_player = false;
+    round_wait = false;
+    velha_reset_board();
+    game_hud_set_tier_mode(hud, HUD_TIER_CPU, true);
+    game_hud_set_score_tag(hud, "Vit");
+    game_hud_set_tier(hud, 0);
+    game_hud_set_score(hud, 0);
+    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
 }
 
 void game_velha_run(const GameEntry* cfg) {
@@ -219,84 +298,103 @@ void game_velha_run(const GameEntry* cfg) {
     GameHud* hud = game_hud_begin(cfg->engine);
     if (!hud) return;
 
-    wins = 0;
-    cpu_wins = 0;
-    two_player = false;
-    waiting = false;
-    velha_reset_board();
-    game_hud_set_tier_mode(hud, HUD_TIER_CPU, true);
-    game_hud_set_score_tag(hud, "Vit");
-    game_hud_set_tier(hud, 0);
-    game_hud_set_score(hud, 0);
-
-    GameInput in;
+    bool retry = false;
     for (;;) {
-        game_frame_tick();
-        game_input_poll(&in);
-        if (game_hud_poll(hud)) {
-            if (wins > 0) score_store_save(hud->engine, wins);
-            game_hud_end(hud);
-            return;
-        }
-        if (game_hud_consume_resume_redraw(hud))
-            draw_grid();
+        if (retry) game_hud_reset_play(hud);
+        retry = true;
+        velha_init(hud);
 
-        if (waiting) {
-            if (millis() < wait_until) {
+        GameInput in;
+        bool dead = false;
+
+        while (!dead) {
+            game_frame_tick();
+            game_input_poll(&in);
+            if (game_hud_poll(hud)) {
+                game_hud_end(hud);
+                return;
+            }
+            if (game_hud_consume_resume_redraw(hud))
+                draw_grid();
+
+            if (round_wait) {
+                if (millis() >= wait_until) {
+                    round_wait = false;
+                    if (round_won && !two_player)
+                        game_hud_set_score(hud, wins);
+                    if (round_lost && !two_player) {
+                        game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
+                        if (cpu_wins != hud->tier) {
+                            if (game_hud_advance_tier(hud, cpu_wins))
+                                draw_grid();
+                            else
+                                game_hud_set_tier(hud, cpu_wins);
+                        }
+                        if (lives <= 0) {
+                            dead = true;
+                            break;
+                        }
+                    }
+                    velha_reset_board();
+                }
                 game_frame_delay();
                 continue;
             }
-            waiting = false;
-            velha_reset_board();
-        }
 
-        if (in.just_pressed && in.y >= PLAY_Y) {
-            if (hit_mode_toggle(in.play_x, in.play_y)) {
-                velha_reset_board();
-                continue;
-            }
+            if (in.just_pressed && in.y >= PLAY_Y) {
+                if (hit_mode_toggle(in.play_x, in.play_y)) {
+                    velha_reset_board();
+                    continue;
+                }
 
-            const int cell = hit_cell(in.play_x, in.play_y);
-            if (cell < 0 || check_winner()) continue;
-            const int r = cell / GRID;
-            const int c = cell % GRID;
-            if (board[r][c]) continue;
+                const int cell = hit_cell(in.play_x, in.play_y);
+                if (cell < 0 || check_winner()) continue;
+                const int r = cell / GRID;
+                const int c = cell % GRID;
+                if (board[r][c]) continue;
 
-            const int8_t mark = two_player ? turn : 1;
-            board[r][c] = mark;
-            draw_mark(r, c);
-            buzzer_play(SFX_TICK);
+                const int8_t mark = two_player ? turn : 1;
+                board[r][c] = mark;
+                draw_mark(r, c);
+                buzzer_play(SFX_TICK);
 
-            int w = check_winner();
-            if (w) {
-                if (two_player)
-                    end_round(hud, w == 1 ? "X venceu!" : "O venceu!",
-                              w == 1 ? COL_X : COL_O, false, false);
-                else if (w == 1)
-                    end_round(hud, "Vitoria!", COL_X, true, false);
+                int w = check_winner();
+                if (w) {
+                    if (two_player)
+                        begin_round_wait(false, false, false);
+                    else if (w == 1)
+                        begin_round_wait(true, false, false);
+                    else
+                        begin_round_wait(false, true, false);
+                    continue;
+                }
+                if (board_full()) {
+                    begin_round_wait(false, false, true);
+                    continue;
+                }
+
+                if (two_player) {
+                    turn = (turn == 1) ? 2 : 1;
+                    continue;
+                }
+
+                if (cpu_wins >= 2)
+                    cpu_move_strong();
                 else
-                    end_round(hud, "CPU venceu", COL_O, false, true);
-                continue;
-            }
-            if (board_full()) {
-                end_round(hud, "Empate", COL_GRID, false, false);
-                continue;
-            }
+                    cpu_move_weak();
+                draw_grid();
 
-            if (two_player) {
-                turn = (turn == 1) ? 2 : 1;
-                continue;
+                w = check_winner();
+                if (w == 2)
+                    begin_round_wait(false, true, false);
+                else if (board_full())
+                    begin_round_wait(false, false, true);
             }
-
-            cpu_move_weak();
-            draw_grid();
-
-            w = check_winner();
-            if (w == 2)
-                end_round(hud, "CPU venceu", COL_O, false, true);
-            else if (board_full())
-                end_round(hud, "Empate", COL_GRID, false, false);
+            game_frame_delay();
         }
-        game_frame_delay();
+
+        const bool session_won = wins >= cpu_wins;
+        if (game_hud_end_game(hud, wins, session_won) == GAME_END_MENU) break;
     }
+    game_hud_end(hud);
 }

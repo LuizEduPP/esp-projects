@@ -22,11 +22,14 @@ static const uint16_t COL_CAR   = 0xFFE0;
 static const uint16_t COL_OBS_A = 0xF800;
 static const uint16_t COL_OBS_B = 0x001F;
 
+static const uint16_t COL_COIN  = 0xFFE0;
+
 static int car_lane;
 static int prev_lane;
 static int obs_lane[OBS_MAX];
 static int obs_y[OBS_MAX];
 static bool obs_on[OBS_MAX];
+static bool obs_coin[OBS_MAX];
 static uint16_t obs_col[OBS_MAX];
 static int score;
 static int lives;
@@ -66,8 +69,18 @@ static void draw_car() {
     draw_car_sprite(lane_cx(car_lane), car_y(), COL_CAR, true);
 }
 
+static void draw_coin(int cx, int y) {
+    game_play_fill_circle(cx, y + CAR_H / 2, 10, COL_COIN);
+    game_play_fill_circle(cx, y + CAR_H / 2, 7, 0xFD20);
+    game_play_fill_rect(cx - 2, y + CAR_H / 2 - 5, 4, 10, COL_COIN);
+}
+
 static void draw_obs(int i) {
     if (!obs_on[i]) return;
+    if (obs_coin[i]) {
+        draw_coin(lane_cx(obs_lane[i]), obs_y[i]);
+        return;
+    }
     draw_car_sprite(lane_cx(obs_lane[i]), obs_y[i], obs_col[i], false);
 }
 
@@ -83,7 +96,8 @@ static void spawn_obs() {
         obs_on[i] = true;
         obs_lane[i] = random(0, LANES);
         obs_y[i] = -CAR_H;
-        obs_col[i] = (random(0, 2) == 0) ? COL_OBS_A : COL_OBS_B;
+        obs_coin[i] = random(0, 100) < 18;
+        obs_col[i] = obs_coin[i] ? COL_COIN : ((random(0, 2) == 0) ? COL_OBS_A : COL_OBS_B);
         return;
     }
 }
@@ -108,8 +122,15 @@ static bool step_game() {
         const int cx = lane_cx(obs_lane[i]);
         if (obs_lane[i] == car_lane &&
             rects_hit(lane_cx(car_lane) - CAR_W / 2, car_y(), CAR_W, CAR_H,
-                      cx - CAR_W / 2, obs_y[i], CAR_W, CAR_H))
+                      cx - CAR_W / 2, obs_y[i], CAR_W, CAR_H)) {
+            if (obs_coin[i]) {
+                obs_on[i] = false;
+                score += 25;
+                buzzer_play(SFX_RECORD);
+                continue;
+            }
             return false;
+        }
     }
     return true;
 }
@@ -124,7 +145,7 @@ static void dodge_redraw() {
 static void dodge_reset_after_hit() {
     car_lane = 1;
     prev_lane = 1;
-    for (int i = 0; i < OBS_MAX; i++) obs_on[i] = false;
+    for (int i = 0; i < OBS_MAX; i++) obs_on[i] = obs_coin[i] = false;
     last_spawn = millis();
     dodge_redraw();
 }
@@ -135,7 +156,7 @@ static void dodge_init(const GameEntry* cfg, GameHud* hud) {
     score = 0;
     lives = GAME_LIVES_DEFAULT;
     phase = 1;
-    for (int i = 0; i < OBS_MAX; i++) obs_on[i] = false;
+    for (int i = 0; i < OBS_MAX; i++) obs_on[i] = obs_coin[i] = false;
     step_ms = cfg->speed > 0 ? cfg->speed : 80;
     last_step = millis();
     last_spawn = millis();
