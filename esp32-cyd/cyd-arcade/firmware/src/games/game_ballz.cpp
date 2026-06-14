@@ -10,24 +10,37 @@
 #include <stdio.h>
 #include <string.h>
 
-#define COLS     8
-#define MAX_ROWS 9
-#define BALL_R   5
-#define LAUNCH_Y (PLAY_H - 20)
-#define DANGER_R (MAX_ROWS - 2)
-#define COL_BG   0x0000
-#define COL_BALL 0xFFFF
-#define COL_AIM  0x4208
-#define PHYS_MS  16
+#define COLS       8
+#define MAX_ROWS   9
+#define MAX_BALLS  24
+#define BALL_R     5
+#define LAUNCH_Y   (PLAY_H - 20)
+#define DANGER_R   (MAX_ROWS - 2)
+#define LAUNCH_GAP 65
+#define COL_BG     0x0000
+#define COL_BALL   0xFFFF
+#define COL_BONUS  0xFFE0
+#define COL_AIM    0x4208
+#define PHYS_MS    16
+
+typedef struct {
+    float x, y, dx, dy;
+    bool live;
+    int prev_x, prev_y;
+} Ball;
 
 static int8_t grid[MAX_ROWS][COLS];
-static float ball_x, ball_y, ball_dx, ball_dy;
-static bool ball_live;
+static bool bonus[MAX_ROWS][COLS];
+static Ball balls[MAX_BALLS];
+static int ball_stock;
+static int launch_left;
+static float launch_dx, launch_dy;
+static uint32_t next_launch_ms;
+static bool volley_active;
 static bool aiming;
 static int aim_px, aim_py;
 static int score, level, lives;
 static uint32_t last_phys;
-static int prev_bx, prev_by;
 
 static int cell_w() { return PLAY_W / COLS; }
 static int cell_h() { return 24; }
@@ -39,21 +52,32 @@ static uint16_t block_color(int hp) {
     return cols[hp - 1];
 }
 
+static int live_ball_count() {
+    int n = 0;
+    for (int i = 0; i < MAX_BALLS; i++)
+        if (balls[i].live) n++;
+    return n;
+}
+
 static void spawn_row(int row) {
     for (int c = 0; c < COLS; c++) {
-        if (random(0, 100) < 30) {
+        if (random(0, 100) < 28) {
             grid[row][c] = 0;
+            bonus[row][c] = false;
             continue;
         }
         int hp = random(1, 4) + level / 2;
         if (hp > 9) hp = 9;
         grid[row][c] = (int8_t)hp;
+        bonus[row][c] = (random(0, 100) < 14);
     }
 }
 
 static void shift_blocks_down() {
-    for (int r = MAX_ROWS - 1; r >= 1; r--)
+    for (int r = MAX_ROWS - 1; r >= 1; r--) {
         memcpy(grid[r], grid[r - 1], COLS);
+        memcpy(bonus[r], bonus[r - 1], COLS);
+    }
     spawn_row(0);
 }
 
@@ -79,10 +103,32 @@ static void draw_block(int c, int r) {
     const int h = cell_h() - 4;
     const uint16_t col = block_color(hp);
     game_play_fill_round_rect(x, y, w, h, 4, col);
+    if (bonus[r][c]) {
+        game_play_fill_circle(x + w - 6, y + 6, 4, COL_BONUS);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(0x0000, COL_BONUS);
+        tft.drawString("+", PLAY_X + x + w - 6, PLAY_Y + y + 6, 1);
+    }
     char s[2] = {(char)('0' + hp), 0};
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(hp >= 5 ? 0x0000 : 0xFFFF, col);
     tft.drawString(s, PLAY_X + x + w / 2, PLAY_Y + y + h / 2, 2);
+}
+
+static void draw_stock() {
+    const int cx = PLAY_W / 2;
+    const int y = LAUNCH_Y + 10;
+    const int show = ball_stock > 8 ? 8 : ball_stock;
+    const int start_x = cx - (show * 10) / 2;
+    for (int i = 0; i < show; i++)
+        game_play_fill_circle(start_x + i * 10 + 5, y, 4, COL_BALL);
+    if (ball_stock > 8) {
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(COL_BALL, COL_BG);
+        char buf[8];
+        snprintf(buf, sizeof(buf), "+%d", ball_stock - 8);
+        tft.drawString(buf, PLAY_X + cx + show * 5 + 8, PLAY_Y + y, 1);
+    }
 }
 
 static void draw_aim_line() {
@@ -107,15 +153,34 @@ static void ballz_redraw() {
     for (int r = 0; r < MAX_ROWS; r++)
         for (int c = 0; c < COLS; c++)
             draw_block(c, r);
-    game_play_fill_circle(PLAY_W / 2, LAUNCH_Y, 6, ui_tint565(0xFFFF, -40));
-    if (ball_live)
-        game_play_fill_circle((int)ball_x, (int)ball_y, BALL_R, COL_BALL);
+    game_play_fill_circle(PLAY_W / 2, LAUNCH_Y, 7, ui_tint565(0xFFFF, -50));
+    draw_stock();
+    for (int i = 0; i < MAX_BALLS; i++)
+        if (balls[i].live)
+            game_play_fill_circle((int)balls[i].x, (int)balls[i].y, BALL_R, COL_BALL);
     draw_aim_line();
-    prev_bx = (int)ball_x;
-    prev_by = (int)ball_y;
+    for (int i = 0; i < MAX_BALLS; i++) {
+        balls[i].prev_x = (int)balls[i].x;
+        balls[i].prev_y = (int)balls[i].y;
+    }
 }
 
-static void launch_ball() {
+static void spawn_ball(float dx, float dy) {
+    for (int i = 0; i < MAX_BALLS; i++) {
+        if (balls[i].live) continue;
+        const float spd = 3.2f + level * 0.22f;
+        balls[i].x = (float)(PLAY_W / 2);
+        balls[i].y = (float)LAUNCH_Y;
+        balls[i].dx = dx * spd;
+        balls[i].dy = dy * spd;
+        balls[i].live = true;
+        balls[i].prev_x = (int)balls[i].x;
+        balls[i].prev_y = (int)balls[i].y;
+        return;
+    }
+}
+
+static void begin_volley() {
     const int cx = PLAY_W / 2;
     const int cy = LAUNCH_Y;
     float dx = (float)(aim_px - cx);
@@ -129,108 +194,140 @@ static void launch_ball() {
         dy /= len;
     }
     if (dy > -0.25f) dy = -0.25f;
-    const float spd = 3.2f + level * 0.22f;
-    ball_x = (float)cx;
-    ball_y = (float)cy;
-    ball_dx = dx * spd;
-    ball_dy = dy * spd;
-    ball_live = true;
+    launch_dx = dx;
+    launch_dy = dy;
+    launch_left = ball_stock;
+    next_launch_ms = millis();
+    volley_active = true;
     aiming = false;
     buzzer_play(SFX_SHOOT);
-    prev_bx = (int)ball_x;
-    prev_by = (int)ball_y;
 }
 
-static bool hit_block(int c, int r) {
+static bool hit_block(Ball* b, int c, int r) {
     const int hp = grid[r][c];
     if (hp <= 0) return false;
     const int x = c * cell_w() + 2;
     const int y = r * cell_h() + 4;
     const int w = cell_w() - 4;
     const int h = cell_h() - 4;
-    const float bx = ball_x;
-    const float by = ball_y;
-    if (bx + BALL_R < x || bx - BALL_R > x + w || by + BALL_R < y || by - BALL_R > y + h)
+    if (b->x + BALL_R < x || b->x - BALL_R > x + w || b->y + BALL_R < y || b->y - BALL_R > y + h)
         return false;
 
     grid[r][c] = (int8_t)(hp - 1);
     score += 10;
     buzzer_play(SFX_HIT);
-    if (grid[r][c] <= 0)
+    if (grid[r][c] <= 0) {
+        if (bonus[r][c]) {
+            ball_stock++;
+            bonus[r][c] = false;
+            buzzer_play(SFX_SCORE);
+        }
         game_play_fill_rect(x - 1, y - 1, w + 2, h + 2, COL_BG);
-    else
+    } else {
         draw_block(c, r);
+    }
 
     const float cx = x + w * 0.5f;
     const float cy = y + h * 0.5f;
-    if (fabsf(bx - cx) > fabsf(by - cy))
-        ball_dx = -ball_dx;
+    if (fabsf(b->x - cx) > fabsf(b->y - cy))
+        b->dx = -b->dx;
     else
-        ball_dy = -ball_dy;
+        b->dy = -b->dy;
     return true;
 }
 
-static void physics_step() {
-    ball_x += ball_dx;
-    ball_y += ball_dy;
+static void step_ball(Ball* b) {
+    b->x += b->dx;
+    b->y += b->dy;
 
-    if (ball_x < BALL_R) { ball_x = BALL_R; ball_dx = fabsf(ball_dx); }
-    if (ball_x > PLAY_W - BALL_R) { ball_x = PLAY_W - BALL_R; ball_dx = -fabsf(ball_dx); }
-    if (ball_y < BALL_R) { ball_y = BALL_R; ball_dy = fabsf(ball_dy); }
+    if (b->x < BALL_R) { b->x = BALL_R; b->dx = fabsf(b->dx); }
+    if (b->x > PLAY_W - BALL_R) { b->x = PLAY_W - BALL_R; b->dx = -fabsf(b->dx); }
+    if (b->y < BALL_R) { b->y = BALL_R; b->dy = fabsf(b->dy); }
 
     for (int r = 0; r < MAX_ROWS; r++)
         for (int c = 0; c < COLS; c++)
-            if (hit_block(c, r)) return;
+            if (hit_block(b, c, r)) return;
 
-    if (ball_y >= LAUNCH_Y - 4 && ball_dy > 0) {
-        ball_live = false;
-        if (any_blocks_left()) {
-            shift_blocks_down();
-            if (blocks_in_danger()) {
-                lives--;
-                buzzer_play(SFX_ERROR);
-                memset(grid, 0, sizeof(grid));
-                for (int i = 0; i < 3 + level / 2; i++)
-                    spawn_row(i);
-            }
-        } else {
-            level++;
-            score += 100 * level;
-            buzzer_play(SFX_LEVEL);
-            memset(grid, 0, sizeof(grid));
-            for (int i = 0; i < 3 + level / 2; i++)
-                spawn_row(i);
-        }
-    }
+    if (b->y >= LAUNCH_Y - 2 && b->dy > 0)
+        b->live = false;
 }
 
-static void sync_ball_draw() {
-    const int bx = (int)ball_x;
-    const int by = (int)ball_y;
-    if (bx == prev_bx && by == prev_by) return;
-    game_play_fill_circle(prev_bx, prev_by, BALL_R + 1, COL_BG);
-    for (int r = 0; r < MAX_ROWS; r++)
-        for (int c = 0; c < COLS; c++)
-            if (grid[r][c] > 0) {
-                const int x = c * cell_w() + 2;
-                const int y = r * cell_h() + 4;
-                if (bx + BALL_R >= x && bx - BALL_R <= x + cell_w() &&
-                    by + BALL_R >= y && by - BALL_R <= y + cell_h() + 4)
-                    draw_block(c, r);
-            }
-    game_play_fill_circle(bx, by, BALL_R, COL_BALL);
-    prev_bx = bx;
-    prev_by = by;
+static void end_turn() {
+    volley_active = false;
+    launch_left = 0;
+    if (any_blocks_left()) {
+        shift_blocks_down();
+        if (blocks_in_danger()) {
+            lives--;
+            buzzer_play(SFX_ERROR);
+            memset(grid, 0, sizeof(grid));
+            memset(bonus, 0, sizeof(bonus));
+            for (int i = 0; i < 3 + level / 2; i++)
+                spawn_row(i);
+            ball_stock = 1;
+        }
+    } else {
+        level++;
+        score += 100 * level;
+        buzzer_play(SFX_LEVEL);
+        memset(grid, 0, sizeof(grid));
+        memset(bonus, 0, sizeof(bonus));
+        for (int i = 0; i < 3 + level / 2; i++)
+            spawn_row(i);
+    }
+    ballz_redraw();
+}
+
+static void physics_step() {
+    if (launch_left > 0 && (int32_t)(millis() - next_launch_ms) >= 0) {
+        spawn_ball(launch_dx, launch_dy);
+        launch_left--;
+        next_launch_ms = millis() + LAUNCH_GAP;
+    }
+
+    for (int i = 0; i < MAX_BALLS; i++)
+        if (balls[i].live)
+            step_ball(&balls[i]);
+
+    if (volley_active && launch_left <= 0 && live_ball_count() == 0)
+        end_turn();
+}
+
+static void sync_balls_draw() {
+    for (int i = 0; i < MAX_BALLS; i++) {
+        Ball* b = &balls[i];
+        if (!b->live) continue;
+        const int bx = (int)b->x;
+        const int by = (int)b->y;
+        if (bx == b->prev_x && by == b->prev_y) continue;
+        game_play_fill_circle(b->prev_x, b->prev_y, BALL_R + 1, COL_BG);
+        for (int r = 0; r < MAX_ROWS; r++)
+            for (int c = 0; c < COLS; c++)
+                if (grid[r][c] > 0) {
+                    const int x = c * cell_w() + 2;
+                    const int y = r * cell_h() + 4;
+                    if (bx + BALL_R >= x && bx - BALL_R <= x + cell_w() &&
+                        by + BALL_R >= y && by - BALL_R <= y + cell_h() + 4)
+                        draw_block(c, r);
+                }
+        game_play_fill_circle(bx, by, BALL_R, COL_BALL);
+        b->prev_x = bx;
+        b->prev_y = by;
+    }
 }
 
 static void ballz_init(GameHud* hud) {
     score = 0;
     level = 1;
     lives = GAME_LIVES_DEFAULT;
-    ball_live = false;
+    ball_stock = 1;
+    launch_left = 0;
+    volley_active = false;
     aiming = false;
     last_phys = millis();
     memset(grid, 0, sizeof(grid));
+    memset(bonus, 0, sizeof(bonus));
+    memset(balls, 0, sizeof(balls));
     for (int i = 0; i < 4; i++)
         spawn_row(i);
     ballz_redraw();
@@ -265,7 +362,7 @@ void game_ballz_run(const GameEntry* cfg) {
             if (game_hud_consume_resume_redraw(hud))
                 ballz_redraw();
 
-            if (!ball_live) {
+            if (!volley_active) {
                 if (in.just_pressed && in.y >= PLAY_Y) {
                     aiming = true;
                     aim_px = in.play_x;
@@ -279,11 +376,11 @@ void game_ballz_run(const GameEntry* cfg) {
                 if (aiming && in.just_released) {
                     aim_px = in.play_x;
                     aim_py = in.play_y;
-                    launch_ball();
+                    begin_volley();
                 }
             }
 
-            if (ball_live && millis() - last_phys >= PHYS_MS) {
+            if (volley_active && millis() - last_phys >= PHYS_MS) {
                 last_phys = millis();
                 physics_step();
                 if (lives <= 0) {
@@ -300,9 +397,9 @@ void game_ballz_run(const GameEntry* cfg) {
                 }
             }
 
-            if (ball_live) {
+            if (volley_active) {
                 game_frame_draw_now();
-                sync_ball_draw();
+                sync_balls_draw();
             }
 
             if (score != hud->score)

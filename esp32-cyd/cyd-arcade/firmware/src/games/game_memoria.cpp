@@ -5,6 +5,7 @@
 #include "display.h"
 #include "hw_config.h"
 #include "ui_draw.h"
+#include "ui_theme.h"
 #include <Arduino.h>
 #include <string.h>
 
@@ -13,12 +14,12 @@
 #define PAIRS 8
 #define CARD_GAP 6
 #define COL_BG 0x0000
-#define COL_BACK 0x4A69
-#define COL_BACK_HI 0x6B8E
 #define LOCK_MS 750
 
-static const uint16_t PAIR_COL[PAIRS] = {
-    0xF800, 0x07E0, 0x001F, 0xFFE0, 0xF81F, 0x07FF, 0xFD20, 0xFF80,
+/* Cores bem separadas no matiz + símbolo único por par */
+static const uint32_t PAIR_RGB[PAIRS] = {
+    0xFF3B30u, 0x34C759u, 0x007AFFu, 0xFF9500u,
+    0xAF52DEu, 0x00C7BEu, 0xFFCC00u, 0xFF2D55u,
 };
 
 static uint8_t deck[COLS * ROWS];
@@ -30,6 +31,10 @@ static int moves;
 static bool input_lock;
 static uint32_t lock_until;
 static int card_w, card_h;
+
+static uint16_t pair_col(int id) {
+    return ui_rgb565(PAIR_RGB[id % PAIRS]);
+}
 
 static int idx(int c, int r) { return r * COLS + c; }
 
@@ -51,6 +56,46 @@ static void shuffle_deck() {
     }
 }
 
+static void draw_pair_symbol(int id, int cx, int cy, int sz, uint16_t fg, uint16_t bg) {
+    const int s = sz / 2;
+    switch (id % 8) {
+    case 0:
+        game_play_fill_circle(cx, cy, s, fg);
+        break;
+    case 1:
+        game_play_fill_round_rect(cx - s, cy - s, s * 2, s * 2, 2, fg);
+        break;
+    case 2:
+        game_play_fill_circle(cx, cy - s / 2, s - 1, fg);
+        game_play_fill_circle(cx - s + 1, cy + s / 2, s - 1, fg);
+        game_play_fill_circle(cx + s - 1, cy + s / 2, s - 1, fg);
+        break;
+    case 3:
+        game_play_fill_rect(cx - s / 2, cy - s, s, s * 2, fg);
+        game_play_fill_rect(cx - s, cy - s / 2, s * 2, s, fg);
+        break;
+    case 4: {
+        const int r1 = s - 1;
+        game_play_fill_circle(cx, cy, r1, fg);
+        game_play_fill_circle(cx, cy, r1 - 3, bg);
+        game_play_fill_circle(cx, cy, 2, fg);
+        break;
+    }
+    case 5:
+        for (int i = -1; i <= 1; i++)
+            game_play_fill_rect(cx - s, cy + i * (s / 2), s * 2, 3, fg);
+        break;
+    case 6:
+        game_play_fill_circle(cx, cy, s, fg);
+        game_play_fill_circle(cx, cy, s - 3, COL_BG);
+        break;
+    default:
+        game_play_fill_circle(cx - s / 2, cy, s - 1, fg);
+        game_play_fill_circle(cx + s / 2, cy, s - 1, fg);
+        break;
+    }
+}
+
 static void draw_card(int c, int r, bool highlight) {
     int x, y;
     card_rect(c, r, &x, &y);
@@ -58,17 +103,21 @@ static void draw_card(int c, int r, bool highlight) {
     const bool face_up = open[i] || solved[i];
 
     if (face_up) {
-        const uint16_t col = PAIR_COL[deck[i]];
-        game_play_fill_round_rect(x, y, card_w, card_h, 6, col);
+        const int pid = deck[i];
+        const uint16_t col = pair_col(pid);
+        const uint16_t bg = ui_tint565(col, -70);
+        game_play_fill_round_rect(x, y, card_w, card_h, 6, bg);
+        tft.drawRoundRect(PLAY_X + x, PLAY_Y + y, card_w, card_h, 6, col);
         if (highlight)
-            game_play_fill_round_rect(x + 2, y + 2, card_w - 4, card_h - 4, 5, ui_tint565(col, 25));
-        game_play_fill_circle(x + card_w / 2, y + card_h / 2, card_w / 5, ui_tint565(col, -35));
-        game_play_fill_circle(x + card_w / 2, y + card_h / 2, card_w / 8, 0xFFFF);
+            game_play_fill_round_rect(x + 2, y + 2, card_w - 4, card_h - 4, 5, ui_tint565(col, 15));
+        const int sym_sz = card_w < card_h ? card_w / 2 : card_h / 2;
+        draw_pair_symbol(pid, x + card_w / 2, y + card_h / 2, sym_sz, col, bg);
     } else {
-        game_play_fill_round_rect(x, y, card_w, card_h, 6, highlight ? COL_BACK_HI : COL_BACK);
-        game_play_fill_rect(x + 6, y + 6, card_w - 12, card_h - 12, ui_tint565(COL_BACK, 15));
-        for (int dy = 8; dy < card_h - 8; dy += 10)
-            game_play_fill_rect(x + 8, y + dy, card_w - 16, 2, ui_tint565(COL_BACK_HI, -20));
+        const uint16_t back = ui_rgb565(0x3D2E6Bu);
+        const uint16_t back_hi = ui_rgb565(0x5240A0u);
+        game_play_fill_round_rect(x, y, card_w, card_h, 6, highlight ? back_hi : back);
+        game_play_fill_rect(x + 5, y + 5, card_w - 10, card_h - 10, ui_tint565(back, 12));
+        game_play_fill_circle(x + card_w / 2, y + card_h / 2, card_w / 6, ui_tint565(back_hi, 20));
     }
 }
 
@@ -167,9 +216,10 @@ void game_memoria_run(const GameEntry* cfg) {
                         open[first_pick] = open[pick] = false;
                         first_pick = -1;
                         second_pick = -1;
+                        memoria_redraw();
                         bool all = true;
-                        for (int i = 0; i < COLS * ROWS; i++)
-                            if (!solved[i]) all = false;
+                        for (int k = 0; k < COLS * ROWS; k++)
+                            if (!solved[k]) all = false;
                         if (all) {
                             won = true;
                             buzzer_play(SFX_WIN);
