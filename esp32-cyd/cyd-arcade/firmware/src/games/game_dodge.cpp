@@ -27,6 +27,7 @@ static int obs_y[OBS_MAX];
 static bool obs_on[OBS_MAX];
 static uint16_t obs_col[OBS_MAX];
 static int score;
+static int lives;
 static uint32_t last_step, step_ms, last_spawn;
 
 static int lane_w() { return PLAY_W / LANES; }
@@ -108,20 +109,30 @@ static void dodge_redraw() {
     draw_car();
 }
 
-static void dodge_init(const GameEntry* cfg) {
+static void dodge_reset_after_hit() {
+    car_lane = 1;
+    prev_lane = 1;
+    for (int i = 0; i < OBS_MAX; i++) obs_on[i] = false;
+    last_spawn = millis();
+    dodge_redraw();
+}
+
+static void dodge_init(const GameEntry* cfg, GameHud* hud) {
     car_lane = 1;
     prev_lane = 1;
     score = 0;
+    lives = GAME_LIVES_DEFAULT;
     for (int i = 0; i < OBS_MAX; i++) obs_on[i] = false;
     step_ms = cfg->speed > 0 ? cfg->speed : 80;
     last_step = millis();
     last_spawn = millis();
     draw_road();
     draw_car();
+    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
 }
 
 void game_dodge_run(const GameEntry* cfg) {
-    GameHud* hud = game_hud_begin(cfg->title, cfg->engine, cfg->color);
+    GameHud* hud = game_hud_begin(cfg->engine);
     if (!hud) return;
 
     bool retry = false;
@@ -129,7 +140,7 @@ void game_dodge_run(const GameEntry* cfg) {
     for (;;) {
         if (retry) game_hud_reset_play(hud);
         retry = true;
-        dodge_init(cfg);
+        dodge_init(cfg, hud);
         game_hud_set_score(hud, 0);
 
         GameInput in;
@@ -175,8 +186,15 @@ void game_dodge_run(const GameEntry* cfg) {
             if (millis() - last_step >= (uint32_t)step_ms) {
                 last_step = millis();
                 if (!step_game()) {
-                    dead = true;
-                    break;
+                    lives--;
+                    buzzer_play(SFX_ERROR);
+                    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
+                    if (lives <= 0) {
+                        dead = true;
+                        break;
+                    }
+                    dodge_reset_after_hit();
+                    continue;
                 }
                 game_hud_set_score(hud, score);
             }

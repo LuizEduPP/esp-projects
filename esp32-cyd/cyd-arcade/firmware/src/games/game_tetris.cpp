@@ -27,6 +27,7 @@ static uint8_t grid[BH][BW];
 static int cur_x, cur_y, cur_type, cur_rot;
 static int next_type;
 static int score, lines, level;
+static int lives;
 static uint32_t drop_ms, last_drop;
 
 /* Tetris Guideline: I,O,T,S,Z,J,L */
@@ -223,7 +224,7 @@ static void update_level(GameHud* hud) {
     const int nl = lines / 10 + 1;
     if (nl != level) {
         level = nl;
-        game_hud_set_level(hud, level);
+        game_hud_set_tier(hud, level);
         buzzer_play(SFX_LEVEL);
     }
 }
@@ -289,6 +290,18 @@ static bool rotate_piece() {
     return false;
 }
 
+static bool tetris_lose_life(GameHud* hud) {
+    lives--;
+    buzzer_play(SFX_ERROR);
+    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
+    if (lives <= 0) return false;
+    for (int y = 0; y < BH; y++)
+        for (int x = 0; x < BW; x++)
+            grid[y][x] = 0;
+    draw_board();
+    return spawn_piece();
+}
+
 static bool step_down(GameHud* hud) {
     if (move_piece(0, 1)) {
         score += 1;
@@ -310,17 +323,18 @@ static bool handle_input(GameHud* hud, GameInput* in, GameDrag* drag, uint32_t* 
         if (sh > 0) move_piece(1, 0);
         else if (sh < 0) move_piece(-1, 0);
 
-        if (in->play_y > drag->start_y + 24 && millis() - *last_soft > 80) {
+        const int sv = game_drag_step_v(drag, in, 22);
+        if (sv < 0) {
+            if (rotate_piece()) buzzer_play(SFX_SELECT);
+        } else if (sv > 0 && millis() - *last_soft > 80) {
             *last_soft = millis();
             if (!step_down(hud)) return false;
             game_hud_set_score(hud, score);
         }
     }
 
-    if (in->just_released && drag->active) {
-        if (rotate_piece()) buzzer_play(SFX_SELECT);
+    if (in->just_released && drag->active)
         drag->active = false;
-    }
     return true;
 }
 
@@ -332,16 +346,18 @@ static void tetris_init(const GameEntry* cfg, GameHud* hud) {
     score = 0;
     lines = 0;
     level = 1;
+    lives = GAME_LIVES_DEFAULT;
     next_type = random(0, 7);
     drop_ms = cfg->speed > 0 ? cfg->speed : 600;
     last_drop = millis();
     game_hud_set_score(hud, 0);
-    game_hud_set_level(hud, level);
+    game_hud_set_tier(hud, level);
+    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
     draw_board();
 }
 
 void game_tetris_run(const GameEntry* cfg) {
-    GameHud* hud = game_hud_begin(cfg->title, cfg->engine, cfg->color);
+    GameHud* hud = game_hud_begin(cfg->engine);
     if (!hud) return;
 
     bool retry = false;
@@ -370,15 +386,20 @@ void game_tetris_run(const GameEntry* cfg) {
             if (game_hud_consume_resume_redraw(hud))
                 tetris_redraw_play();
             if (!handle_input(hud, &in, &drag, &last_soft)) {
-                dead = true;
-                break;
+                if (!tetris_lose_life(hud)) {
+                    dead = true;
+                    break;
+                }
+                continue;
             }
 
             if (millis() - last_drop >= drop_ms) {
                 last_drop = millis();
                 if (!step_down(hud)) {
-                    dead = true;
-                    break;
+                    if (!tetris_lose_life(hud)) {
+                        dead = true;
+                        break;
+                    }
                 }
                 game_hud_set_score(hud, score);
             }

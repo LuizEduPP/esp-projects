@@ -24,6 +24,7 @@ enum { PONG_OK = 0, PONG_LOST, PONG_WON };
 static int pad_p, pad_c;
 static float ball_x, ball_y, ball_dx, ball_dy;
 static int score, cpu_score;
+static int lives;
 static bool serving;
 static uint32_t last_phys, serve_until;
 static int prev_bx, prev_by, prev_px, prev_cx;
@@ -109,13 +110,15 @@ static void serve_ball(bool toward_player) {
     pong_redraw();
 }
 
-static void pong_init() {
+static void pong_init(GameHud* hud) {
     pad_p = PLAY_W / 2;
     pad_c = PLAY_W / 2;
     score = 0;
     cpu_score = 0;
+    lives = GAME_LIVES_DEFAULT;
     last_hud_cpu = -1;
     last_phys = millis();
+    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
     serve_ball(true);
 }
 
@@ -172,9 +175,10 @@ static int physics_step() {
         return PONG_OK;
     }
     if (ball_y > PLAY_H + BALL_R) {
+        lives--;
         cpu_score++;
         buzzer_play(SFX_ERROR);
-        if (cpu_score >= WIN_SCORE)
+        if (lives <= 0)
             return PONG_LOST;
         serve_ball(false);
         return PONG_OK;
@@ -206,17 +210,18 @@ static void sync_draw() {
 }
 
 void game_pong_run(const GameEntry* cfg) {
-    GameHud* hud = game_hud_begin(cfg->title, cfg->engine, cfg->color);
+    GameHud* hud = game_hud_begin(cfg->engine);
     if (!hud) return;
-    game_hud_set_level_prefix(hud, 'C');
+    game_hud_set_tier_mode(hud, HUD_TIER_CPU, true);
 
     bool retry = false;
     for (;;) {
         if (retry) game_hud_reset_play(hud);
         retry = true;
-        pong_init();
+        pong_init(hud);
         game_hud_set_score(hud, 0);
-        game_hud_set_level(hud, 0);
+        game_hud_set_tier(hud, 0);
+        last_hud_cpu = 0;
 
         GameInput in;
         bool dead = false;
@@ -254,10 +259,15 @@ void game_pong_run(const GameEntry* cfg) {
             } else if (millis() - last_phys >= PHYS_MS) {
                 last_phys = millis();
                 const int res = physics_step();
-                if (res != PONG_OK) {
+                if (res == PONG_LOST) {
                     dead = true;
-                    won = (res == PONG_WON);
+                    won = false;
+                } else if (res == PONG_WON) {
+                    dead = true;
+                    won = true;
                 }
+                if (lives != hud->lives)
+                    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
             }
 
             game_frame_draw_now();
@@ -266,7 +276,7 @@ void game_pong_run(const GameEntry* cfg) {
             if (score != hud->score)
                 game_hud_set_score(hud, score);
             if (cpu_score != last_hud_cpu) {
-                game_hud_set_level(hud, cpu_score);
+                game_hud_set_tier(hud, cpu_score);
                 last_hud_cpu = cpu_score;
             }
             game_frame_delay();

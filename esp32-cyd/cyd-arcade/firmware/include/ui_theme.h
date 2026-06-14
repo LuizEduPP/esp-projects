@@ -5,14 +5,12 @@ struct ArcadeTheme {
     uint16_t bg;
     uint16_t surface;
     uint16_t card;
-    uint16_t card_sel;
     uint16_t border;
     uint16_t accent;
     uint16_t accent_hi;
     uint16_t text_hi;
     uint16_t text_mute;
     uint16_t icon;
-    uint16_t pause;
     uint16_t play_bg;
     uint16_t ok;
     uint16_t danger;

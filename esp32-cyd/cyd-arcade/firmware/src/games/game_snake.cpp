@@ -24,6 +24,18 @@ static uint32_t last_step;
 static uint32_t step_ms;
 static int score;
 static int phase;
+static int lives;
+
+static void spawn_food();
+
+static void snake_reset_pos() {
+    len = 3;
+    dir = ndir = 1;
+    body_x[0] = GW / 2; body_y[0] = GH / 2;
+    body_x[1] = body_x[0] - 1; body_y[1] = body_y[0];
+    body_x[2] = body_x[0] - 2; body_y[2] = body_y[0];
+    spawn_food();
+}
 
 static void spawn_food() {
     for (;;) {
@@ -84,31 +96,37 @@ static void handle_drag(GameInput* in, GameDrag* drag) {
     }
 }
 
-static void snake_init(const GameEntry* cfg) {
-    len = 3;
-    dir = ndir = 1;
+static bool snake_lose_life(GameHud* hud) {
+    lives--;
+    buzzer_play(SFX_ERROR);
+    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
+    if (lives <= 0) return false;
+    snake_reset_pos();
+    snake_redraw_all();
+    return true;
+}
+static void snake_init(const GameEntry* cfg, GameHud* hud) {
     score = 0;
     phase = 1;
-    body_x[0] = GW / 2; body_y[0] = GH / 2;
-    body_x[1] = body_x[0] - 1; body_y[1] = body_y[0];
-    body_x[2] = body_x[0] - 2; body_y[2] = body_y[0];
-    spawn_food();
+    lives = GAME_LIVES_DEFAULT;
+    snake_reset_pos();
     last_step = millis();
     step_ms = cfg->speed > 0 ? cfg->speed : 150;
     snake_redraw_all();
+    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
 }
 
 void game_snake_run(const GameEntry* cfg) {
-    GameHud* hud = game_hud_begin(cfg->title, cfg->engine, cfg->color);
+    GameHud* hud = game_hud_begin(cfg->engine);
     if (!hud) return;
 
     bool retry = false;
     for (;;) {
         if (retry) game_hud_reset_play(hud);
         retry = true;
-        snake_init(cfg);
+        snake_init(cfg, hud);
         game_hud_set_score(hud, 0);
-        game_hud_set_level(hud, phase);
+        game_hud_set_tier(hud, phase);
 
         GameInput in;
         GameDrag drag = {};
@@ -137,16 +155,21 @@ void game_snake_run(const GameEntry* cfg) {
                 else if (dir == 2) hx--;
                 else hy++;
 
-                if (hx < 0 || hx >= GW || hy < 0 || hy >= GH) {
-                    dead = true;
-                    break;
+                bool crashed = (hx < 0 || hx >= GW || hy < 0 || hy >= GH);
+                if (!crashed) {
+                    for (int i = 0; i < len; i++)
+                        if (body_x[i] == hx && body_y[i] == hy) {
+                            crashed = true;
+                            break;
+                        }
                 }
-                for (int i = 0; i < len; i++)
-                    if (body_x[i] == hx && body_y[i] == hy) {
+                if (crashed) {
+                    if (!snake_lose_life(hud)) {
                         dead = true;
                         break;
                     }
-                if (dead) break;
+                    continue;
+                }
 
                 const bool ate = (hx == food_x && hy == food_y);
                 if (!ate) clear_cell(tail_x, tail_y);
@@ -171,11 +194,10 @@ void game_snake_run(const GameEntry* cfg) {
                     const int new_phase = score / 50 + 1;
                     if (new_phase != phase) {
                         phase = new_phase;
-                        game_hud_set_level(hud, phase);
+                        game_hud_set_tier(hud, phase);
                         buzzer_play(SFX_LEVEL);
                         if (step_ms > 90) step_ms -= 6;
                     }
-                    if (score > 0 && score % 50 == 0 && step_ms > 90) step_ms -= 6;
                     spawn_food();
                     draw_apple();
                 }

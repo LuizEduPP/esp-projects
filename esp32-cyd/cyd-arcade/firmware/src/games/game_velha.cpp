@@ -19,6 +19,7 @@
 
 static int8_t board[GRID][GRID];
 static int wins;
+static int cpu_wins;
 static int CELL, OFF_X, OFF_Y;
 static bool two_player;
 static int8_t turn;
@@ -189,17 +190,23 @@ static void velha_reset_board() {
     draw_grid();
 }
 
-static void end_round(GameHud* hud, const char* title, uint16_t col, bool player_won) {
+static void end_round(GameHud* hud, const char* title, uint16_t col,
+                      bool player_won, bool cpu_won) {
+    (void)col;
     if (strcmp(title, "Empate") == 0) {
         buzzer_play(SFX_SELECT);
-    } else if (player_won || strstr(title, "venceu")) {
-        if (player_won && !two_player) {
+    } else if (player_won) {
+        if (!two_player) {
             wins++;
             game_hud_set_score(hud, wins);
         }
         buzzer_play(SFX_WIN);
-    } else {
+    } else if (cpu_won) {
+        cpu_wins++;
+        game_hud_set_tier(hud, cpu_wins);
         buzzer_play(SFX_ERROR);
+    } else {
+        buzzer_play(SFX_WIN);
     }
     game_play_toast(title, "Toque p/ continuar", col, COL_BG);
     waiting = true;
@@ -208,13 +215,16 @@ static void end_round(GameHud* hud, const char* title, uint16_t col, bool player
 
 void game_velha_run(const GameEntry* cfg) {
     (void)cfg;
-    GameHud* hud = game_hud_begin("Velha", "velha", 0x00D4FF);
+    GameHud* hud = game_hud_begin(cfg->engine);
     if (!hud) return;
 
     wins = 0;
+    cpu_wins = 0;
     two_player = false;
     waiting = false;
     velha_reset_board();
+    game_hud_set_tier_mode(hud, HUD_TIER_CPU, true);
+    game_hud_set_tier(hud, 0);
     game_hud_set_score(hud, 0);
 
     GameInput in;
@@ -258,15 +268,16 @@ void game_velha_run(const GameEntry* cfg) {
             int w = check_winner();
             if (w) {
                 if (two_player)
-                    end_round(hud, w == 1 ? "X venceu!" : "O venceu!", w == 1 ? COL_X : COL_O, false);
+                    end_round(hud, w == 1 ? "X venceu!" : "O venceu!",
+                              w == 1 ? COL_X : COL_O, false, false);
                 else if (w == 1)
-                    end_round(hud, "Vitoria!", COL_X, true);
+                    end_round(hud, "Vitoria!", COL_X, true, false);
                 else
-                    end_round(hud, "CPU venceu", COL_O, false);
+                    end_round(hud, "CPU venceu", COL_O, false, true);
                 continue;
             }
             if (board_full()) {
-                end_round(hud, "Empate", COL_GRID, false);
+                end_round(hud, "Empate", COL_GRID, false, false);
                 continue;
             }
 
@@ -280,9 +291,9 @@ void game_velha_run(const GameEntry* cfg) {
 
             w = check_winner();
             if (w == 2)
-                end_round(hud, "CPU venceu", COL_O, false);
+                end_round(hud, "CPU venceu", COL_O, false, true);
             else if (board_full())
-                end_round(hud, "Empate", COL_GRID, false);
+                end_round(hud, "Empate", COL_GRID, false, false);
         }
         game_frame_delay();
     }

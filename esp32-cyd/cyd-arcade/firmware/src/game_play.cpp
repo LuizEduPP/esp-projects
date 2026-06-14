@@ -16,29 +16,59 @@
 
 #define TH ui_theme_get()
 
+#define COL_LIFE_PANEL 0x001F
+#define COL_LIFE       0xFFE0
+#define COL_LIFE_OFF   0x2949
+#define COL_LIFE_DOT   0xF800
+
 static GameHud* s_active_hud;
+
+static void draw_lives_in_status(GameHud* hud) {
+    if (!hud || hud->lives_max <= 0) return;
+    const int y = 4;
+    const int h = STATUS_H - 8;
+    tft.fillRoundRect(HUD_LIVES_X, y, HUD_LIVES_W, h, 4, COL_LIFE_PANEL);
+    for (int i = 0; i < hud->lives_max; i++) {
+        const int cx = HUD_LIVES_X + 10 + i * 14;
+        const int cy = y + h / 2;
+        const bool on = i < hud->lives;
+        tft.fillCircle(cx, cy, 4, on ? COL_LIFE : COL_LIFE_OFF);
+        if (on)
+            tft.fillCircle(cx, cy, 2, COL_LIFE_DOT);
+    }
+}
+
+static void draw_tier_badge(GameHud* hud) {
+    if (!hud) return;
+    const char prefix = hud->tier_prefix ? hud->tier_prefix : HUD_TIER_FASE;
+    if (hud->tier <= 0) {
+        if (!hud->tier_show_zero || prefix != HUD_TIER_CPU) return;
+    }
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%c%d", prefix, hud->tier);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(TH->accent, TH->bg);
+    tft.drawString(buf, SCREEN_CX, STATUS_H / 2, 2);
+}
+
+static void draw_score_badge(GameHud* hud) {
+    if (!hud) return;
+    char sc[16];
+    snprintf(sc, sizeof(sc), "%d", hud->score);
+    tft.fillRoundRect(HUD_SCORE_X, 4, HUD_SCORE_W, 20, 4, TH->card);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(TH->pal[1], TH->card);
+    tft.drawString(sc, HUD_SCORE_X + HUD_SCORE_W / 2, STATUS_H / 2, 2);
+}
 
 static void draw_status_bar(GameHud* hud) {
     tft.fillRect(0, 0, SCREEN_W, STATUS_H, TH->bg);
     tft.fillRect(0, STATUS_H - 2, SCREEN_W, 2, TH->border);
 
     tft.fillCircle(14, STATUS_H / 2, 5, TH->accent);
-
-    if (hud->level > 0 || hud->level_prefix == 'V' || hud->level_prefix == 'C') {
-        char lv[8];
-        const char p = hud->level_prefix ? hud->level_prefix : 'F';
-        snprintf(lv, sizeof(lv), "%c%d", p, hud->level);
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TH->accent, TH->bg);
-        tft.drawString(lv, SCREEN_CX, STATUS_H / 2, 2);
-    }
-
-    char sc[16];
-    snprintf(sc, sizeof(sc), "%d", hud->score);
-    tft.fillRoundRect(HUD_SCORE_X, 4, 54, 20, 4, TH->card);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TH->pal[1], TH->card);
-    tft.drawString(sc, HUD_SCORE_X + 27, STATUS_H / 2, 2);
+    draw_lives_in_status(hud);
+    draw_tier_badge(hud);
+    draw_score_badge(hud);
 
     tft.fillRoundRect(HUD_PAUSE_X, 4, HUD_PAUSE_W, 20, 4, TH->card);
     ui_icon_draw(HUD_PAUSE_X + 4, 2, 20, UI_ICON_PAUSE, TH->text_hi);
@@ -124,14 +154,12 @@ static GameEndAction wait_end_choice(int btn1_y, int btn2_y, int btn_w, int btn1
     }
 }
 
-GameHud* game_hud_begin(const char* title, const char* engine, uint32_t color) {
+GameHud* game_hud_begin(const char* engine) {
     auto* hud = (GameHud*)calloc(1, sizeof(GameHud));
     if (!hud) return nullptr;
 
-    strncpy(hud->title, title, sizeof(hud->title) - 1);
     strncpy(hud->engine, engine, sizeof(hud->engine) - 1);
-    hud->accent_color = ui_rgb565(color);
-    hud->level_prefix = 'F';
+    hud->tier_prefix = HUD_TIER_FASE;
     hud->best = score_store_get(engine);
     score_store_get_name(engine, hud->best_name, sizeof(hud->best_name));
     hud->pause_after_ms = millis() + 450;
@@ -156,21 +184,35 @@ void game_hud_set_score(GameHud* hud, int score) {
     draw_status_bar(hud);
 }
 
-void game_hud_set_level(GameHud* hud, int level) {
-    if (!hud || hud->level == level) return;
-    hud->level = level;
+void game_hud_set_tier_mode(GameHud* hud, char prefix, bool show_at_zero) {
+    if (!hud) return;
+    hud->tier_prefix = prefix ? prefix : HUD_TIER_FASE;
+    hud->tier_show_zero = show_at_zero;
     draw_status_bar(hud);
 }
 
-void game_hud_set_level_prefix(GameHud* hud, char prefix) {
+void game_hud_set_tier(GameHud* hud, int value) {
+    if (!hud || hud->tier == value) return;
+    hud->tier = value;
+    draw_status_bar(hud);
+}
+
+void game_hud_set_lives(GameHud* hud, int lives, int max_lives) {
     if (!hud) return;
-    hud->level_prefix = prefix;
+    if (max_lives < 0) max_lives = 0;
+    if (lives < 0) lives = 0;
+    if (max_lives > 0 && lives > max_lives) lives = max_lives;
+    hud->lives = lives;
+    hud->lives_max = max_lives;
+    draw_status_bar(hud);
 }
 
 void game_hud_reset_play(GameHud* hud) {
     if (!hud) return;
     hud->score = 0;
-    hud->level = 0;
+    hud->tier = 0;
+    hud->lives = 0;
+    hud->lives_max = 0;
     tft.fillRect(PLAY_X, PLAY_Y, PLAY_W, PLAY_H, TH->play_bg);
     draw_status_bar(hud);
     touch_wait_release();
@@ -299,7 +341,8 @@ void game_play_toast(const char* title, const char* sub, uint16_t stroke, uint16
 void game_play_clear(uint16_t color) {
     game_frame_draw_now();
     tft.fillRect(PLAY_X, PLAY_Y, PLAY_W, PLAY_H, color);
-    if (s_active_hud) draw_status_bar(s_active_hud);
+    if (s_active_hud)
+        draw_status_bar(s_active_hud);
 }
 
 void game_play_fill_rect(int x, int y, int w, int h, uint16_t color) {
@@ -330,13 +373,6 @@ void game_play_fill_circle(int cx, int cy, int r, uint16_t color) {
     const bool clipped_top = (cy - r < 0);
     tft.fillCircle(PLAY_X + cx, PLAY_Y + cy, r, color);
     refresh_status_if_clipped(clipped_top);
-}
-
-void game_play_fill_triangle(int x0, int y0, int x1, int y1, int x2, int y2, uint16_t color) {
-    if (!game_frame_draw_on()) return;
-    tft.fillTriangle(PLAY_X + x0, PLAY_Y + y0,
-                     PLAY_X + x1, PLAY_Y + y1,
-                     PLAY_X + x2, PLAY_Y + y2, color);
 }
 
 void game_play_hint(const char* msg, uint16_t fg, uint16_t bg) {

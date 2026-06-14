@@ -24,6 +24,7 @@ static int8_t board[GH][GW];
 static uint8_t state[GH][GW];
 static bool first_tap;
 static int revealed, score;
+static int lives;
 static uint32_t start_ms;
 
 enum { ST_COVER = 0, ST_OPEN, ST_MINE, ST_FLAG };
@@ -102,30 +103,36 @@ static void flood(int x, int y) {
             flood(x + dx, y + dy);
 }
 
-static void mines_init() {
-    CELL = PLAY_W / GW;
-    OFF_X = 0;
-    OFF_Y = (PLAY_H - GH * CELL) / 2;
-    if (OFF_Y < 0) OFF_Y = 0;
+static void mines_reset_board() {
     memset(state, 0, sizeof(state));
     memset(board, 0, sizeof(board));
     first_tap = true;
     revealed = 0;
-    score = 0;
     start_ms = millis();
     mines_redraw();
 }
 
+static void mines_init(GameHud* hud) {
+    CELL = PLAY_W / GW;
+    OFF_X = 0;
+    OFF_Y = (PLAY_H - GH * CELL) / 2;
+    if (OFF_Y < 0) OFF_Y = 0;
+    score = 0;
+    mines_reset_board();
+    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
+}
+
 void game_mines_run(const GameEntry* cfg) {
     (void)cfg;
-    GameHud* hud = game_hud_begin("Minesweeper", "mines", 0xC0C0C0);
+    GameHud* hud = game_hud_begin(cfg->engine);
     if (!hud) return;
 
     bool retry = false;
     for (;;) {
         if (retry) game_hud_reset_play(hud);
         retry = true;
-        mines_init();
+        lives = GAME_LIVES_DEFAULT;
+        mines_init(hud);
         game_hud_set_score(hud, 0);
 
         GameInput in;
@@ -159,8 +166,14 @@ void game_mines_run(const GameEntry* cfg) {
                     state[y][x] = ST_MINE;
                     draw_cell(x, y);
                     buzzer_play(SFX_ERROR);
-                    dead = true;
-                    break;
+                    lives--;
+                    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
+                    if (lives <= 0) {
+                        dead = true;
+                        break;
+                    }
+                    mines_reset_board();
+                    continue;
                 }
                 flood(x, y);
                 buzzer_play(SFX_TICK);

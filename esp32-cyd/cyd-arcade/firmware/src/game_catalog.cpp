@@ -6,7 +6,6 @@ static const GameEntry k_builtin[] = {
     {"Arkanoid",    "breakout", 0xFF6600, 100},
     {"Tetris",      "tetris",   0x00F0F0, 600},
     {"Pong",        "pong",     0xFFFFFF, 80},
-    {"Torre",       "stack",    0xFF4D8D, 14},
     {"Dodge",       "dodge",    0xFFE000, 80},
     {"Simon",       "simon",    0xFF0000, 500},
     {"Minesweeper", "mines",    0xC0C0C0, 0},

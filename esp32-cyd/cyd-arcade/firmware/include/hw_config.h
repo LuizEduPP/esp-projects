@@ -26,20 +26,25 @@
 #define UI_CONTENT_W     (SCREEN_W - UI_PAD * 2)
 
 #define STATUS_H         28
-#define HUD_SCORE_X      168
-#define HUD_PAUSE_X      206
-#define HUD_PAUSE_W      28
+#define HUD_LIVES_X      28
+#define HUD_LIVES_W      52
+#define HUD_SCORE_X      154
+#define HUD_SCORE_W      50
+#define HUD_PAUSE_X      210
+#define HUD_PAUSE_W      26
+
+#define UI_SCROLLBAR_W   8
+#define UI_SCROLLBAR_X   (SCREEN_W - UI_SCROLLBAR_W - 4)
 
 #define UI_HDR_H         44
 #define UI_LIST_TOP      (UI_HDR_H + 8)
 #define UI_LIST_ROW_H    50
-#define UI_LIST_ROW_W    UI_CONTENT_W
+#define UI_LIST_ROW_W    (UI_CONTENT_W - UI_SCROLLBAR_W - 8)
 #define UI_LIST_GAP      6
 #define UI_LIST_ICON     40
 #define UI_LIST_ROW_STEP (UI_LIST_ROW_H + UI_LIST_GAP)
 #define UI_LIST_VIEW_H   (SCREEN_H - UI_LIST_TOP - 4)
 #define UI_LIST_BOT      SCREEN_H
-#define UI_GRID_TOP      UI_LIST_TOP
 
 #define SPLASH_MS            800
 #define SPLASH_BAR_Y         252
@@ -52,9 +57,6 @@
 #define PLAY_Y   STATUS_H
 #define PLAY_W   SCREEN_W
 #define PLAY_H   (SCREEN_H - STATUS_H)
-
-#define BTN_PAUSE_L  HUD_PAUSE_X
-#define BTN_PAUSE_W  HUD_PAUSE_W
 
 /* Tetris: 10x20, celulas 20x14, tabuleiro 200x280, Prox 30px */
 #define TETRIS_CELL_W    20

@@ -38,14 +38,12 @@ void ui_theme_init() {
     s_theme.bg        = BOR_BG;
     s_theme.surface   = BOR_SURFACE;
     s_theme.card      = BOR_CARD;
-    s_theme.card_sel  = BOR_SURFACE;
     s_theme.border    = BOR_BORDER;
     s_theme.accent    = BOR_TEAL;
     s_theme.accent_hi = BOR_CORAL;
     s_theme.text_hi   = BOR_TEXT;
     s_theme.text_mute = BOR_MUTE;
     s_theme.icon      = BOR_TEAL;
-    s_theme.pause     = BOR_SURFACE;
     s_theme.play_bg   = BOR_BG;
     s_theme.ok        = BOR_LIME;
     s_theme.danger    = BOR_RED;

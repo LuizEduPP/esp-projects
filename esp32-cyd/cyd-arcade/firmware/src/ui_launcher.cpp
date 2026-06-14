@@ -3,7 +3,6 @@
 #include "hw_config.h"
 #include "score_store.h"
 #include "touch_input.h"
-#include "ui_draw.h"
 #include "ui_icons.h"
 #include "ui_theme.h"
 #include <Arduino.h>
@@ -29,6 +28,37 @@ static void label_fit(const char* src, char* out, size_t out_sz, int max_w) {
         out[n + 2] = '.';
         out[n + 3] = '\0';
     }
+}
+
+static int list_content_h(int count) {
+    if (count <= 0) return 0;
+    return count * UI_LIST_ROW_STEP - UI_LIST_GAP;
+}
+
+static int list_max_scroll(int count) {
+    const int max_s = list_content_h(count) - UI_LIST_VIEW_H;
+    return max_s > 0 ? max_s : 0;
+}
+
+static void draw_scrollbar(int count, int scroll_y) {
+    const int max_s = list_max_scroll(count);
+    const int track_y = UI_LIST_TOP + 4;
+    const int track_h = UI_LIST_VIEW_H - 8;
+    const int bar_x = UI_SCROLLBAR_X;
+
+    tft.fillRoundRect(bar_x, track_y, UI_SCROLLBAR_W, track_h, 3, TH->card);
+    if (max_s <= 0) return;
+
+    const int content_h = list_content_h(count);
+    int thumb_h = track_h * UI_LIST_VIEW_H / content_h;
+    if (thumb_h < 16) thumb_h = 16;
+    if (thumb_h > track_h) thumb_h = track_h;
+
+    int thumb_y = track_y;
+    if (max_s > 0 && track_h > thumb_h)
+        thumb_y += (scroll_y * (track_h - thumb_h)) / max_s;
+
+    tft.fillRoundRect(bar_x, thumb_y, UI_SCROLLBAR_W, thumb_h, 3, TH->accent);
 }
 
 static void repair_header_gap() {
@@ -76,10 +106,10 @@ static void draw_list_row_content(const GameEntry* game, int cx, int cy, bool se
 
     const int icon_x = cx + 14;
     const int icon_y = cy + (UI_LIST_ROW_H - UI_LIST_ICON) / 2;
-    tft.fillRoundRect(icon_x, icon_y, UI_LIST_ICON, UI_LIST_ICON, 8, TH->card);
+    const uint16_t icon_bg = ui_theme_brick_color(idx);
+    tft.fillRoundRect(icon_x, icon_y, UI_LIST_ICON, UI_LIST_ICON, 8, icon_bg);
     tft.drawRoundRect(icon_x, icon_y, UI_LIST_ICON, UI_LIST_ICON, 8, TH->border);
-    ui_draw_game_cover(game->engine, icon_x + 2, icon_y + 2,
-                       UI_LIST_ICON - 4, UI_LIST_ICON - 4, idx);
+    ui_icon_draw(icon_x + 8, icon_y + 8, UI_LIST_ICON - 16, UI_ICON_CART, TH->icon);
 
     char title[24];
     label_fit(game->title, title, sizeof(title), 80);
@@ -106,16 +136,6 @@ static void draw_list_row_content(const GameEntry* game, int cx, int cy, bool se
         tft.setTextDatum(MC_DATUM);
         tft.drawString(rec, badge_x + badge_w / 2, badge_y + 10, 1);
     }
-}
-
-static int list_content_h(int count) {
-    if (count <= 0) return 0;
-    return count * UI_LIST_ROW_STEP - UI_LIST_GAP;
-}
-
-static int list_max_scroll(int count) {
-    const int max_s = list_content_h(count) - UI_LIST_VIEW_H;
-    return max_s > 0 ? max_s : 0;
 }
 
 static void draw_list_row_at(GameEntry* games, int count, int scroll_y, int idx, int sel) {
@@ -147,6 +167,7 @@ static void draw_list_viewport(GameEntry* games, int count, int scroll_y, int se
     tft.fillRect(0, 0, SCREEN_W, UI_LIST_VIEW_H, TH->bg);
     paint_list_rows(games, count, scroll_y, sel);
     list_viewport_end(repair_gap);
+    draw_scrollbar(count, scroll_y);
     tft.endWrite();
 }
 
@@ -157,6 +178,7 @@ static void redraw_screen(GameEntry* games, int count, int scroll_y, int sel) {
     list_viewport_begin();
     paint_list_rows(games, count, scroll_y, sel);
     list_viewport_end(true);
+    draw_scrollbar(count, scroll_y);
     tft.endWrite();
 }
 
@@ -165,9 +187,35 @@ static bool hit_gear(int16_t tx, int16_t ty) {
         && ty >= 0 && ty < UI_HDR_H;
 }
 
+static int scroll_y_from_touch(int16_t ty, int count) {
+    const int max_s = list_max_scroll(count);
+    if (max_s <= 0) return 0;
+
+    const int track_y = UI_LIST_TOP + 4;
+    const int track_h = UI_LIST_VIEW_H - 8;
+    const int content_h = list_content_h(count);
+    int thumb_h = track_h * UI_LIST_VIEW_H / content_h;
+    if (thumb_h < 16) thumb_h = 16;
+    if (thumb_h > track_h) thumb_h = track_h;
+
+    const int range = track_h - thumb_h;
+    if (range <= 0) return 0;
+
+    int rel = ty - track_y - thumb_h / 2;
+    if (rel < 0) rel = 0;
+    if (rel > range) rel = range;
+    return (rel * max_s) / range;
+}
+
+static bool hit_scrollbar(int16_t tx, int16_t ty) {
+    return tx >= UI_SCROLLBAR_X - 6 && tx < SCREEN_W
+        && ty >= UI_LIST_TOP && ty < LIST_VIEW_BOT;
+}
+
 static int list_hit(int16_t tx, int16_t ty, int scroll_y, int count) {
     if (ty < UI_LIST_TOP || ty >= LIST_VIEW_BOT) return -1;
     if (tx < UI_PAD || tx >= UI_PAD + UI_LIST_ROW_W) return -1;
+    if (tx >= UI_SCROLLBAR_X) return -1;
     const int rel_y = ty - UI_LIST_TOP + scroll_y;
     const int idx = rel_y / UI_LIST_ROW_STEP;
     if (idx < 0 || idx >= count) return -1;
@@ -194,6 +242,7 @@ int launcher_show(GameEntry* games, int count) {
     bool was_pressed = false;
     bool cfg_pending = false;
     bool scrolling = false;
+    bool scroll_bar_drag = false;
     int16_t last_tx = 0, last_ty = 0;
     int16_t touch_start_ty = 0;
     int scroll_anchor = 0;
@@ -210,7 +259,17 @@ int launcher_show(GameEntry* games, int count) {
                 touch_start_ty = last_ty;
                 scroll_anchor = scroll_y;
                 cfg_pending = hit_gear(last_tx, last_ty);
-                if (!cfg_pending) {
+                scroll_bar_drag = !cfg_pending && hit_scrollbar(last_tx, last_ty);
+                if (scroll_bar_drag) {
+                    scrolling = true;
+                    const int ns = scroll_y_from_touch(last_ty, count);
+                    if (ns != scroll_y) {
+                        scroll_y = ns;
+                        draw_list_viewport(games, count, scroll_y, sel, false);
+                        painted_scroll = scroll_y;
+                        last_paint_ms = millis();
+                    }
+                } else if (!cfg_pending) {
                     const int idx = list_hit(last_tx, last_ty, scroll_y, count);
                     if (idx >= 0 && idx != sel) {
                         const int old = sel;
@@ -218,6 +277,18 @@ int launcher_show(GameEntry* games, int count) {
                         if (old >= 0)
                             draw_list_row_at(games, count, scroll_y, old, sel);
                         draw_list_row_at(games, count, scroll_y, sel, sel);
+                    }
+                }
+            } else if (scroll_bar_drag) {
+                scrolling = true;
+                const int ns = scroll_y_from_touch(last_ty, count);
+                if (ns != scroll_y) {
+                    scroll_y = ns;
+                    const uint32_t now = millis();
+                    if (now - last_paint_ms >= SCROLL_PAINT_MS) {
+                        draw_list_viewport(games, count, scroll_y, sel, false);
+                        painted_scroll = scroll_y;
+                        last_paint_ms = now;
                     }
                 }
             } else if (!cfg_pending) {
@@ -255,6 +326,7 @@ int launcher_show(GameEntry* games, int count) {
             }
             cfg_pending = false;
             scrolling = false;
+            scroll_bar_drag = false;
         }
         was_pressed = down;
         delay(scrolling && down ? 5 : 10);

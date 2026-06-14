@@ -15,15 +15,12 @@
 #define PAD_W 64
 #define PAD_H 12
 #define BALL_R 5
-#define LIVES_MAX 3
+#define LIVES_MAX GAME_LIVES_DEFAULT
 #define PHYS_MS 16
 
 static const uint16_t COL_BG = 0x0000;
 static const uint16_t COL_BALL = 0xFFFF;
 static const uint16_t COL_PAD = 0xDEFB;
-static const uint16_t COL_LIFE_PANEL = 0x001F;
-static const uint16_t COL_LIFE = 0xFFE0;
-static const uint16_t COL_LIFE_OFF = 0x2949;
 
 static const uint16_t ROW_COLORS[ROWS] = {
     0xF800, 0xFD20, 0xFFE0, 0x07E0, 0x001F,
@@ -41,7 +38,6 @@ static uint32_t last_phys;
 static int brick_w() { return PLAY_W / COLS; }
 static int brick_h() { return 14; }
 static int pad_y() { return PLAY_H - 18; }
-static int lives_panel_y() { return 4; }
 
 static void brick_rect(int r, int c, int* x, int* y, int* w, int* h) {
     const int bw = brick_w(), bh = brick_h();
@@ -123,35 +119,12 @@ static void erase_pad_at(int px) {
     erase_rect(px - PAD_W / 2 - 1, pad_y() - 1, PAD_W + 2, PAD_H + 2);
 }
 
-static void draw_lives() {
-    const int px = 8;
-    const int py = lives_panel_y();
-    game_play_fill_round_rect(px, py, 56, 12, 4, COL_LIFE_PANEL);
-    for (int i = 0; i < LIVES_MAX; i++) {
-        const int cx = px + 12 + i * 15;
-        const int cy = py + 6;
-        game_play_fill_circle(cx, cy, 4, i < lives ? COL_LIFE : COL_LIFE_OFF);
-        if (i < lives)
-            game_play_fill_circle(cx, cy, 2, 0xF800);
-    }
-}
-
-static void erase_lives() {
-    game_play_fill_rect(6, 2, 62, 16, COL_BG);
-    for (int r = 0; r < ROWS; r++)
-        for (int c = 0; c < COLS; c++) {
-            int bx, by, bw, bh;
-            brick_rect(r, c, &bx, &by, &bw, &bh);
-            if (by < 20 && bricks[r][c]) draw_brick(r, c);
-        }
-}
-
-static void breakout_redraw() {
+static void breakout_redraw(GameHud* hud) {
     game_play_clear(COL_BG);
     draw_all_bricks();
     draw_pad(pad_x);
     draw_ball((int)ball_x, (int)ball_y);
-    draw_lives();
+    (void)hud;
 }
 
 static void launch_ball() {
@@ -246,15 +219,16 @@ static void breakout_init(GameHud* hud) {
     level = 1;
     init_level();
     last_phys = millis();
-    breakout_redraw();
+    breakout_redraw(hud);
     game_hud_set_score(hud, 0);
-    game_hud_set_level(hud, level);
+    game_hud_set_tier(hud, level);
+    game_hud_set_lives(hud, lives, LIVES_MAX);
 }
 
 void game_breakout_run(const GameEntry* cfg) {
-    GameHud* hud = game_hud_begin(cfg->title, cfg->engine, cfg->color);
+    GameHud* hud = game_hud_begin(cfg->engine);
     if (!hud) return;
-    game_hud_set_level_prefix(hud, 'N');
+    game_hud_set_tier_mode(hud, HUD_TIER_NIVEL, false);
 
     bool retry = false;
     for (;;) {
@@ -276,7 +250,7 @@ void game_breakout_run(const GameEntry* cfg) {
                 return;
             }
             if (game_hud_consume_resume_redraw(hud))
-                breakout_redraw();
+                breakout_redraw(hud);
 
             if (in.down && in.y >= PLAY_Y) {
                 pad_x = constrain((int)in.play_x, PAD_W / 2, PLAY_W - PAD_W / 2);
@@ -299,14 +273,12 @@ void game_breakout_run(const GameEntry* cfg) {
                     break;
                 }
                 if (lives < prev_lives) {
-                    game_frame_draw_now();
-                    erase_lives();
-                    draw_lives();
+                    game_hud_set_lives(hud, lives, LIVES_MAX);
                     prev_lives = lives;
                 }
                 if (level_cleared) {
-                    game_hud_set_level(hud, level);
-                    breakout_redraw();
+                    game_hud_set_tier(hud, level);
+                    breakout_redraw(hud);
                     prev_lives = lives;
                     prev_pad = pad_x;
                     prev_bx = (int)ball_x;

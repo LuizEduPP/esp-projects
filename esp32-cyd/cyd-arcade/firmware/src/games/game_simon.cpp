@@ -20,6 +20,7 @@ static int seq_len;
 static int step_idx;
 static int input_idx;
 static int score;
+static int lives;
 static bool playing_seq;
 static bool waiting_input;
 static uint32_t flash_until;
@@ -77,13 +78,24 @@ static void start_round() {
     begin_sequence();
 }
 
-static void simon_init() {
+static void simon_restart_round() {
     seq_len = 0;
-    score = 0;
     playing_seq = false;
     waiting_input = false;
     flash_btn = -1;
     simon_redraw();
+    start_round();
+}
+
+static void simon_init(GameHud* hud) {
+    seq_len = 0;
+    score = 0;
+    lives = GAME_LIVES_DEFAULT;
+    playing_seq = false;
+    waiting_input = false;
+    flash_btn = -1;
+    simon_redraw();
+    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
     game_play_hint("Preste atencao...", ui_theme_get()->accent_hi, COL_BG);
     delay(ROUND_WAIT);
     game_play_clear_hint(COL_BG);
@@ -131,14 +143,14 @@ static void advance_sequence() {
 
 void game_simon_run(const GameEntry* cfg) {
     (void)cfg;
-    GameHud* hud = game_hud_begin("Simon", "simon", 0xFF0000);
+    GameHud* hud = game_hud_begin(cfg->engine);
     if (!hud) return;
 
     bool retry = false;
     for (;;) {
         if (retry) game_hud_reset_play(hud);
         retry = true;
-        simon_init();
+        simon_init(hud);
         game_hud_set_score(hud, 0);
 
         GameInput in;
@@ -168,8 +180,14 @@ void game_simon_run(const GameEntry* cfg) {
                 draw_btn(b, false);
                 if (b != seq[input_idx]) {
                     buzzer_play(SFX_ERROR);
-                    dead = true;
-                    break;
+                    lives--;
+                    game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
+                    if (lives <= 0) {
+                        dead = true;
+                        break;
+                    }
+                    simon_restart_round();
+                    continue;
                 }
                 input_idx++;
                 if (input_idx >= seq_len) {

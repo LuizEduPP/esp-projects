@@ -10,7 +10,6 @@ typedef enum {
     ENGINE_SIMON,
     ENGINE_MINES,
     ENGINE_VELHA,
-    ENGINE_STACK,
     ENGINE_UNKNOWN,
 } EngineId;
 

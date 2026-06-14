@@ -1,56 +1,49 @@
 #include "engine.h"
+#include "games_fwd.h"
 #include <string.h>
+
+typedef struct {
+    const char* id;
+    const char* score_key;
+    EngineId engine;
+    GameRunFn run;
+} EngineEntry;
+
+static const EngineEntry k_engines[] = {
+    {"snake",    "hi_snake",  ENGINE_SNAKE,    game_snake_run},
+    {"breakout", "hi_break",  ENGINE_BREAKOUT, game_breakout_run},
+    {"tetris",   "hi_tetris", ENGINE_TETRIS,   game_tetris_run},
+    {"pong",     "hi_pong",   ENGINE_PONG,     game_pong_run},
+    {"dodge",    "hi_dodge",  ENGINE_DODGE,    game_dodge_run},
+    {"simon",    "hi_simon",  ENGINE_SIMON,    game_simon_run},
+    {"mines",    "hi_mines",  ENGINE_MINES,    game_mines_run},
+    {"velha",    "hi_velha",  ENGINE_VELHA,    game_velha_run},
+};
 
 EngineId engine_id(const char* engine) {
     if (!engine) return ENGINE_UNKNOWN;
-    if (strcmp(engine, "snake") == 0) return ENGINE_SNAKE;
-    if (strcmp(engine, "breakout") == 0 || strcmp(engine, "arkanoid") == 0) return ENGINE_BREAKOUT;
-    if (strcmp(engine, "tetris") == 0) return ENGINE_TETRIS;
-    if (strcmp(engine, "pong") == 0) return ENGINE_PONG;
-    if (strcmp(engine, "dodge") == 0) return ENGINE_DODGE;
-    if (strcmp(engine, "simon") == 0) return ENGINE_SIMON;
-    if (strcmp(engine, "mines") == 0) return ENGINE_MINES;
-    if (strcmp(engine, "velha") == 0) return ENGINE_VELHA;
-    if (strcmp(engine, "stack") == 0) return ENGINE_STACK;
+    if (strcmp(engine, "arkanoid") == 0) return ENGINE_BREAKOUT;
+    for (size_t i = 0; i < sizeof(k_engines) / sizeof(k_engines[0]); i++) {
+        if (strcmp(engine, k_engines[i].id) == 0)
+            return k_engines[i].engine;
+    }
     return ENGINE_UNKNOWN;
 }
 
 const char* engine_score_key(const char* engine) {
-    switch (engine_id(engine)) {
-    case ENGINE_SNAKE: return "hi_snake";
-    case ENGINE_BREAKOUT: return "hi_break";
-    case ENGINE_TETRIS: return "hi_tetris";
-    case ENGINE_PONG: return "hi_pong";
-    case ENGINE_DODGE: return "hi_dodge";
-    case ENGINE_SIMON: return "hi_simon";
-    case ENGINE_MINES: return "hi_mines";
-    case ENGINE_VELHA: return "hi_velha";
-    case ENGINE_STACK: return "hi_stack";
-    default: return nullptr;
+    const EngineId id = engine_id(engine);
+    for (size_t i = 0; i < sizeof(k_engines) / sizeof(k_engines[0]); i++) {
+        if (k_engines[i].engine == id)
+            return k_engines[i].score_key;
     }
+    return nullptr;
 }
 
-extern void game_snake_run(const GameEntry* cfg);
-extern void game_breakout_run(const GameEntry* cfg);
-extern void game_tetris_run(const GameEntry* cfg);
-extern void game_pong_run(const GameEntry* cfg);
-extern void game_dodge_run(const GameEntry* cfg);
-extern void game_simon_run(const GameEntry* cfg);
-extern void game_mines_run(const GameEntry* cfg);
-extern void game_velha_run(const GameEntry* cfg);
-extern void game_stack_run(const GameEntry* cfg);
-
 GameRunFn engine_runner(const char* engine) {
-    switch (engine_id(engine)) {
-    case ENGINE_SNAKE: return game_snake_run;
-    case ENGINE_BREAKOUT: return game_breakout_run;
-    case ENGINE_TETRIS: return game_tetris_run;
-    case ENGINE_PONG: return game_pong_run;
-    case ENGINE_DODGE: return game_dodge_run;
-    case ENGINE_SIMON: return game_simon_run;
-    case ENGINE_MINES: return game_mines_run;
-    case ENGINE_VELHA: return game_velha_run;
-    case ENGINE_STACK: return game_stack_run;
-    default: return nullptr;
+    const EngineId id = engine_id(engine);
+    for (size_t i = 0; i < sizeof(k_engines) / sizeof(k_engines[0]); i++) {
+        if (k_engines[i].engine == id)
+            return k_engines[i].run;
     }
+    return nullptr;
 }

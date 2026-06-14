@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-#define MAX_GAMES 15
+#define MAX_GAMES 10
 #define GAME_TITLE_LEN 24
 #define GAME_ENGINE_LEN 16
 
