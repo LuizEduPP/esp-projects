@@ -401,6 +401,7 @@ static void launch_ball() {
     ball_stuck = false;
     hint_visible = false;
     clear_launch_hint();
+    buzzer_play(SFX_SHOOT);
 }
 
 static void stick_ball_to_pad() {
@@ -435,17 +436,20 @@ static bool collide_brick(Ball* b) {
                 else b->dx = fabsf(b->dx);
                 if (by < ry + rh / 2) b->dy = -fabsf(b->dy);
                 else b->dy = fabsf(b->dy);
+                buzzer_play(SFX_TICK);
                 return true;
             }
 
             if (brick_hp[r][c] > 1) {
                 brick_hp[r][c]--;
                 draw_brick(r, c);
+                buzzer_play(SFX_TICK);
             } else {
                 brick_kind[r][c] = BRICK_EMPTY;
                 score += 10 + (ROWS - r) * 5 + (kind == BRICK_SILVER ? 20 : 0);
                 spawn_capsule(rx + rw / 2, ry + rh / 2);
                 game_play_fill_rect(rx - 1, ry - 1, rw + 2, rh + 2, COL_BG);
+                buzzer_play(SFX_HIT);
             }
 
             const int cx = rx + rw / 2;
@@ -467,46 +471,84 @@ static void normalize_ball(Ball* b) {
     b->dy = b->dy / len * cap;
 }
 
-static void ball_physics(Ball* b) {
-    if (!b->live) return;
+static bool collide_pad(Ball* b, float ox, float oy) {
+    if (b->dy <= 0.0f) return false;
 
-    const float prev_by = b->y;
-    b->x += b->dx;
-    b->y += b->dy;
+    const float py = (float)pad_y();
+    const float pw = (float)pad_w();
+    const float pl = (float)pad_x - pw * 0.5f - BALL_R;
+    const float pr = (float)pad_x + pw * 0.5f + BALL_R;
+    const float pb = py + PAD_H + BALL_R;
+
+    const float prev_bot = oy + BALL_R;
+    const float curr_bot = b->y + BALL_R;
+    if (prev_bot < py - BALL_R && curr_bot < py - BALL_R) return false;
+
+    const bool crossed = prev_bot <= pb && curr_bot >= py - 2.0f;
+    const bool inside = curr_bot >= py && b->y - BALL_R <= pb;
+    if (!crossed && !inside) return false;
+
+    const float xlo = ox - BALL_R < b->x - BALL_R ? ox - BALL_R : b->x - BALL_R;
+    const float xhi = ox + BALL_R > b->x + BALL_R ? ox + BALL_R : b->x + BALL_R;
+    if (xhi < pl || xlo > pr) return false;
+
+    b->y = py - BALL_R;
+    if (catch_armed) {
+        stick_ball_to_pad();
+        return true;
+    }
+
+    const float min_up = 1.4f;
+    b->dy = -fmaxf(fabsf(b->dy), min_up);
+    b->pad_cd = 2;
+    const float hit = (b->x - (float)pad_x) / (pw * 0.5f);
+    b->dx = hit * 3.2f;
+    if (fabsf(b->dx) < 0.6f) b->dx = b->dx < 0.0f ? -0.6f : 0.6f;
+    normalize_ball(b);
+    if (b->dy > -min_up) b->dy = -min_up;
+    buzzer_play(SFX_TICK);
+    return true;
+}
+
+static void ball_move_step(Ball* b, float sx, float sy) {
+    const float ox = b->x;
+    const float oy = b->y;
+    b->x += sx;
+    b->y += sy;
 
     if (b->x < BALL_R) { b->x = BALL_R; b->dx = fabsf(b->dx); }
     if (b->x > PLAY_W - BALL_R) { b->x = PLAY_W - BALL_R; b->dx = -fabsf(b->dx); }
     if (b->y < BALL_R) { b->y = BALL_R; b->dy = fabsf(b->dy); }
 
-    if (b->pad_cd > 0) b->pad_cd--;
+    if (b->pad_cd > 0) {
+        b->pad_cd--;
+        if (oy + BALL_R < (float)pad_y() - 8.0f) b->pad_cd = 0;
+    }
 
-    const int py = pad_y();
-    const int pw = pad_w();
-    const float min_up = 1.4f;
-    if (b->pad_cd == 0 && b->dy > 0 &&
-        prev_by + BALL_R <= py + 2.0f &&
-        b->y + BALL_R >= py &&
-        b->x >= pad_x - pw / 2 && b->x <= pad_x + pw / 2) {
-        b->y = (float)py - BALL_R;
-        if (catch_armed) {
-            stick_ball_to_pad();
+    if (!collide_pad(b, ox, oy))
+        collide_brick(b);
+}
+
+static void ball_physics(Ball* b) {
+    if (!b->live) return;
+
+    const float speed = sqrtf(b->dx * b->dx + b->dy * b->dy);
+    int steps = 1;
+    if (speed > 2.5f) steps = 2;
+    if (speed > 4.0f) steps = 3;
+    if (speed > 5.5f) steps = 5;
+    if (speed > 7.0f) steps = 7;
+
+    for (int i = 0; i < steps; i++) {
+        const float sx = b->dx / (float)steps;
+        const float sy = b->dy / (float)steps;
+        ball_move_step(b, sx, sy);
+        if (!b->live || ball_stuck) return;
+        if (b->y > PLAY_H + BALL_R) {
+            b->live = false;
             return;
         }
-        b->dy = -fmaxf(fabsf(b->dy), min_up);
-        b->pad_cd = 4;
-        const float hit = (b->x - pad_x) / (pw * 0.5f);
-        b->dx = hit * 3.2f;
-        if (fabsf(b->dx) < 0.6f) b->dx = b->dx < 0 ? -0.6f : 0.6f;
-        normalize_ball(b);
-        if (b->dy > -min_up) b->dy = -min_up;
     }
-
-    if (b->y > PLAY_H + BALL_R) {
-        b->live = false;
-        return;
-    }
-
-    collide_brick(b);
 }
 
 static void step_capsule() {
@@ -564,7 +606,6 @@ static void physics_step() {
     if (live_ball_count() > 0 && !bricks_left()) {
         level++;
         score += 80 * level;
-        buzzer_play(SFX_LEVEL);
         init_level();
         level_cleared = true;
     }

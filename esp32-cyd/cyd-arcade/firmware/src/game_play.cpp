@@ -90,7 +90,7 @@ static void draw_tier_badge(GameHud* hud) {
 }
 
 static void draw_score_badge(GameHud* hud) {
-    if (!hud) return;
+    if (!hud || !hud->score_visible) return;
     char sc[16];
     if (hud->score_tag[0])
         snprintf(sc, sizeof(sc), "%s %d", hud->score_tag, hud->score);
@@ -250,6 +250,7 @@ GameHud* game_hud_begin(const char* engine) {
     strncpy(hud->engine, engine, sizeof(hud->engine) - 1);
     strncpy(hud->score_tag, "Pts", sizeof(hud->score_tag));
     hud->tier_kind = HUD_TIER_FASE;
+    hud->score_visible = true;
     hud->best = score_store_get(engine);
     score_store_get_name(engine, hud->best_name, sizeof(hud->best_name));
     hud->pause_after_ms = millis() + 450;
@@ -278,6 +279,12 @@ void game_hud_set_score_tag(GameHud* hud, const char* tag) {
     if (!hud || !tag) return;
     strncpy(hud->score_tag, tag, sizeof(hud->score_tag) - 1);
     hud->score_tag[sizeof(hud->score_tag) - 1] = '\0';
+    draw_status_bar(hud);
+}
+
+void game_hud_set_score_visible(GameHud* hud, bool visible) {
+    if (!hud || hud->score_visible == visible) return;
+    hud->score_visible = visible;
     draw_status_bar(hud);
 }
 

@@ -31,6 +31,7 @@ typedef struct {
     bool resume_redraw;
     bool tier_show_zero;
     bool score_lower_better;
+    bool score_visible;
     uint32_t pause_after_ms;
     uint32_t toast_until_ms;
     int16_t toast_x;
@@ -44,6 +45,7 @@ GameHud* game_hud_begin(const char* engine);
 void game_hud_end(GameHud* hud);
 void game_hud_set_score(GameHud* hud, int score);
 void game_hud_set_score_tag(GameHud* hud, const char* tag);
+void game_hud_set_score_visible(GameHud* hud, bool visible);
 void game_hud_set_tier_mode(GameHud* hud, HudTierKind kind, bool show_at_zero);
 void game_hud_set_tier(GameHud* hud, int value);
 bool game_hud_advance_tier(GameHud* hud, int new_tier);
