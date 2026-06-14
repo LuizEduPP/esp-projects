@@ -1,6 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
+#include "buzzer.h"
 #include "display.h"
 #include "hw_config.h"
 #include "ui_draw.h"
@@ -143,11 +144,11 @@ static void draw_next_preview() {
     }
 }
 
-static void flash_lines(int row_count) {
-    if (row_count <= 0) return;
-    const int y = OFF_Y + (BH - 1) * CELL_H;
-    game_play_fill_rect(OFF_X, y - (row_count - 1) * CELL_H, BOARD_W, row_count * CELL_H,
-                        ui_rgb565(0xFFFFFF));
+static void flash_rows(const int* rows, int count) {
+    if (count <= 0) return;
+    for (int i = 0; i < count; i++)
+        game_play_fill_rect(OFF_X, OFF_Y + rows[i] * CELL_H, BOARD_W, CELL_H,
+                            ui_rgb565(0xFFFFFF));
     delay(80);
 }
 
@@ -191,12 +192,24 @@ static void tetris_redraw_play() {
 
 static int clear_lines() {
     int cleared = 0;
+    int full_rows[BH];
+
     for (int y = BH - 1; y >= 0; y--) {
         bool full = true;
         for (int x = 0; x < BW; x++)
             if (!grid[y][x]) full = false;
         if (!full) continue;
-        cleared++;
+        full_rows[cleared++] = y;
+    }
+    if (cleared == 0) return 0;
+
+    flash_rows(full_rows, cleared);
+
+    for (int y = BH - 1; y >= 0; y--) {
+        bool full = true;
+        for (int x = 0; x < BW; x++)
+            if (!grid[y][x]) full = false;
+        if (!full) continue;
         for (int yy = y; yy > 0; yy--)
             for (int x = 0; x < BW; x++)
                 grid[yy][x] = grid[yy - 1][x];
@@ -211,6 +224,7 @@ static void update_level(GameHud* hud) {
     if (nl != level) {
         level = nl;
         game_hud_set_level(hud, level);
+        buzzer_play(SFX_LEVEL);
     }
 }
 
@@ -227,11 +241,13 @@ static void lock_piece(GameHud* hud) {
     const int n = clear_lines();
     if (n > 0) {
         static const int pts[] = {0, 100, 300, 500, 800};
-        flash_lines(n);
+        buzzer_play(SFX_LINE);
         score += pts[n < 5 ? n : 4];
         lines += n;
         update_level(hud);
         if (drop_ms > 200) drop_ms -= (uint32_t)n * 15;
+    } else {
+        buzzer_play(SFX_DROP);
     }
 }
 
@@ -302,7 +318,7 @@ static bool handle_input(GameHud* hud, GameInput* in, GameDrag* drag, uint32_t* 
     }
 
     if (in->just_released && drag->active) {
-        if (game_drag_swipe_v(drag) < 0) rotate_piece();
+        if (rotate_piece()) buzzer_play(SFX_SELECT);
         drag->active = false;
     }
     return true;

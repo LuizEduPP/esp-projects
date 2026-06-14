@@ -1,6 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
+#include "buzzer.h"
 #include "hw_config.h"
 #include <Arduino.h>
 
@@ -122,6 +123,7 @@ static void physics_step(int target_x) {
                 if ((int)px + PLAYER_R > p->x + 2 && (int)px - PLAYER_R < p->x + PLAT_W - 2) {
                     vy = -8.5f - min(score / 120, 4);
                     py = (float)(p->y - PLAYER_R);
+                    buzzer_play(SFX_HIT);
                     break;
                 }
             }

@@ -17,6 +17,11 @@
 #define LED_G_PIN 16
 #define LED_B_PIN 17
 
+#define BUZZER_PIN       1
+#define BUZZER_LEDC_CH   1
+#define BUZZER_LEDC_BITS 10
+#define BUZZER_DUTY      768
+
 /* Layout UI */
 #define UI_PAD           12
 #define UI_CONTENT_W     (SCREEN_W - UI_PAD * 2)

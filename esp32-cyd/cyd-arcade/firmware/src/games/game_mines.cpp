@@ -1,6 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
+#include "buzzer.h"
 #include "display.h"
 #include "hw_config.h"
 #include <Arduino.h>
@@ -157,10 +158,12 @@ void game_mines_run(const GameEntry* cfg) {
                 if (board[y][x] == -1) {
                     state[y][x] = ST_MINE;
                     draw_cell(x, y);
+                    buzzer_play(SFX_ERROR);
                     dead = true;
                     break;
                 }
                 flood(x, y);
+                buzzer_play(SFX_TICK);
                 score = revealed * 10;
                 if (revealed >= GW * GH - MINES) {
                     score += (int)((millis() - start_ms) / 100);

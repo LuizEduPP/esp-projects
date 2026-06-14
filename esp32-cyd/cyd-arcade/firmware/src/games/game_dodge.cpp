@@ -1,6 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
+#include "buzzer.h"
 #include "hw_config.h"
 #include <Arduino.h>
 
@@ -87,6 +88,7 @@ static bool step_game() {
         if (obs_y[i] > PLAY_H) {
             obs_on[i] = false;
             score += 10;
+            buzzer_play(SFX_TICK);
             continue;
         }
         draw_obs(i);

@@ -8,6 +8,7 @@
 #include "ui_icons.h"
 #include "ui_keyboard.h"
 #include "ui_theme.h"
+#include "buzzer.h"
 #include <Arduino.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -207,6 +208,13 @@ GameEndAction game_hud_end_game(GameHud* hud, int score, bool won) {
     if (!hud) return GAME_END_MENU;
 
     const bool record = score_store_save(hud->engine, score);
+    if (record && score > 0)
+        buzzer_play(SFX_RECORD);
+    else if (won)
+        buzzer_play(SFX_WIN);
+    else
+        buzzer_play(SFX_LOSE);
+
     hud->best = score_store_get(hud->engine);
     score_store_get_name(hud->engine, hud->best_name, sizeof(hud->best_name));
 

@@ -15,8 +15,6 @@ static const char* name_key_for(const char* engine) {
     case ENGINE_SIMON: return "nm_simon";
     case ENGINE_MINES: return "nm_mines";
     case ENGINE_VELHA: return "nm_velha";
-    case ENGINE_REACTION: return "nm_reaction";
-    case ENGINE_RPS: return "nm_rps";
     case ENGINE_JUMP: return "nm_jump";
     case ENGINE_BOUNCE: return "nm_bounce";
     case ENGINE_STACK: return "nm_stack";

@@ -2,6 +2,7 @@
 #include "game_catalog.h"
 #include "game_input.h"
 #include "score_store.h"
+#include "buzzer.h"
 #include "ui_theme.h"
 #include "display.h"
 #include "hw_config.h"
@@ -189,9 +190,16 @@ static void velha_reset_board() {
 }
 
 static void end_round(GameHud* hud, const char* title, uint16_t col, bool player_won) {
-    if (player_won && !two_player) {
-        wins++;
-        game_hud_set_score(hud, wins);
+    if (strcmp(title, "Empate") == 0) {
+        buzzer_play(SFX_SELECT);
+    } else if (player_won || strstr(title, "venceu")) {
+        if (player_won && !two_player) {
+            wins++;
+            game_hud_set_score(hud, wins);
+        }
+        buzzer_play(SFX_WIN);
+    } else {
+        buzzer_play(SFX_ERROR);
     }
     game_play_toast(title, "Toque p/ continuar", col, COL_BG);
     waiting = true;
@@ -245,6 +253,7 @@ void game_velha_run(const GameEntry* cfg) {
             const int8_t mark = two_player ? turn : 1;
             board[r][c] = mark;
             draw_mark(r, c);
+            buzzer_play(SFX_TICK);
 
             int w = check_winner();
             if (w) {

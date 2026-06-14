@@ -1,6 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
+#include "buzzer.h"
 #include "hw_config.h"
 #include <Arduino.h>
 
@@ -107,6 +108,7 @@ static bool place_block() {
         base_w[0] = cur_w;
         erase_block(cur_x, block_y(0), cur_w);
         draw_block(cur_x, block_y(0), cur_w, COLS[0]);
+        buzzer_play(SFX_TICK);
         next_level();
         return true;
     }
@@ -124,7 +126,12 @@ static bool place_block() {
     base_w[level] = overlap;
     draw_block(left, block_y(level), overlap, COLS[level % 5]);
 
-    if (overlap == cur_w && overlap == pw) score += 5;
+    if (overlap == cur_w && overlap == pw) {
+        score += 5;
+        buzzer_play(SFX_SCORE);
+    } else {
+        buzzer_play(SFX_TICK);
+    }
 
     next_level();
     if (level < MAX_LVL)
@@ -177,6 +184,7 @@ void game_stack_run(const GameEntry* cfg) {
 
             if (in.just_pressed && in.y >= PLAY_Y) {
                 if (!place_block()) {
+                    buzzer_play(SFX_ERROR);
                     dead = true;
                     break;
                 }

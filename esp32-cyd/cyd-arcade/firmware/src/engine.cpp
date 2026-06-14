@@ -11,8 +11,6 @@ EngineId engine_id(const char* engine) {
     if (strcmp(engine, "simon") == 0) return ENGINE_SIMON;
     if (strcmp(engine, "mines") == 0) return ENGINE_MINES;
     if (strcmp(engine, "velha") == 0) return ENGINE_VELHA;
-    if (strcmp(engine, "reaction") == 0) return ENGINE_REACTION;
-    if (strcmp(engine, "rps") == 0) return ENGINE_RPS;
     if (strcmp(engine, "jump") == 0) return ENGINE_JUMP;
     if (strcmp(engine, "bounce") == 0) return ENGINE_BOUNCE;
     if (strcmp(engine, "stack") == 0) return ENGINE_STACK;
@@ -29,8 +27,6 @@ const char* engine_score_key(const char* engine) {
     case ENGINE_SIMON: return "hi_simon";
     case ENGINE_MINES: return "hi_mines";
     case ENGINE_VELHA: return "hi_velha";
-    case ENGINE_REACTION: return "hi_reaction";
-    case ENGINE_RPS: return "hi_rps";
     case ENGINE_JUMP: return "hi_jump";
     case ENGINE_BOUNCE: return "hi_bounce";
     case ENGINE_STACK: return "hi_stack";
@@ -46,8 +42,6 @@ extern void game_dodge_run(const GameEntry* cfg);
 extern void game_simon_run(const GameEntry* cfg);
 extern void game_mines_run(const GameEntry* cfg);
 extern void game_velha_run(const GameEntry* cfg);
-extern void game_reaction_run(const GameEntry* cfg);
-extern void game_rps_run(const GameEntry* cfg);
 extern void game_jump_run(const GameEntry* cfg);
 extern void game_bounce_run(const GameEntry* cfg);
 extern void game_stack_run(const GameEntry* cfg);
@@ -62,8 +56,6 @@ GameRunFn engine_runner(const char* engine) {
     case ENGINE_SIMON: return game_simon_run;
     case ENGINE_MINES: return game_mines_run;
     case ENGINE_VELHA: return game_velha_run;
-    case ENGINE_REACTION: return game_reaction_run;
-    case ENGINE_RPS: return game_rps_run;
     case ENGINE_JUMP: return game_jump_run;
     case ENGINE_BOUNCE: return game_bounce_run;
     case ENGINE_STACK: return game_stack_run;

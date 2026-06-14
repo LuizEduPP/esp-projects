@@ -2,6 +2,7 @@
 #include "game_catalog.h"
 #include "game_input.h"
 #include "ui_theme.h"
+#include "buzzer.h"
 #include "hw_config.h"
 #include <Arduino.h>
 
@@ -97,6 +98,7 @@ static void advance_sequence() {
         flash_btn = seq[step_idx];
         game_frame_draw_now();
         draw_btn(flash_btn, true);
+        buzzer_simon_tone(flash_btn);
         flash_until = millis() + FLASH_ON;
         return;
     }
@@ -122,6 +124,7 @@ static void advance_sequence() {
         flash_btn = seq[step_idx];
         game_frame_draw_now();
         draw_btn(flash_btn, true);
+        buzzer_simon_tone(flash_btn);
         flash_until = millis() + FLASH_ON;
     }
 }
@@ -159,10 +162,12 @@ void game_simon_run(const GameEntry* cfg) {
                 if (b < 0) continue;
                 game_frame_draw_now();
                 draw_btn(b, true);
+                buzzer_simon_tone(b);
                 delay(220);
                 game_frame_draw_now();
                 draw_btn(b, false);
                 if (b != seq[input_idx]) {
+                    buzzer_play(SFX_ERROR);
                     dead = true;
                     break;
                 }
@@ -170,6 +175,7 @@ void game_simon_run(const GameEntry* cfg) {
                 if (input_idx >= seq_len) {
                     score = seq_len;
                     game_hud_set_score(hud, score);
+                    buzzer_play(SFX_LEVEL);
                     delay(500);
                     start_round();
                 }

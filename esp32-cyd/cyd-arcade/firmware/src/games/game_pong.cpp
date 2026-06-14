@@ -1,6 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
+#include "buzzer.h"
 #include "hw_config.h"
 #include <Arduino.h>
 #include <math.h>
@@ -130,6 +131,7 @@ static bool paddle_hit(int pad_x, int pad_top, bool from_above) {
             const float hit = (bx - pad_x) / (PAD_W * 0.5f);
             ball_dx = hit * 2.8f;
             normalize_ball(BALL_SPD + (score / 8) * 0.1f);
+            buzzer_play(SFX_HIT);
             return true;
         }
     } else {
@@ -139,6 +141,7 @@ static bool paddle_hit(int pad_x, int pad_top, bool from_above) {
             const float hit = (bx - pad_x) / (PAD_W * 0.5f);
             ball_dx = hit * 2.8f;
             normalize_ball(BALL_SPD + (score / 8) * 0.1f);
+            buzzer_play(SFX_HIT);
             return true;
         }
     }
@@ -162,6 +165,7 @@ static int physics_step() {
 
     if (ball_y < -BALL_R) {
         score++;
+        buzzer_play(SFX_SCORE);
         if (score >= WIN_SCORE)
             return PONG_WON;
         serve_ball(true);
@@ -169,6 +173,7 @@ static int physics_step() {
     }
     if (ball_y > PLAY_H + BALL_R) {
         cpu_score++;
+        buzzer_play(SFX_ERROR);
         if (cpu_score >= WIN_SCORE)
             return PONG_LOST;
         serve_ball(false);

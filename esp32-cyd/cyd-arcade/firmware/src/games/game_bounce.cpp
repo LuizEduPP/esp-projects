@@ -1,6 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
+#include "buzzer.h"
 #include "hw_config.h"
 #include <Arduino.h>
 #include <math.h>
@@ -162,11 +163,13 @@ static bool physics_step() {
         bdx = hit * 2.8f;
         normalize(2.6f + min(score / 40, 2));
         score += 10;
+        buzzer_play(SFX_HIT);
         return true;
     }
 
     if (by - BALL_R > pad_bot) {
         lives--;
+        buzzer_play(SFX_ERROR);
         if (lives <= 0) return false;
         erase_ball(prev_bx, prev_by);
         ball_on = false;

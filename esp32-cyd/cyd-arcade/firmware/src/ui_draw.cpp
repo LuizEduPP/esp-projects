@@ -191,26 +191,6 @@ static void cover_dodge(int x, int y, int w, int h, int brick_idx) {
     tft.fillRoundRect(x + w * 5 / 6 - 6, y + 20, 12, 8, 2, ui_theme_brick_color(3));
 }
 
-static void cover_reaction(int x, int y, int w, int h, int brick_idx) {
-    (void)brick_idx;
-    tft.fillRoundRect(x, y, w, h, 4, TH->bg);
-    tft.drawRoundRect(x, y, w, h, 4, TH->border);
-    tft.fillCircle(x + w / 2, y + h / 2, w / 5, TH->ok);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TH->text_hi, TH->bg);
-    tft.drawString("!", x + w / 2, y + h / 2, 2);
-}
-
-static void cover_rps(int x, int y, int w, int h, int brick_idx) {
-    (void)brick_idx;
-    tft.fillRoundRect(x, y, w, h, 4, TH->bg);
-    tft.drawRoundRect(x, y, w, h, 4, TH->border);
-    tft.fillCircle(x + w / 3, y + h / 2, 5, TH->border);
-    tft.fillRect(x + w / 2 - 2, y + h / 3, 4, h / 3, TH->accent);
-    tft.drawLine(x + w * 2 / 3 - 4, y + h / 3, x + w * 2 / 3 + 4, y + h * 2 / 3, TH->danger);
-    tft.drawLine(x + w * 2 / 3 + 4, y + h / 3, x + w * 2 / 3 - 4, y + h * 2 / 3, TH->danger);
-}
-
 static void cover_velha(int x, int y, int w, int h, int brick_idx) {
     (void)brick_idx;
     tft.fillRoundRect(x, y, w, h, 4, TH->bg);
@@ -289,8 +269,6 @@ void ui_draw_game_cover(const char* engine, int x, int y, int w, int h, int bric
     case ENGINE_SIMON: cover_simon(x, y, w, h, brick_idx); break;
     case ENGINE_MINES: cover_mines(x, y, w, h, brick_idx); break;
     case ENGINE_VELHA: cover_velha(x, y, w, h, brick_idx); break;
-    case ENGINE_REACTION: cover_reaction(x, y, w, h, brick_idx); break;
-    case ENGINE_RPS: cover_rps(x, y, w, h, brick_idx); break;
     case ENGINE_JUMP: cover_jump(x, y, w, h, brick_idx); break;
     case ENGINE_BOUNCE: cover_bounce(x, y, w, h, brick_idx); break;
     case ENGINE_STACK: cover_stack(x, y, w, h, brick_idx); break;

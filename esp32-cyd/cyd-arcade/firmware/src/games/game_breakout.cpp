@@ -1,6 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
+#include "buzzer.h"
 #include "hw_config.h"
 #include "ui_theme.h"
 #include <Arduino.h>
@@ -180,6 +181,7 @@ static bool collide_brick() {
 
             bricks[r][c] = false;
             score += 10 + (ROWS - r) * 5;
+            buzzer_play(SFX_SCORE);
             game_play_fill_rect(rx - 1, ry - 1, rw + 2, rh + 2, COL_BG);
 
             const int cx = rx + rw / 2;
@@ -207,6 +209,7 @@ static void physics_step() {
         ball_x >= pad_x - PAD_W / 2 && ball_x <= pad_x + PAD_W / 2) {
         ball_y = py - BALL_R;
         ball_dy = -fabsf(ball_dy);
+        buzzer_play(SFX_HIT);
         const float hit = (ball_x - pad_x) / (PAD_W * 0.5f);
         ball_dx = hit * 3.2f;
         if (fabsf(ball_dx) < 0.6f) ball_dx = ball_dx < 0 ? -0.6f : 0.6f;
@@ -214,6 +217,7 @@ static void physics_step() {
 
     if (ball_y > PLAY_H + BALL_R) {
         lives--;
+        buzzer_play(SFX_ERROR);
         ball_live = false;
         ball_x = (float)pad_x;
         ball_y = (float)(pad_y() - BALL_R - 4);
@@ -225,6 +229,7 @@ static void physics_step() {
     if (ball_live && !bricks_left()) {
         level++;
         score += 100 * level;
+        buzzer_play(SFX_LEVEL);
         init_level();
         level_cleared = true;
     }

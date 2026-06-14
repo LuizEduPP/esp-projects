@@ -1,6 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
+#include "buzzer.h"
 #include "hw_config.h"
 #include <Arduino.h>
 #include <stdio.h>
@@ -166,10 +167,12 @@ void game_snake_run(const GameEntry* cfg) {
                     body_y[len - 1] = tail_y;
                     draw_seg(tail_x, tail_y, COL_BODY);
                     score += 10;
+                    buzzer_play(SFX_SCORE);
                     const int new_phase = score / 50 + 1;
                     if (new_phase != phase) {
                         phase = new_phase;
                         game_hud_set_level(hud, phase);
+                        buzzer_play(SFX_LEVEL);
                         if (step_ms > 90) step_ms -= 6;
                     }
                     if (score > 0 && score % 50 == 0 && step_ms > 90) step_ms -= 6;
