@@ -25,14 +25,6 @@ void setup() {
 
     display_init();
     touch_init();
-    buzzer_init();
-
-    display_splash("CYD-ARCADE");
-    buzzer_play(SFX_STARTUP);
-    if (display_splash_wait(SPLASH_MS)) {
-        touch_clear_calibration();
-        Serial.println("[INIT] calibracao resetada (segurou na splash)");
-    }
 
     if (!touch_has_saved_calibration()) {
         Serial.println("[INIT] sem calibracao — abrindo assistente");
@@ -41,6 +33,14 @@ void setup() {
 
     Serial.printf("[INIT] heap=%u games=%d cal=%d\n",
                   ESP.getFreeHeap(), game_catalog_count(), touch_has_saved_calibration());
+    Serial.end();
+
+    buzzer_init();
+    display_splash("CYD-ARCADE");
+    buzzer_play(SFX_STARTUP);
+    if (display_splash_wait(SPLASH_MS)) {
+        touch_clear_calibration();
+    }
 }
 
 void loop() {

@@ -14,3 +14,4 @@ uint8_t display_get_brightness();
 void display_set_brightness(uint8_t level);
 int display_brightness_percent();
 void display_brightness_step(int delta);
+void display_brightness_refresh();

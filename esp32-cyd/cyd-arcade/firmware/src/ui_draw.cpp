@@ -234,22 +234,6 @@ static void cover_breakout(int x, int y, int w, int h, int brick_idx) {
     tft.fillCircle(x + w / 2, y + h / 2 + 6, 4, TH->accent);
 }
 
-static void cover_jump(int x, int y, int w, int h, int brick_idx) {
-    tft.fillRoundRect(x, y, w, h, 4, TH->bg);
-    tft.drawRoundRect(x, y, w, h, 4, TH->border);
-    tft.fillRoundRect(x + 8, y + h - 14, w / 2, 8, 4, TH->border);
-    tft.fillRoundRect(x + w / 3, y + h / 3, w / 3, 8, 4,
-                      ui_theme_brick_color(brick_idx + 1));
-    tft.fillCircle(x + w / 2, y + h / 2 - 4, 5, ui_theme_brick_color(brick_idx));
-}
-
-static void cover_bounce(int x, int y, int w, int h, int brick_idx) {
-    tft.fillRoundRect(x, y, w, h, 4, TH->bg);
-    tft.drawRoundRect(x, y, w, h, 4, TH->border);
-    tft.fillRoundRect(x + w / 2 - w / 6, y + h - 12, w / 3, 5, 2, TH->border);
-    tft.fillCircle(x + w / 2, y + h / 2 - 6, 5, ui_theme_brick_color(brick_idx + 2));
-}
-
 static void cover_stack(int x, int y, int w, int h, int brick_idx) {
     tft.fillRoundRect(x, y, w, h, 4, TH->bg);
     tft.drawRoundRect(x, y, w, h, 4, TH->border);
@@ -269,8 +253,6 @@ void ui_draw_game_cover(const char* engine, int x, int y, int w, int h, int bric
     case ENGINE_SIMON: cover_simon(x, y, w, h, brick_idx); break;
     case ENGINE_MINES: cover_mines(x, y, w, h, brick_idx); break;
     case ENGINE_VELHA: cover_velha(x, y, w, h, brick_idx); break;
-    case ENGINE_JUMP: cover_jump(x, y, w, h, brick_idx); break;
-    case ENGINE_BOUNCE: cover_bounce(x, y, w, h, brick_idx); break;
     case ENGINE_STACK: cover_stack(x, y, w, h, brick_idx); break;
     default: cover_breakout(x, y, w, h, brick_idx); break;
     }

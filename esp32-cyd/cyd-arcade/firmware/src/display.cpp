@@ -10,29 +10,50 @@
 
 TFT_eSPI tft = TFT_eSPI();
 
-#define BL_CH       0
-#define BL_FREQ     5000
-#define BL_BITS     8
-#define BL_DEFAULT  200
-#define BL_MIN      16
-#define BL_MAX      255
-#define BL_STEP     20
+#define BL_CH          0
+#define BL_FREQ        5000
+#define BL_BITS        8
+#define BL_MIN         16
+#define BL_MAX         255
+#define BL_STEP_PCT    10
+#define BL_DEFAULT_PCT 78
 
-static uint8_t s_brightness = BL_DEFAULT;
+static uint8_t s_brightness = BL_MIN;
+static uint8_t s_brightness_pct = BL_DEFAULT_PCT;
 static bool s_bl_ready = false;
+
+static uint8_t brightness_pct_to_pwm(int pct) {
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    return (uint8_t)(BL_MIN + (uint32_t)(BL_MAX - BL_MIN) * (uint32_t)pct / 100);
+}
+
+static uint8_t brightness_pwm_to_pct(uint8_t pwm) {
+    if (pwm <= BL_MIN) return 0;
+    return (uint8_t)((uint32_t)(pwm - BL_MIN) * 100 / (BL_MAX - BL_MIN));
+}
 
 static void display_load_brightness() {
     Preferences prefs;
     prefs.begin("cyd-arcade", true);
-    s_brightness = prefs.getUChar("bright", BL_DEFAULT);
+    if (prefs.isKey("bright_pct")) {
+        s_brightness_pct = prefs.getUChar("bright_pct", BL_DEFAULT_PCT);
+    } else {
+        const uint8_t legacy = prefs.getUChar("bright", brightness_pct_to_pwm(BL_DEFAULT_PCT));
+        s_brightness_pct = brightness_pwm_to_pct(legacy);
+    }
     prefs.end();
-    if (s_brightness < BL_MIN) s_brightness = BL_MIN;
+    s_brightness_pct = (uint8_t)(((s_brightness_pct + BL_STEP_PCT / 2) / BL_STEP_PCT) * BL_STEP_PCT);
+    if (s_brightness_pct > 100) s_brightness_pct = 100;
+    s_brightness = brightness_pct_to_pwm(s_brightness_pct);
 }
 
 static void display_apply_brightness() {
-    ledcSetup(BL_CH, BL_FREQ, BL_BITS);
-    ledcAttachPin(TFT_PIN_BL, BL_CH);
-    s_bl_ready = true;
+    if (!s_bl_ready) {
+        ledcSetup(BL_CH, BL_FREQ, BL_BITS);
+        ledcAttachPin(TFT_PIN_BL, BL_CH);
+        s_bl_ready = true;
+    }
     ledcWrite(BL_CH, s_brightness);
 }
 
@@ -48,20 +69,36 @@ uint8_t display_get_brightness() {
 
 void display_set_brightness(uint8_t level) {
     s_brightness = constrain(level, BL_MIN, BL_MAX);
+    s_brightness_pct = brightness_pwm_to_pct(s_brightness);
+    s_brightness_pct = (uint8_t)(((s_brightness_pct + BL_STEP_PCT / 2) / BL_STEP_PCT) * BL_STEP_PCT);
+    s_brightness = brightness_pct_to_pwm(s_brightness_pct);
     display_apply_brightness();
     Preferences prefs;
     prefs.begin("cyd-arcade", false);
-    prefs.putUChar("bright", s_brightness);
+    prefs.putUChar("bright_pct", s_brightness_pct);
     prefs.end();
 }
 
 int display_brightness_percent() {
-    return (int)((s_brightness - BL_MIN) * 100 / (BL_MAX - BL_MIN));
+    return (int)s_brightness_pct;
 }
 
 void display_brightness_step(int delta) {
-    int v = (int)s_brightness + delta * BL_STEP;
-    display_set_brightness((uint8_t)v);
+    int v = (int)s_brightness_pct + delta * BL_STEP_PCT;
+    if (v < 0) v = 0;
+    if (v > 100) v = 100;
+    s_brightness_pct = (uint8_t)v;
+    s_brightness = brightness_pct_to_pwm(s_brightness_pct);
+    display_apply_brightness();
+    Preferences prefs;
+    prefs.begin("cyd-arcade", false);
+    prefs.putUChar("bright_pct", s_brightness_pct);
+    prefs.end();
+}
+
+void display_brightness_refresh() {
+    if (!s_bl_ready) return;
+    ledcWrite(BL_CH, s_brightness);
 }
 
 void display_init() {

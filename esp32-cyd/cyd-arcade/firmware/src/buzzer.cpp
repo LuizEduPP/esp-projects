@@ -1,8 +1,13 @@
 #include "buzzer.h"
+#include "display.h"
 #include "hw_config.h"
 #include <Arduino.h>
+#include <Preferences.h>
+
+#define SOUND_PREF_KEY "sound_on"
 
 static bool s_ready = false;
+static bool s_sound_on = true;
 
 typedef struct {
     uint16_t freq;
@@ -11,6 +16,37 @@ typedef struct {
 } BuzzerNote;
 
 static const uint16_t SIMON_FREQ[4] = {784, 988, 1175, 1568};
+
+static void buzzer_save_sound();
+
+static void buzzer_load_sound() {
+    Preferences prefs;
+    prefs.begin("cyd-arcade", true);
+    bool migrate = false;
+    if (prefs.isKey(SOUND_PREF_KEY)) {
+        s_sound_on = prefs.getBool(SOUND_PREF_KEY, true);
+    } else if (prefs.isKey("vol_pct")) {
+        s_sound_on = prefs.getUChar("vol_pct", 70) > 0;
+        migrate = true;
+    } else if (prefs.isKey("volume")) {
+        s_sound_on = prefs.getUChar("volume", 70) > 0;
+        migrate = true;
+    } else {
+        s_sound_on = true;
+    }
+    prefs.end();
+    if (migrate)
+        buzzer_save_sound();
+}
+
+static void buzzer_save_sound() {
+    Preferences prefs;
+    prefs.begin("cyd-arcade", false);
+    prefs.putBool(SOUND_PREF_KEY, s_sound_on);
+    prefs.remove("vol_pct");
+    prefs.remove("volume");
+    prefs.end();
+}
 
 static uint16_t passive_hz(uint16_t freq) {
     if (freq < 350) return (uint16_t)(freq * 4);
@@ -30,25 +66,37 @@ static void play_notes(const BuzzerNote* notes, int count) {
 }
 
 void buzzer_init() {
-    if (s_ready) return;
+    buzzer_load_sound();
     ledcSetup(BUZZER_LEDC_CH, 2700, BUZZER_LEDC_BITS);
     ledcAttachPin(BUZZER_PIN, BUZZER_LEDC_CH);
     ledcWrite(BUZZER_LEDC_CH, 0);
     s_ready = true;
-    Serial.printf("[BUZZER] GPIO%d (P1 TX + GND)\n", BUZZER_PIN);
+}
+
+bool buzzer_sound_on() {
+    return s_sound_on;
+}
+
+void buzzer_sound_toggle() {
+    s_sound_on = !s_sound_on;
+    buzzer_save_sound();
 }
 
 void buzzer_stop() {
     if (!s_ready) return;
     ledcWrite(BUZZER_LEDC_CH, 0);
+    display_brightness_refresh();
 }
 
 void buzzer_tone(uint16_t freq_hz, uint16_t duration_ms) {
-    if (!s_ready || freq_hz == 0 || duration_ms == 0) return;
+    if (!s_sound_on || freq_hz == 0 || duration_ms == 0) return;
     freq_hz = passive_hz(freq_hz);
     ledcAttachPin(BUZZER_PIN, BUZZER_LEDC_CH);
-    if (ledcWriteTone(BUZZER_LEDC_CH, freq_hz) == 0) return;
-    ledcWrite(BUZZER_LEDC_CH, BUZZER_DUTY);
+    s_ready = true;
+    if (ledcWriteTone(BUZZER_LEDC_CH, freq_hz) == 0) {
+        ledcSetup(BUZZER_LEDC_CH, freq_hz, BUZZER_LEDC_BITS);
+        ledcWrite(BUZZER_LEDC_CH, 512);
+    }
     delay(duration_ms);
     buzzer_stop();
 }

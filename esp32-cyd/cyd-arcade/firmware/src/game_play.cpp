@@ -142,7 +142,6 @@ GameHud* game_hud_begin(const char* title, const char* engine, uint32_t color) {
     draw_status_bar(hud);
     touch_wait_release();
 
-    Serial.printf("[HUD] %s best=%d heap=%u\n", title, hud->best, ESP.getFreeHeap());
     return hud;
 }
 
