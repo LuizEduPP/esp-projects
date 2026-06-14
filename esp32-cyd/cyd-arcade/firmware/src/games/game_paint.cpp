@@ -18,11 +18,13 @@
 #define BRUSH_MIN   1
 #define BRUSH_MAX   18
 #define MAIN_COLORS 6
-#define EXTRA_COLS  4
-#define EXTRA_ROWS  3
 #define PICKER_BTN_W 32
 #define PICKER_HIT_OPEN  105
+#define PICKER_HIT_OK    201
 #define PICKER_HIT_CLOSE 200
+#define PICK_DRAG_NONE 0
+#define PICK_DRAG_SV   1
+#define PICK_DRAG_HUE  2
 
 typedef struct {
     int16_t x, y;
@@ -30,43 +32,97 @@ typedef struct {
     int8_t r;
 } PaintDot;
 
-/* Primarias + secundarias na barra */
 static const uint16_t MAIN_PALETTE[] = {
-    0xF800, /* Vermelho */
-    0xFFE0, /* Amarelo */
-    0x001F, /* Azul */
-    0xFD20, /* Laranja */
-    0x07E0, /* Verde */
-    0x881F, /* Roxo */
-};
-
-/* Cores extras — so na janela de selecao */
-static const uint16_t EXTRA_PALETTE[] = {
-    0x0000, 0xFFFF, 0x8410, 0x8200,
-    0xDEFB, 0xFC9F, 0xF81F, 0x07FF,
-    0x051F, 0x3666, 0xFEA0, 0xFB66,
+    0xF800, 0xFFE0, 0x001F, 0xFD20, 0x07E0, 0x881F,
 };
 
 static PaintDot dots[MAX_DOTS];
 static int dot_n;
 static int color_idx;
-static int extra_idx;
-static bool use_extra;
+static bool use_custom;
+static uint16_t custom_color;
+static float pick_h, pick_s, pick_v;
 static bool picker_open;
+static int pick_drag;
 static int brush_r;
 static bool erasing;
 static int last_x, last_y;
 static bool drawing;
-static int picker_ox, picker_oy, picker_ow, picker_oh;
-static int picker_grid_x, picker_grid_y, picker_cell;
 
-static int extra_n() {
-    return (int)(sizeof(EXTRA_PALETTE) / sizeof(EXTRA_PALETTE[0]));
+static int picker_ox, picker_oy, picker_ow, picker_oh;
+static int sv_x, sv_y, sv_w, sv_h;
+static int hue_x, hue_y, hue_w, hue_h;
+static int ok_x, ok_y, ok_w, ok_h;
+static int prev_x, prev_y;
+static int cross_px, cross_py;
+
+static float clampf(float v, float lo, float hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+static uint16_t hsv_to565(float h, float s, float v) {
+    while (h < 0.0f) h += 360.0f;
+    while (h >= 360.0f) h -= 360.0f;
+    s = clampf(s, 0.0f, 1.0f);
+    v = clampf(v, 0.0f, 1.0f);
+
+    const float c = v * s;
+    const float hh = h / 60.0f;
+    const float x = c * (1.0f - fabsf(fmodf(hh, 2.0f) - 1.0f));
+    const float m = v - c;
+    float r = 0, g = 0, b = 0;
+
+    if (hh < 1.0f) {
+        r = c; g = x;
+    } else if (hh < 2.0f) {
+        r = x; g = c;
+    } else if (hh < 3.0f) {
+        g = c; b = x;
+    } else if (hh < 4.0f) {
+        g = x; b = c;
+    } else if (hh < 5.0f) {
+        r = x; b = c;
+    } else {
+        r = c; b = x;
+    }
+
+    const uint8_t R = (uint8_t)((r + m) * 255.0f + 0.5f);
+    const uint8_t G = (uint8_t)((g + m) * 255.0f + 0.5f);
+    const uint8_t B = (uint8_t)((b + m) * 255.0f + 0.5f);
+    return (uint16_t)(((R & 0xF8) << 8) | ((G & 0xFC) << 3) | (B >> 3));
+}
+
+static void rgb565_to_hsv(uint16_t c, float* h, float* s, float* v) {
+    const float r = ((c >> 11) & 0x1F) / 31.0f;
+    const float g = ((c >> 5) & 0x3F) / 63.0f;
+    const float b = (c & 0x1F) / 31.0f;
+    const float maxc = fmaxf(r, fmaxf(g, b));
+    const float minc = fminf(r, fminf(g, b));
+    const float d = maxc - minc;
+
+    *v = maxc;
+    *s = (maxc <= 0.0f) ? 0.0f : d / maxc;
+
+    if (d <= 0.0001f) {
+        *h = pick_h;
+        return;
+    }
+
+    float hh;
+    if (maxc == r)
+        hh = (g - b) / d + (g < b ? 6.0f : 0.0f);
+    else if (maxc == g)
+        hh = (b - r) / d + 2.0f;
+    else
+        hh = (r - g) / d + 4.0f;
+    *h = hh * 60.0f;
 }
 
 static uint16_t active_color() {
     if (erasing) return game_play_field_bg();
-    if (use_extra) return EXTRA_PALETTE[extra_idx];
+    if (use_custom) return custom_color;
     return MAIN_PALETTE[color_idx];
 }
 
@@ -160,22 +216,23 @@ static void draw_color_row() {
 
     for (int i = 0; i < MAIN_COLORS; i++) {
         const int cx = 4 + step / 2 + i * step;
-        const bool sel = !use_extra && i == color_idx;
+        const bool sel = !use_custom && i == color_idx;
         draw_color_swatch(cx, cy, MAIN_PALETTE[i], sel, 8);
     }
 
     const int bx = picker_x;
     const int by = CANVAS_H + 2;
-    const uint16_t btn_fill = use_extra ? EXTRA_PALETTE[extra_idx] : TH->card;
+    const uint16_t btn_fill = use_custom ? custom_color : TH->card;
     game_play_fill_round_rect(bx, by, PICKER_BTN_W, 22, 5, btn_fill);
-    if (use_extra) {
+    if (use_custom) {
         tft.drawRoundRect(PLAY_X + bx, PLAY_Y + by, PICKER_BTN_W, 22, 5, TH->accent);
-        if (EXTRA_PALETTE[extra_idx] == 0x0000)
+        if (custom_color == 0x0000)
             tft.drawRoundRect(PLAY_X + bx + 1, PLAY_Y + by + 1, PICKER_BTN_W - 2, 20, 4, TH->border);
     } else {
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TH->text_hi, TH->card);
-        tft.drawString("+", PLAY_X + bx + PICKER_BTN_W / 2, PLAY_Y + CANVAS_H + 13, 2);
+        game_play_fill_circle(bx + 10, CANVAS_H + 13, 4, 0xF800);
+        game_play_fill_circle(bx + 16, CANVAS_H + 13, 4, 0xFFE0);
+        game_play_fill_circle(bx + 22, CANVAS_H + 13, 4, 0x07E0);
+        game_play_fill_circle(bx + 16, CANVAS_H + 9, 3, 0x001F);
     }
 }
 
@@ -239,59 +296,167 @@ static void draw_toolbar() {
     draw_size_controls();
 }
 
-static void draw_picker_modal() {
-    const uint16_t scrim = ui_tint565(TH->bg, -48);
-    game_play_fill_rect(0, 0, PLAY_W, CANVAS_H, scrim);
-
+static void picker_layout() {
     picker_ow = PLAY_W - 16;
-    picker_oh = 196;
+    picker_oh = 218;
     picker_ox = 8;
     picker_oy = (CANVAS_H - picker_oh) / 2;
 
+    sv_x = picker_ox + 10;
+    sv_y = picker_oy + 34;
+    sv_w = picker_ow - 20;
+    sv_h = 118;
+
+    hue_x = sv_x;
+    hue_y = sv_y + sv_h + 10;
+    hue_w = sv_w;
+    hue_h = 16;
+
+    ok_x = picker_ox + 12;
+    ok_y = hue_y + hue_h + 12;
+    ok_w = 72;
+    ok_h = 28;
+
+    prev_x = picker_ox + picker_ow - 34;
+    prev_y = ok_y + ok_h / 2;
+}
+
+static void picker_cross_pos(int* ox, int* oy) {
+    *ox = sv_x + (int)(pick_s * (sv_w - 1));
+    *oy = sv_y + (int)((1.0f - pick_v) * (sv_h - 1));
+}
+
+static void draw_sv_field() {
+    for (int y = 0; y < sv_h; y++) {
+        const float v = 1.0f - (float)y / (float)(sv_h - 1);
+        for (int x = 0; x < sv_w; x++) {
+            const float s = (float)x / (float)(sv_w - 1);
+            const uint16_t col = hsv_to565(pick_h, s, v);
+            tft.drawPixel(PLAY_X + sv_x + x, PLAY_Y + sv_y + y, col);
+        }
+    }
+    tft.drawRect(PLAY_X + sv_x, PLAY_Y + sv_y, sv_w, sv_h, TH->border);
+}
+
+static void draw_hue_bar() {
+    for (int x = 0; x < hue_w; x++) {
+        const float h = 360.0f * (float)x / (float)(hue_w - 1);
+        const uint16_t col = hsv_to565(h, 1.0f, 1.0f);
+        tft.drawFastVLine(PLAY_X + hue_x + x, PLAY_Y + hue_y, hue_h, col);
+    }
+    tft.drawRect(PLAY_X + hue_x, PLAY_Y + hue_y, hue_w, hue_h, TH->border);
+
+    const int hx = hue_x + (int)(pick_h / 360.0f * (hue_w - 1));
+    tft.drawFastVLine(PLAY_X + hx, PLAY_Y + hue_y - 1, hue_h + 2, 0xFFFF);
+    tft.drawFastVLine(PLAY_X + hx + 1, PLAY_Y + hue_y - 1, hue_h + 2, 0x0000);
+}
+
+static void restore_sv_patch(int cx, int cy) {
+    const int x0 = cx - 7;
+    const int y0 = cy - 7;
+    for (int dy = 0; dy <= 14; dy++) {
+        const int py = y0 + dy;
+        if (py < sv_y || py >= sv_y + sv_h) continue;
+        const float v = 1.0f - (float)(py - sv_y) / (float)(sv_h - 1);
+        for (int dx = 0; dx <= 14; dx++) {
+            const int px = x0 + dx;
+            if (px < sv_x || px >= sv_x + sv_w) continue;
+            const float s = (float)(px - sv_x) / (float)(sv_w - 1);
+            tft.drawPixel(PLAY_X + px, PLAY_Y + py, hsv_to565(pick_h, s, v));
+        }
+    }
+}
+
+static void draw_sv_crosshair() {
+    picker_cross_pos(&cross_px, &cross_py);
+    tft.drawCircle(PLAY_X + cross_px, PLAY_Y + cross_py, 6, 0xFFFF);
+    tft.drawCircle(PLAY_X + cross_px, PLAY_Y + cross_py, 7, 0x0000);
+}
+
+static void draw_picker_preview() {
+    game_play_fill_circle(prev_x, prev_y, 14, custom_color);
+    tft.drawCircle(PLAY_X + prev_x, PLAY_Y + prev_y, 14, TH->border);
+    if (custom_color == 0x0000)
+        tft.drawCircle(PLAY_X + prev_x, PLAY_Y + prev_y, 13, TH->text_mute);
+}
+
+static void draw_picker_chrome() {
     game_play_fill_round_rect(picker_ox, picker_oy, picker_ow, picker_oh, UI_MODAL_R, TH->card);
     tft.drawRoundRect(PLAY_X + picker_ox, PLAY_Y + picker_oy, picker_ow, picker_oh,
                       UI_MODAL_R, TH->border);
-    tft.drawRoundRect(PLAY_X + picker_ox + 1, PLAY_Y + picker_oy + 1,
-                      picker_ow - 2, picker_oh - 2, UI_MODAL_R - 1, TH->accent);
 
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(TH->text_hi, TH->card);
-    tft.drawString("Mais cores", PLAY_X + picker_ox + picker_ow / 2, PLAY_Y + picker_oy + 16, 2);
+    tft.drawString("Cor", PLAY_X + picker_ox + 24, PLAY_Y + picker_oy + 16, 2);
 
     game_play_fill_round_rect(picker_ox + picker_ow - 30, picker_oy + 4, 26, 22, 5, TH->surface);
     tft.setTextColor(TH->text_mute, TH->surface);
     tft.drawString("X", PLAY_X + picker_ox + picker_ow - 17, PLAY_Y + picker_oy + 15, 2);
 
-    picker_grid_y = picker_oy + 34;
-    picker_grid_x = picker_ox + 8;
-    picker_cell = (picker_ow - 16) / EXTRA_COLS;
+    game_play_fill_round_rect(ok_x, ok_y, ok_w, ok_h, 6, TH->accent);
+    tft.setTextColor(TH->bg, TH->accent);
+    tft.drawString("OK", PLAY_X + ok_x + ok_w / 2, PLAY_Y + ok_y + ok_h / 2, 2);
+}
 
-    for (int i = 0; i < extra_n(); i++) {
-        const int col = i % EXTRA_COLS;
-        const int row = i / EXTRA_COLS;
-        const int cx = picker_grid_x + col * picker_cell + picker_cell / 2;
-        const int cy = picker_grid_y + row * picker_cell + picker_cell / 2;
-        const bool sel = use_extra && extra_idx == i;
-        draw_color_swatch(cx, cy, EXTRA_PALETTE[i], sel, 14);
-    }
+static void draw_picker_modal() {
+    const uint16_t scrim = ui_tint565(TH->bg, -48);
+    game_play_fill_rect(0, 0, PLAY_W, CANVAS_H, scrim);
+
+    picker_layout();
+    draw_picker_chrome();
+    draw_sv_field();
+    draw_hue_bar();
+    draw_sv_crosshair();
+    draw_picker_preview();
+}
+
+static void picker_update_color() {
+    custom_color = hsv_to565(pick_h, pick_s, pick_v);
+}
+
+static bool point_in_rect(int px, int py, int x, int y, int w, int h) {
+    return px >= x && px < x + w && py >= y && py < y + h;
+}
+
+static void picker_touch_sv(int px, int py) {
+    pick_s = clampf((float)(px - sv_x) / (float)(sv_w - 1), 0.0f, 1.0f);
+    pick_v = clampf(1.0f - (float)(py - sv_y) / (float)(sv_h - 1), 0.0f, 1.0f);
+    picker_update_color();
+}
+
+static void picker_touch_hue(int px) {
+    pick_h = clampf((float)(px - hue_x) / (float)(hue_w - 1) * 360.0f, 0.0f, 360.0f);
+    picker_update_color();
 }
 
 static int picker_hit(int px, int py) {
-    if (py >= picker_oy + 4 && py < picker_oy + 26 &&
-        px >= picker_ox + picker_ow - 30 && px < picker_ox + picker_ow)
+    if (point_in_rect(px, py, picker_ox + picker_ow - 30, picker_oy + 4, 26, 22))
         return PICKER_HIT_CLOSE;
+    if (point_in_rect(px, py, ok_x, ok_y, ok_w, ok_h))
+        return PICKER_HIT_OK;
+    if (point_in_rect(px, py, sv_x, sv_y, sv_w, sv_h))
+        return PICK_DRAG_SV;
+    if (point_in_rect(px, py, hue_x, hue_y, hue_w, hue_h))
+        return PICK_DRAG_HUE;
+    return PICK_DRAG_NONE;
+}
 
-    if (py < picker_grid_y || py >= picker_grid_y + EXTRA_ROWS * picker_cell)
-        return -1;
-    if (px < picker_grid_x || px >= picker_grid_x + EXTRA_COLS * picker_cell)
-        return -1;
+static void picker_drag(int px, int py, int zone) {
+    const int old_cx = cross_px;
+    const int old_cy = cross_py;
 
-    const int col = (px - picker_grid_x) / picker_cell;
-    const int row = (py - picker_grid_y) / picker_cell;
-    const int idx = row * EXTRA_COLS + col;
-    if (idx < 0 || idx >= extra_n())
-        return -1;
-    return idx;
+    if (zone == PICK_DRAG_SV) {
+        picker_touch_sv(px, py);
+        restore_sv_patch(old_cx, old_cy);
+        draw_sv_crosshair();
+        draw_picker_preview();
+    } else if (zone == PICK_DRAG_HUE) {
+        picker_touch_hue(px);
+        draw_sv_field();
+        draw_hue_bar();
+        draw_sv_crosshair();
+        draw_picker_preview();
+    }
 }
 
 static void replay_dots() {
@@ -342,24 +507,40 @@ static void brush_resize(int delta) {
     buzzer_play(SFX_TICK);
 }
 
+static void picker_seed_from(uint16_t col) {
+    rgb565_to_hsv(col, &pick_h, &pick_s, &pick_v);
+    custom_color = hsv_to565(pick_h, pick_s, pick_v);
+}
+
 static void open_picker() {
     picker_open = true;
     drawing = false;
+    pick_drag = PICK_DRAG_NONE;
+    picker_seed_from(use_custom ? custom_color : MAIN_PALETTE[color_idx]);
     draw_picker_modal();
     buzzer_play(SFX_TICK);
 }
 
-static void close_picker() {
+static void close_picker(bool apply) {
+    if (apply) {
+        use_custom = true;
+        erasing = false;
+    }
     picker_open = false;
+    pick_drag = PICK_DRAG_NONE;
     replay_dots();
 }
 
 static void paint_init() {
     dot_n = 0;
     color_idx = 0;
-    extra_idx = 0;
-    use_extra = false;
+    use_custom = false;
+    custom_color = 0xF800;
+    pick_h = 0.0f;
+    pick_s = 1.0f;
+    pick_v = 1.0f;
     picker_open = false;
+    pick_drag = PICK_DRAG_NONE;
     brush_r = 5;
     erasing = false;
     drawing = false;
@@ -396,16 +577,23 @@ void game_paint_run(const GameEntry* cfg) {
             if (in.just_pressed) {
                 const int hit = picker_hit(in.play_x, in.play_y);
                 if (hit == PICKER_HIT_CLOSE) {
-                    close_picker();
+                    close_picker(false);
                     buzzer_play(SFX_SELECT);
-                } else if (hit >= 0) {
-                    use_extra = true;
-                    extra_idx = hit;
-                    erasing = false;
-                    close_picker();
+                } else if (hit == PICKER_HIT_OK) {
+                    close_picker(true);
                     buzzer_play(SFX_SELECT);
+                } else if (hit == PICK_DRAG_SV || hit == PICK_DRAG_HUE) {
+                    pick_drag = hit;
+                    picker_drag(in.play_x, in.play_y, hit);
+                    buzzer_play(SFX_TICK);
                 }
+            } else if (in.down && pick_drag != PICK_DRAG_NONE) {
+                picker_drag(in.play_x, in.play_y, pick_drag);
             }
+
+            if (in.just_released)
+                pick_drag = PICK_DRAG_NONE;
+
             game_frame_delay();
             continue;
         }
@@ -426,7 +614,7 @@ void game_paint_run(const GameEntry* cfg) {
                 open_picker();
             } else if (hit >= 0 && hit < MAIN_COLORS) {
                 color_idx = hit;
-                use_extra = false;
+                use_custom = false;
                 erasing = false;
                 draw_toolbar();
                 buzzer_play(SFX_TICK);

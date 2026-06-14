@@ -34,7 +34,7 @@ static ScrollLayout scroll_layout() {
 #define CS       3
 #define GW       (PLAY_W / CS)
 #define GH       (CANVAS_H / CS)
-#define PHYS_MS  28
+#define PHYS_MS  22
 #define BRUSH_MIN 1
 #define BRUSH_MAX 5
 
@@ -564,86 +564,60 @@ static bool grain_can_sink(int r, int c, uint8_t t) {
     return false;
 }
 
-static void step_grains() {
-    const bool alt = (phys_tick & 1) != 0;
-    for (int ri = 0; ri < GH - 1; ri++) {
-        const int r = alt ? ri : (GH - 2 - ri);
-        const int c_start = alt ? 0 : GW - 1;
-        const int c_end = alt ? GW : -1;
-        const int c_step = alt ? 1 : -1;
+static bool grain_moves_this_tick(uint8_t t) {
+    if (t == CELL_SAND || t == CELL_DIRT) return true;
+    if (t == CELL_GRASS) return (phys_tick & 1) == 0;
+    if (t == CELL_MUD) return (phys_tick % 3) == 0;
+    if (t == CELL_LAVA) return (phys_tick & 1) == 0;
+    return false;
+}
 
-        for (int c = c_start; c != c_end; c += c_step) {
-            uint8_t t = grid[r][c];
+static void grain_move_to(int r, int c, int nr, int nc, uint8_t t) {
+    if (grid[nr][nc] == CELL_WATER) {
+        grid[r][c] = CELL_WATER;
+        grid[nr][nc] = t;
+    } else {
+        grid[r][c] = CELL_EMPTY;
+        grid[nr][nc] = t;
+    }
+}
+
+static bool grain_try_fall(int r, int c, uint8_t t, int dir) {
+    if (grain_can_sink(r + 1, c, t)) {
+        grain_move_to(r, c, r + 1, c, t);
+        return true;
+    }
+    if (grain_can_sink(r + 1, c + dir, t)) {
+        grain_move_to(r, c, r + 1, c + dir, t);
+        return true;
+    }
+    if (grain_can_sink(r + 1, c - dir, t)) {
+        grain_move_to(r, c, r + 1, c - dir, t);
+        return true;
+    }
+    return false;
+}
+
+static void step_grains_pass(bool rtl) {
+    for (int r = GH - 2; r >= 0; r--) {
+        const int c0 = rtl ? GW - 1 : 0;
+        const int c1 = rtl ? -1 : GW;
+        const int cs = rtl ? -1 : 1;
+        for (int c = c0; c != c1; c += cs) {
+            const uint8_t t = grid[r][c];
             if (t != CELL_SAND && t != CELL_DIRT && t != CELL_MUD &&
                 t != CELL_LAVA && t != CELL_GRASS)
                 continue;
-            if (t == CELL_MUD && random(0, 3) != 0) continue;
-            if (t == CELL_LAVA && random(0, 2) != 0) continue;
-            if (t == CELL_GRASS && random(0, 2) != 0) continue;
-
-            if (grain_can_sink(r + 1, c, t)) {
-                if (grid[r + 1][c] == CELL_WATER) {
-                    grid[r][c] = CELL_WATER;
-                    grid[r + 1][c] = t;
-                } else {
-                    grid[r][c] = CELL_EMPTY;
-                    grid[r + 1][c] = t;
-                }
-            } else if (grain_can_sink(r + 1, c - 1, t) && cell_empty(r, c - 1)) {
-                if (grid[r + 1][c - 1] == CELL_WATER) {
-                    grid[r][c] = CELL_WATER;
-                    grid[r + 1][c - 1] = t;
-                } else {
-                    grid[r][c] = CELL_EMPTY;
-                    grid[r + 1][c - 1] = t;
-                }
-            } else if (grain_can_sink(r + 1, c + 1, t) && cell_empty(r, c + 1)) {
-                if (grid[r + 1][c + 1] == CELL_WATER) {
-                    grid[r][c] = CELL_WATER;
-                    grid[r + 1][c + 1] = t;
-                } else {
-                    grid[r][c] = CELL_EMPTY;
-                    grid[r + 1][c + 1] = t;
-                }
-            } else if (random(0, 2) == 0) {
-                if (grain_can_sink(r + 1, c - 1, t)) {
-                    if (grid[r + 1][c - 1] == CELL_WATER) {
-                        grid[r][c] = CELL_WATER;
-                        grid[r + 1][c - 1] = t;
-                    } else {
-                        grid[r][c] = CELL_EMPTY;
-                        grid[r + 1][c - 1] = t;
-                    }
-                } else if (grain_can_sink(r + 1, c + 1, t)) {
-                    if (grid[r + 1][c + 1] == CELL_WATER) {
-                        grid[r][c] = CELL_WATER;
-                        grid[r + 1][c + 1] = t;
-                    } else {
-                        grid[r][c] = CELL_EMPTY;
-                        grid[r + 1][c + 1] = t;
-                    }
-                }
-            } else {
-                if (grain_can_sink(r + 1, c + 1, t)) {
-                    if (grid[r + 1][c + 1] == CELL_WATER) {
-                        grid[r][c] = CELL_WATER;
-                        grid[r + 1][c + 1] = t;
-                    } else {
-                        grid[r][c] = CELL_EMPTY;
-                        grid[r + 1][c + 1] = t;
-                    }
-                } else if (grain_can_sink(r + 1, c - 1, t)) {
-                    if (grid[r + 1][c - 1] == CELL_WATER) {
-                        grid[r][c] = CELL_WATER;
-                        grid[r + 1][c - 1] = t;
-                    } else {
-                        grid[r][c] = CELL_EMPTY;
-                        grid[r + 1][c - 1] = t;
-                    }
-                }
-            }
+            if (!grain_moves_this_tick(t)) continue;
+            const int dir = ((r + c + phys_tick) & 1) ? 1 : -1;
+            grain_try_fall(r, c, t, dir);
         }
     }
+}
+
+static void step_grains() {
+    step_grains_pass(false);
+    step_grains_pass(true);
 }
 
 static void step_buoyancy() {
@@ -656,22 +630,31 @@ static void step_buoyancy() {
     }
 }
 
-static void step_water_pass() {
+static void step_fluid_pass(uint8_t fluid, bool rtl) {
     for (int r = GH - 2; r >= 0; r--) {
-        for (int c = 0; c < GW; c++) {
-            if (grid[r][c] != CELL_WATER) continue;
+        const int c0 = rtl ? GW - 1 : 0;
+        const int c1 = rtl ? -1 : GW;
+        const int cs = rtl ? -1 : 1;
+        for (int c = c0; c != c1; c += cs) {
+            if (grid[r][c] != fluid) continue;
 
             if (cell_fluid_pass(r + 1, c)) {
                 grid[r][c] = CELL_EMPTY;
-                grid[r + 1][c] = CELL_WATER;
+                grid[r + 1][c] = fluid;
             } else {
-                const int dir = random(0, 2) ? -1 : 1;
+                const int dir = ((r + c + phys_tick) & 1) ? 1 : -1;
                 if (cell_fluid_pass(r, c + dir)) {
                     grid[r][c] = CELL_EMPTY;
-                    grid[r][c + dir] = CELL_WATER;
+                    grid[r][c + dir] = fluid;
                 } else if (cell_fluid_pass(r, c - dir)) {
                     grid[r][c] = CELL_EMPTY;
-                    grid[r][c - dir] = CELL_WATER;
+                    grid[r][c - dir] = fluid;
+                } else if (cell_fluid_pass(r + 1, c + dir)) {
+                    grid[r][c] = CELL_EMPTY;
+                    grid[r + 1][c + dir] = fluid;
+                } else if (cell_fluid_pass(r + 1, c - dir)) {
+                    grid[r][c] = CELL_EMPTY;
+                    grid[r + 1][c - dir] = fluid;
                 }
             }
         }
@@ -679,30 +662,13 @@ static void step_water_pass() {
 }
 
 static void step_water() {
-    step_water_pass();
-    step_water_pass();
+    step_fluid_pass(CELL_WATER, false);
+    step_fluid_pass(CELL_WATER, true);
 }
 
 static void step_oil() {
-    for (int r = GH - 2; r >= 0; r--) {
-        for (int c = 0; c < GW; c++) {
-            if (grid[r][c] != CELL_OIL) continue;
-
-            if (cell_fluid_pass(r + 1, c)) {
-                grid[r][c] = CELL_EMPTY;
-                grid[r + 1][c] = CELL_OIL;
-            } else {
-                const int dir = random(0, 2) ? -1 : 1;
-                if (cell_fluid_pass(r, c + dir)) {
-                    grid[r][c] = CELL_EMPTY;
-                    grid[r][c + dir] = CELL_OIL;
-                } else if (cell_fluid_pass(r, c - dir)) {
-                    grid[r][c] = CELL_EMPTY;
-                    grid[r][c - dir] = CELL_OIL;
-                }
-            }
-        }
-    }
+    step_fluid_pass(CELL_OIL, false);
+    step_fluid_pass(CELL_OIL, true);
 }
 
 static void physics_step() {
@@ -714,6 +680,8 @@ static void physics_step() {
     step_buoyancy();
     step_water();
     step_oil();
+    /* segundo passe de grãos — desbloqueia pilhas que ficaram presas */
+    step_grains();
     sync_grid();
 }
 

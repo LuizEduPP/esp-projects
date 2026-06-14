@@ -336,17 +336,31 @@ static bool try_hit_block(Ball* b) {
 }
 
 static void step_ball(Ball* b) {
-    b->x += b->dx;
-    b->y += b->dy;
+    const float ox = b->x;
+    const float oy = b->y;
+    const float spd = sqrtf(b->dx * b->dx + b->dy * b->dy);
+    int steps = 1;
+    if (spd > 2.2f) steps = 2;
+    if (spd > 3.5f) steps = 3;
+    if (spd > 5.0f) steps = 5;
 
-    if (b->x < BALL_R) { b->x = BALL_R; b->dx = fabsf(b->dx); }
-    if (b->x > PLAY_W - BALL_R) { b->x = PLAY_W - BALL_R; b->dx = -fabsf(b->dx); }
-    if (b->y < BALL_R) { b->y = BALL_R; b->dy = fabsf(b->dy); }
+    for (int i = 0; i < steps; i++) {
+        b->x += b->dx / (float)steps;
+        b->y += b->dy / (float)steps;
 
-    if (try_hit_block(b)) return;
+        if (b->x < BALL_R) { b->x = BALL_R; b->dx = fabsf(b->dx); }
+        if (b->x > PLAY_W - BALL_R) { b->x = PLAY_W - BALL_R; b->dx = -fabsf(b->dx); }
+        if (b->y < BALL_R) { b->y = BALL_R; b->dy = fabsf(b->dy); }
 
-    if (b->y >= LAUNCH_Y - 2 && b->dy > 0)
-        b->live = false;
+        if (try_hit_block(b)) return;
+
+        if (b->y >= LAUNCH_Y - 2 && b->dy > 0) {
+            b->live = false;
+            return;
+        }
+    }
+    (void)ox;
+    (void)oy;
 }
 
 static void finish_volley_if_done() {

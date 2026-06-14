@@ -147,7 +147,7 @@ static bool step_game() {
         draw_obs(i);
         const int cx = lane_cx(obs_lane[i]);
         if (obs_lane[i] == car_lane &&
-            rects_hit(lane_cx(car_lane) - CAR_W / 2, car_y(), CAR_W, CAR_H,
+            rects_hit(lane_cx(car_lane) - CAR_W / 2 + 3, car_y() + 2, CAR_W - 6, CAR_H - 4,
                       cx - CAR_W / 2, obs_y[i], CAR_W, CAR_H)) {
             if (obs_coin[i]) {
                 obs_on[i] = false;
@@ -219,8 +219,12 @@ void game_dodge_run(const GameEntry* cfg) {
 
             if (in.just_pressed && in.y >= PLAY_Y)
                 game_drag_begin(&drag, &in);
-            if (in.down)
+            if (in.down) {
                 game_drag_update(&drag, &in);
+                const int sh = game_drag_step_h(&drag, &in, 28);
+                if (sh < 0 && car_lane > 0) car_lane--;
+                else if (sh > 0 && car_lane < LANES - 1) car_lane++;
+            }
             if (in.just_released && drag.active) {
                 const int swipe = game_drag_swipe_h(&drag);
                 if (swipe < 0 && car_lane > 0) car_lane--;

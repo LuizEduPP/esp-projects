@@ -361,7 +361,7 @@ void game_velha_run(const GameEntry* cfg) {
                 int w = check_winner();
                 if (w) {
                     if (two_player)
-                        begin_round_wait(false, false, false);
+                        begin_round_wait(true, false, false);
                     else if (w == 1)
                         begin_round_wait(true, false, false);
                     else

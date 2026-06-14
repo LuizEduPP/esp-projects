@@ -222,7 +222,8 @@ static void draw_ghost(int type, int rot, int px, int py) {
 
 static void draw_active_piece() {
     const int gy = ghost_at(cur_type, cur_rot, cur_x, cur_y);
-    draw_ghost(cur_type, cur_rot, cur_x, gy);
+    if (gy != cur_y)
+        draw_ghost(cur_type, cur_rot, cur_x, gy);
     draw_piece(cur_type, cur_rot, cur_x, cur_y);
 }
 
@@ -377,16 +378,15 @@ static bool handle_input(GameHud* hud, GameInput* in, GameDrag* drag, uint32_t* 
         const int sv = game_drag_step_v(drag, in, 22);
         if (sv < 0) {
             if (rotate_piece()) buzzer_play(SFX_SELECT);
-        } else if (sv > 0 && millis() - *last_soft > 110) {
-            *last_soft = millis();
-            if (!step_down(hud)) return false;
-            game_hud_set_score(hud, score);
         }
     }
 
     if (in->just_released && drag->active) {
         const int sv = game_drag_swipe_v(drag);
-        if (sv > 0 && drag->total_dy > 72) {
+        if (sv > 0 && drag->total_dy > 36 && drag->total_dy <= 72) {
+            if (!step_down(hud)) return false;
+            game_hud_set_score(hud, score);
+        } else if (sv > 0 && drag->total_dy > 72) {
             if (!hard_drop(hud))
                 return false;
             game_hud_set_score(hud, score);

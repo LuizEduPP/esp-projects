@@ -27,6 +27,7 @@ static uint32_t step_ms;
 static int score;
 static int phase;
 static int lives;
+static uint32_t base_step_ms;
 
 static void spawn_food();
 
@@ -40,15 +41,33 @@ static void snake_reset_pos() {
 }
 
 static void spawn_food() {
-    for (;;) {
+    if (len >= GW * GH) return;
+
+    for (int t = 0; t < 400; t++) {
         food_x = random(0, GW);
         food_y = random(0, GH);
         bool hit = false;
         for (int i = 0; i < len; i++)
             if (body_x[i] == food_x && body_y[i] == food_y) hit = true;
-        if (!hit) break;
+        if (!hit) {
+            food_star = random(0, 100) < 16;
+            return;
+        }
     }
-    food_star = random(0, 100) < 16;
+
+    for (int y = 0; y < GH; y++) {
+        for (int x = 0; x < GW; x++) {
+            bool hit = false;
+            for (int i = 0; i < len; i++)
+                if (body_x[i] == x && body_y[i] == y) hit = true;
+            if (!hit) {
+                food_x = (int8_t)x;
+                food_y = (int8_t)y;
+                food_star = random(0, 100) < 16;
+                return;
+            }
+        }
+    }
 }
 
 static void draw_seg(int x, int y, uint16_t col, bool head) {
@@ -129,6 +148,7 @@ static bool snake_lose_life(GameHud* hud) {
     buzzer_play(SFX_ERROR);
     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
     if (lives <= 0) return false;
+    step_ms = base_step_ms;
     snake_reset_pos();
     snake_redraw_all();
     return true;
@@ -139,7 +159,8 @@ static void snake_init(const GameEntry* cfg, GameHud* hud) {
     lives = GAME_LIVES_DEFAULT;
     snake_reset_pos();
     last_step = millis();
-    step_ms = cfg->speed > 0 ? cfg->speed : 150;
+    base_step_ms = cfg->speed > 0 ? cfg->speed : 150;
+    step_ms = base_step_ms;
     snake_redraw_all();
     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
 }

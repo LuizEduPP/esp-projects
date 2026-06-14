@@ -153,20 +153,17 @@ static void update_player_pad(const GameInput* in) {
         return;
     }
 
-    if (!pad_dragging) {
-        if (!in->just_pressed || in->play_y < zone_top)
-            return;
+    if (in->just_pressed && in->y >= PLAY_Y && in->play_y >= zone_top) {
+        pad_p = constrain((int)in->play_x, PAD_W / 2, PLAY_W - PAD_W / 2);
         pad_dragging = true;
         last_play_x = (int)in->play_x;
         return;
     }
 
-    const int px = (int)in->play_x;
-    const int dx = px - last_play_x;
-    if (dx == 0)
-        return;
+    if (!pad_dragging) return;
 
-    pad_p = constrain(pad_p + dx, PAD_W / 2, PLAY_W - PAD_W / 2);
+    const int px = (int)in->play_x;
+    pad_p = constrain(px, PAD_W / 2, PLAY_W - PAD_W / 2);
     last_play_x = px;
 }
 
@@ -253,34 +250,46 @@ static bool paddle_hit(int pad_x, int pad_top, bool from_above) {
 }
 
 static int physics_step() {
-    ball_x += ball_dx;
-    ball_y += ball_dy;
+    const float ox = ball_x;
+    const float oy = ball_y;
+    const float spd = ball_speed();
+    int steps = 1;
+    if (spd > 2.8f) steps = 2;
+    if (spd > 4.2f) steps = 3;
+    if (spd > 5.5f) steps = 5;
 
-    if (ball_x < BALL_R) {
-        ball_x = BALL_R;
-        ball_dx = fabsf(ball_dx);
-    } else if (ball_x > PLAY_W - BALL_R) {
-        ball_x = PLAY_W - BALL_R;
-        ball_dx = -fabsf(ball_dx);
-    }
+    for (int i = 0; i < steps; i++) {
+        ball_x += ball_dx / (float)steps;
+        ball_y += ball_dy / (float)steps;
 
-    paddle_hit(pad_c, cpu_y(), false);
-    paddle_hit(pad_p, player_y(), true);
+        if (ball_x < BALL_R) {
+            ball_x = BALL_R;
+            ball_dx = fabsf(ball_dx);
+        } else if (ball_x > PLAY_W - BALL_R) {
+            ball_x = PLAY_W - BALL_R;
+            ball_dx = -fabsf(ball_dx);
+        }
 
-    if (ball_y < -BALL_R) {
-        score++;
-        buzzer_play(SFX_SCORE);
-        serve_ball(true);
-        return PONG_OK;
+        paddle_hit(pad_c, cpu_y(), false);
+        paddle_hit(pad_p, player_y(), true);
+
+        if (ball_y < -BALL_R) {
+            score++;
+            buzzer_play(SFX_SCORE);
+            serve_ball(true);
+            return PONG_OK;
+        }
+        if (ball_y > PLAY_H + BALL_R) {
+            lives--;
+            buzzer_play(SFX_ERROR);
+            if (lives <= 0)
+                return PONG_LOST;
+            serve_ball(false);
+            return PONG_OK;
+        }
     }
-    if (ball_y > PLAY_H + BALL_R) {
-        lives--;
-        buzzer_play(SFX_ERROR);
-        if (lives <= 0)
-            return PONG_LOST;
-        serve_ball(false);
-        return PONG_OK;
-    }
+    (void)ox;
+    (void)oy;
     return PONG_OK;
 }
 

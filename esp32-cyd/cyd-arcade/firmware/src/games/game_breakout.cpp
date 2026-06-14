@@ -12,6 +12,7 @@
 
 #define TH ui_theme_get()
 
+#define LEVEL_PATTERNS 15
 #define COLS       8
 #define ROWS       5
 #define PAD_W      64
@@ -82,7 +83,8 @@ static int pad_w() {
 }
 
 static float ball_speed_cap() {
-    float spd = 2.1f + level * 0.18f;
+    float spd = 2.1f + level * 0.16f;
+    if (spd > 6.5f) spd = 6.5f;
     if (slow_ball && millis() < slow_until) spd *= 0.55f;
     else if (slow_ball) slow_ball = false;
     return spd;
@@ -90,7 +92,12 @@ static float ball_speed_cap() {
 
 static int brick_w() { return PLAY_W / COLS; }
 static int brick_h() { return 12 + (level > 3 ? 1 : 0); }
-static int brick_top() { return PLAY_MARGIN + 8 + (level - 1) * 2; }
+static int brick_top() {
+    int top = PLAY_MARGIN + 8 + (level - 1) * 2;
+    const int max_top = PLAY_H / 4;
+    if (top > max_top) top = max_top;
+    return top;
+}
 static int pad_y() { return PLAY_H - PLAY_MARGIN - PAD_H - 4; }
 static int bricks_bottom_y() { return ROWS * brick_h() + brick_top() + 4; }
 
@@ -102,8 +109,71 @@ static void brick_rect(int r, int c, int* x, int* y, int* w, int* h) {
     *h = bh - 2;
 }
 
+/* Hitbox contigua — evita bola passar pelas frestas entre tijolos */
+static void brick_hit_rect(int r, int c, int* x, int* y, int* w, int* h) {
+    const int bw = brick_w(), bh = brick_h();
+    *x = c * bw;
+    *y = r * bh + brick_top();
+    *w = bw;
+    *h = bh;
+}
+
 static bool rects_overlap(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh) {
     return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
+static bool circle_rect_overlap(float cx, float cy, float r,
+                                int rx, int ry, int rw, int rh) {
+    const float nx = fmaxf((float)rx, fminf(cx, (float)(rx + rw)));
+    const float ny = fmaxf((float)ry, fminf(cy, (float)(ry + rh)));
+    const float dx = cx - nx;
+    const float dy = cy - ny;
+    return dx * dx + dy * dy <= r * r;
+}
+
+static bool sweep_hits_brick(float ox, float oy, float nx, float ny, float r,
+                             int rx, int ry, int rw, int rh) {
+    if (circle_rect_overlap(nx, ny, r, rx, ry, rw, rh)) return true;
+    if (circle_rect_overlap(ox, oy, r, rx, ry, rw, rh)) return true;
+
+    const float dx = nx - ox;
+    const float dy = ny - oy;
+    const float len = sqrtf(dx * dx + dy * dy);
+    if (len < 0.5f) return false;
+
+    int steps = (int)(len / (r * 0.35f)) + 1;
+    if (steps > 16) steps = 16;
+    for (int i = 1; i <= steps; i++) {
+        const float t = (float)i / (float)steps;
+        if (circle_rect_overlap(ox + dx * t, oy + dy * t, r, rx, ry, rw, rh))
+            return true;
+    }
+    return false;
+}
+
+static float sweep_first_hit_t(float ox, float oy, float nx, float ny, float r,
+                               int rx, int ry, int rw, int rh) {
+    if (!sweep_hits_brick(ox, oy, nx, ny, r, rx, ry, rw, rh))
+        return -1.0f;
+
+    const float dx = nx - ox;
+    const float dy = ny - oy;
+    const float len = sqrtf(dx * dx + dy * dy);
+    if (len < 0.5f)
+        return circle_rect_overlap(nx, ny, r, rx, ry, rw, rh) ? 1.0f : -1.0f;
+
+    int lo = 0;
+    int hi = 16;
+    for (int i = 0; i <= 16; i++) {
+        const float t = (float)i / 16.0f;
+        if (circle_rect_overlap(ox + dx * t, oy + dy * t, r, rx, ry, rw, rh)) {
+            hi = i;
+            break;
+        }
+        lo = i;
+    }
+    (void)lo;
+    return (float)hi / 16.0f;
 }
 
 static bool bricks_left() {
@@ -139,15 +209,64 @@ static void set_brick(int r, int c, uint8_t kind, uint8_t hp) {
     brick_hp[r][c] = hp;
 }
 
-static void build_level_layout() {
-    clear_bricks();
+static void fill_all_color() {
     for (int r = 0; r < ROWS; r++)
         for (int c = 0; c < COLS; c++)
             set_brick(r, c, BRICK_COLOR, 1);
+}
 
-    const int lv = ((level - 1) % 6) + 1;
+static void layout_pyramid() {
+    for (int r = 0; r < ROWS; r++) {
+        const int half = (r + 1) / 2 + 1;
+        const int c0 = (COLS / 2) - half;
+        const int c1 = (COLS / 2) + half - 1;
+        for (int c = 0; c < COLS; c++)
+            if (c < c0 || c > c1)
+                set_brick(r, c, BRICK_EMPTY, 0);
+    }
+}
+
+static void layout_frame() {
+    for (int r = 1; r < ROWS - 1; r++)
+        for (int c = 1; c < COLS - 1; c++)
+            set_brick(r, c, BRICK_EMPTY, 0);
+}
+
+static void layout_stairs(bool mirror) {
+    for (int r = 0; r < ROWS; r++)
+        for (int c = 0; c < COLS; c++) {
+            const int lim = mirror ? (COLS - 1 - r) : r;
+            if (c < lim)
+                set_brick(r, c, BRICK_EMPTY, 0);
+        }
+}
+
+static void layout_islands() {
+    for (int r = 0; r < ROWS; r++)
+        for (int c = 3; c <= 4; c++)
+            if (r != ROWS / 2)
+                set_brick(r, c, BRICK_EMPTY, 0);
+}
+
+static void layout_diamond() {
+    const float cr = (ROWS - 1) * 0.5f;
+    const float cc = (COLS - 1) * 0.5f;
+    for (int r = 0; r < ROWS; r++)
+        for (int c = 0; c < COLS; c++) {
+            const float d = fabsf((float)r - cr) + fabsf((float)c - cc);
+            if (d > 3.6f)
+                set_brick(r, c, BRICK_EMPTY, 0);
+        }
+}
+
+static void build_level_layout() {
+    clear_bricks();
+    fill_all_color();
+
+    const int lv = ((level - 1) % LEVEL_PATTERNS) + 1;
     switch (lv) {
     case 1:
+        /* parede cheia */
         break;
     case 2:
         for (int r = 0; r < ROWS; r++)
@@ -163,8 +282,8 @@ static void build_level_layout() {
     case 4:
         for (int r = 0; r < ROWS; r++)
             set_brick(r, COLS / 2, BRICK_EMPTY, 0);
-        for (int c = 0; c < COLS; c++)
-            if (c != 0 && c != COLS - 1) set_brick(0, c, BRICK_SILVER, 2);
+        for (int c = 1; c < COLS - 1; c++)
+            set_brick(0, c, BRICK_SILVER, 2);
         break;
     case 5:
         for (int c = 0; c < COLS; c++) {
@@ -172,15 +291,85 @@ static void build_level_layout() {
             set_brick(1, c, BRICK_SILVER, 2);
         }
         break;
-    default:
+    case 6:
         for (int r = 0; r < ROWS; r++)
-            for (int c = 0; c < COLS; c++) {
-                if ((r + c + level) % 3 == 0) set_brick(r, c, BRICK_EMPTY, 0);
-                else if (r == 0) set_brick(r, c, BRICK_SILVER, 2);
-            }
+            for (int c = 0; c < COLS; c++)
+                if ((r + c) % 3 == 0) set_brick(r, c, BRICK_EMPTY, 0);
         set_brick(0, 0, BRICK_GOLD, 1);
         set_brick(0, COLS - 1, BRICK_GOLD, 1);
         break;
+    case 7:
+        layout_pyramid();
+        for (int c = 0; c < COLS; c++)
+            set_brick(ROWS - 1, c, BRICK_GOLD, 1);
+        break;
+    case 8:
+        layout_frame();
+        for (int c = 0; c < COLS; c++)
+            set_brick(0, c, BRICK_SILVER, 2);
+        break;
+    case 9:
+        for (int c = 0; c < COLS; c++) {
+            set_brick(0, c, BRICK_SILVER, 2);
+            set_brick(1, c, BRICK_SILVER, 2);
+        }
+        for (int r = 2; r < ROWS; r++)
+            for (int c = 2; c < COLS - 2; c++)
+                set_brick(r, c, BRICK_EMPTY, 0);
+        break;
+    case 10:
+        layout_stairs(false);
+        for (int c = 0; c < COLS; c++)
+            set_brick(0, c, BRICK_SILVER, 2);
+        break;
+    case 11:
+        layout_stairs(true);
+        for (int c = 0; c < COLS; c++)
+            set_brick(0, c, BRICK_SILVER, 2);
+        break;
+    case 12:
+        for (int r = 0; r < ROWS; r++)
+            for (int c = 0; c < COLS; c++)
+                if (r % 2 == 0)
+                    set_brick(r, c, BRICK_SILVER, 2);
+        break;
+    case 13:
+        layout_islands();
+        set_brick(0, 0, BRICK_GOLD, 1);
+        set_brick(0, COLS - 1, BRICK_GOLD, 1);
+        for (int c = 2; c < COLS - 2; c++)
+            set_brick(ROWS - 1, c, BRICK_SILVER, 2);
+        break;
+    case 14:
+        layout_diamond();
+        for (int c = 0; c < COLS; c++)
+            set_brick(0, c, BRICK_SILVER, 2);
+        set_brick(ROWS / 2, COLS / 2, BRICK_GOLD, 1);
+        break;
+    case 15:
+        for (int c = 0; c < COLS; c++) {
+            set_brick(0, c, BRICK_SILVER, 2);
+            set_brick(1, c, BRICK_SILVER, 2);
+            set_brick(ROWS - 1, c, BRICK_GOLD, 1);
+        }
+        for (int r = 2; r < ROWS - 1; r++)
+            for (int c = 0; c < COLS; c++)
+                if ((r * c + r) % 4 == 0) set_brick(r, c, BRICK_EMPTY, 0);
+        break;
+    default:
+        break;
+    }
+
+    /* dificuldade extra apos completar o ciclo de fases */
+    const int cycle = (level - 1) / LEVEL_PATTERNS;
+    if (cycle > 0) {
+        for (int c = 0; c < COLS; c++)
+            if (brick_kind[0][c] == BRICK_COLOR)
+                set_brick(0, c, BRICK_SILVER, 2);
+        if (cycle >= 2) {
+            for (int c = 0; c < COLS; c++)
+                set_brick(ROWS - 1, c, BRICK_GOLD, 1);
+        }
     }
 
     if (!bricks_left()) {
@@ -213,8 +402,17 @@ static void draw_brick(int r, int c) {
     if (kind == BRICK_SILVER) col = COL_SILVER;
     else if (kind == BRICK_GOLD) col = COL_GOLD;
     game_play_fill_round_rect(x, y, w, h, 2, col);
-    if (kind == BRICK_SILVER && brick_hp[r][c] > 1) {
-        game_play_fill_rect(x + 2, y + h / 2, w - 4, 2, 0xFFFF);
+    if (kind == BRICK_SILVER) {
+        if (brick_hp[r][c] > 1) {
+            game_play_fill_rect(x + 2, y + h / 2, w - 4, 2, 0xFFFF);
+        } else {
+            tft.drawLine(PLAY_X + x + 2, PLAY_Y + y + 2,
+                         PLAY_X + x + w - 2, PLAY_Y + y + h - 2, 0x4208);
+            tft.drawLine(PLAY_X + x + w - 2, PLAY_Y + y + 2,
+                         PLAY_X + x + 2, PLAY_Y + y + h - 2, 0x4208);
+        }
+    } else if (kind == BRICK_GOLD) {
+        tft.drawRoundRect(PLAY_X + x, PLAY_Y + y, w, h, 2, 0xFB60);
     }
 }
 
@@ -416,51 +614,80 @@ static void stick_ball_to_pad() {
     }
 }
 
-static bool collide_brick(Ball* b) {
-    const int bx = (int)b->x;
-    const int by = (int)b->y;
+static bool collide_brick(Ball* b, float ox, float oy) {
+    int hit_r = -1;
+    int hit_c = -1;
+    float hit_t = 2.0f;
 
     for (int r = 0; r < ROWS; r++) {
         for (int c = 0; c < COLS; c++) {
             const uint8_t kind = brick_kind[r][c];
             if (kind == BRICK_EMPTY) continue;
             int rx, ry, rw, rh;
-            brick_rect(r, c, &rx, &ry, &rw, &rh);
-            if (bx + BALL_R <= rx || bx - BALL_R >= rx + rw ||
-                by + BALL_R <= ry || by - BALL_R >= ry + rh)
-                continue;
-
-            if (kind == BRICK_GOLD) {
-                const int cx = rx + rw / 2;
-                if (bx < cx) b->dx = -fabsf(b->dx);
-                else b->dx = fabsf(b->dx);
-                if (by < ry + rh / 2) b->dy = -fabsf(b->dy);
-                else b->dy = fabsf(b->dy);
-                buzzer_play(SFX_TICK);
-                return true;
-            }
-
-            if (brick_hp[r][c] > 1) {
-                brick_hp[r][c]--;
-                draw_brick(r, c);
-                buzzer_play(SFX_TICK);
-            } else {
-                brick_kind[r][c] = BRICK_EMPTY;
-                score += 10 + (ROWS - r) * 5 + (kind == BRICK_SILVER ? 20 : 0);
-                spawn_capsule(rx + rw / 2, ry + rh / 2);
-                game_play_fill_rect(rx - 1, ry - 1, rw + 2, rh + 2, COL_BG);
-                buzzer_play(SFX_HIT);
-            }
-
-            const int cx = rx + rw / 2;
-            if (bx < cx) b->dx = -fabsf(b->dx);
-            else b->dx = fabsf(b->dx);
-            if (by < ry + rh / 2) b->dy = -fabsf(b->dy);
-            else b->dy = fabsf(b->dy);
-            return true;
+            brick_hit_rect(r, c, &rx, &ry, &rw, &rh);
+            const float t = sweep_first_hit_t(ox, oy, b->x, b->y, (float)BALL_R,
+                                              rx, ry, rw, rh);
+            if (t < 0.0f || t >= hit_t) continue;
+            hit_t = t;
+            hit_r = r;
+            hit_c = c;
         }
     }
-    return false;
+
+    if (hit_r < 0) return false;
+
+    const int r = hit_r;
+    const int c = hit_c;
+    const uint8_t kind = brick_kind[r][c];
+    int rx, ry, rw, rh;
+    brick_hit_rect(r, c, &rx, &ry, &rw, &rh);
+
+    const float bx = b->x;
+    const float by = b->y;
+
+    if (kind == BRICK_GOLD) {
+        const float cx = (float)rx + rw * 0.5f;
+        const float cy = (float)ry + rh * 0.5f;
+        if (fabsf(bx - cx) > fabsf(by - cy)) {
+            b->dx = (bx < cx) ? -fabsf(b->dx) : fabsf(b->dx);
+            b->x = (bx < cx) ? (float)rx - (float)BALL_R - 0.5f
+                             : (float)(rx + rw) + (float)BALL_R + 0.5f;
+        } else {
+            b->dy = (by < cy) ? -fabsf(b->dy) : fabsf(b->dy);
+            b->y = (by < cy) ? (float)ry - (float)BALL_R - 0.5f
+                             : (float)(ry + rh) + (float)BALL_R + 0.5f;
+        }
+        buzzer_play(SFX_TICK);
+        return true;
+    }
+
+    if (brick_hp[r][c] > 1) {
+        brick_hp[r][c]--;
+        draw_brick(r, c);
+        buzzer_play(SFX_TICK);
+    } else {
+        brick_kind[r][c] = BRICK_EMPTY;
+        score += 10 + (ROWS - r) * 5 + (kind == BRICK_SILVER ? 20 : 0);
+        int dx, dy, dw, dh;
+        brick_rect(r, c, &dx, &dy, &dw, &dh);
+        spawn_capsule(dx + dw / 2, dy + dh / 2);
+        game_play_fill_rect(dx - 1, dy - 1, dw + 2, dh + 2, COL_BG);
+        buzzer_play(SFX_HIT);
+    }
+
+    const float cx = (float)rx + rw * 0.5f;
+    const float cy = (float)ry + rh * 0.5f;
+    if (fabsf(bx - cx) > fabsf(by - cy)) {
+        b->dx = (bx < cx) ? -fabsf(b->dx) : fabsf(b->dx);
+        b->x = (bx < cx) ? (float)rx - (float)BALL_R - 0.5f
+                         : (float)(rx + rw) + (float)BALL_R + 0.5f;
+    } else {
+        b->dy = (by < cy) ? -fabsf(b->dy) : fabsf(b->dy);
+        b->y = (by < cy) ? (float)ry - (float)BALL_R - 0.5f
+                         : (float)(ry + rh) + (float)BALL_R + 0.5f;
+    }
+
+    return true;
 }
 
 static void normalize_ball(Ball* b) {
@@ -516,17 +743,22 @@ static void ball_move_step(Ball* b, float sx, float sy) {
     b->x += sx;
     b->y += sy;
 
-    if (b->x < BALL_R) { b->x = BALL_R; b->dx = fabsf(b->dx); }
-    if (b->x > PLAY_W - BALL_R) { b->x = PLAY_W - BALL_R; b->dx = -fabsf(b->dx); }
-    if (b->y < BALL_R) { b->y = BALL_R; b->dy = fabsf(b->dy); }
-
     if (b->pad_cd > 0) {
         b->pad_cd--;
         if (oy + BALL_R < (float)pad_y() - 8.0f) b->pad_cd = 0;
     }
 
-    if (!collide_pad(b, ox, oy))
-        collide_brick(b);
+    if (b->dy < 0.0f) {
+        if (!collide_brick(b, ox, oy))
+            collide_pad(b, ox, oy);
+    } else {
+        if (!collide_pad(b, ox, oy))
+            collide_brick(b, ox, oy);
+    }
+
+    if (b->x < BALL_R) { b->x = BALL_R; b->dx = fabsf(b->dx); }
+    if (b->x > PLAY_W - BALL_R) { b->x = PLAY_W - BALL_R; b->dx = -fabsf(b->dx); }
+    if (b->y < BALL_R) { b->y = BALL_R; b->dy = fabsf(b->dy); }
 }
 
 static void ball_physics(Ball* b) {
@@ -538,6 +770,7 @@ static void ball_physics(Ball* b) {
     if (speed > 4.0f) steps = 3;
     if (speed > 5.5f) steps = 5;
     if (speed > 7.0f) steps = 7;
+    if (level >= 3 && steps < 6) steps = 6;
 
     for (int i = 0; i < steps; i++) {
         const float sx = b->dx / (float)steps;
