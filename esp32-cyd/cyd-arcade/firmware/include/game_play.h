@@ -32,6 +32,11 @@ typedef struct {
     bool tier_show_zero;
     bool score_lower_better;
     uint32_t pause_after_ms;
+    uint32_t toast_until_ms;
+    int16_t toast_x;
+    int16_t toast_y;
+    int16_t toast_w;
+    int16_t toast_h;
     HudTierKind tier_kind;
 } GameHud;
 

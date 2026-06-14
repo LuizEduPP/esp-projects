@@ -11,18 +11,19 @@
 #include <string.h>
 
 #define COLS       8
-#define MAX_ROWS   8
+#define MAX_ROWS   12
 #define MAX_BALLS  24
 #define BALL_R     6
 #define START_BALLS 3
 #define LAUNCH_Y   (PLAY_H - 22)
 #define DANGER_R   (MAX_ROWS - 1)
-#define LAUNCH_GAP 52
+#define LAUNCH_SPACING 14
 #define COL_BG     0x0000
 #define COL_BALL   0xFFFF
 #define COL_BONUS  0xFFE0
 #define COL_AIM    0x4208
 #define PHYS_MS    16
+#define AIM_MAX_DOTS 32
 
 typedef struct {
     float x, y, dx, dy;
@@ -43,9 +44,19 @@ static int aim_px, aim_py;
 static int score, level, lives;
 static int volley_combo;
 static uint32_t last_phys;
+static int aim_dots_x[AIM_MAX_DOTS];
+static int aim_dots_y[AIM_MAX_DOTS];
+static int aim_dot_n;
 
 static int cell_w() { return PLAY_W / COLS; }
-static int cell_h() { return 24; }
+static int cell_h() { return 20; }
+
+static int launch_gap_ms() {
+    const float spd = 2.8f + (level - 1) * 0.16f;
+    const float dist = (float)(BALL_R * 2 + LAUNCH_SPACING);
+    const int ms = (int)(dist / spd * (float)PHYS_MS);
+    return ms < 56 ? 56 : ms;
+}
 
 static uint16_t block_color(int hp) {
     static const uint16_t cols[] = {0x001F, 0x07FF, 0x07E0, 0xFFE0, 0xFD20, 0xF800, 0xF81F, 0xFFFF};
@@ -167,24 +178,37 @@ static void draw_stock() {
     tft.drawString(buf, PLAY_X + cx, PLAY_Y + y + 16, 2);
 }
 
-static void draw_aim_line() {
+static void clear_aim_dots() {
+    for (int i = 0; i < aim_dot_n; i++)
+        game_play_fill_circle(aim_dots_x[i], aim_dots_y[i], 3, COL_BG);
+    aim_dot_n = 0;
+}
+
+static void update_aim_preview() {
+    clear_aim_dots();
     if (!aiming) return;
+
     const int cx = PLAY_W / 2;
     const int cy = LAUNCH_Y;
     const float dx = (float)(aim_px - cx);
     const float dy = (float)(aim_py - cy);
     const float len = sqrtf(dx * dx + dy * dy);
     if (len < 12.0f) return;
+
     const int steps = (int)(len / 8.0f);
-    for (int i = 1; i <= steps; i++) {
+    for (int i = 1; i <= steps && aim_dot_n < AIM_MAX_DOTS; i++) {
         const int px = cx + (int)(dx * i / steps);
         const int py = cy + (int)(dy * i / steps);
         if (py < 0) break;
         game_play_fill_circle(px, py, 2, COL_AIM);
+        aim_dots_x[aim_dot_n] = px;
+        aim_dots_y[aim_dot_n] = py;
+        aim_dot_n++;
     }
 }
 
 static void ballz_redraw() {
+    aim_dot_n = 0;
     game_play_clear(COL_BG);
     draw_danger_line();
     for (int r = 0; r < MAX_ROWS; r++)
@@ -196,7 +220,7 @@ static void ballz_redraw() {
     for (int i = 0; i < MAX_BALLS; i++)
         if (balls[i].live)
             game_play_fill_circle((int)balls[i].x, (int)balls[i].y, BALL_R, COL_BALL);
-    draw_aim_line();
+    update_aim_preview();
     for (int i = 0; i < MAX_BALLS; i++) {
         balls[i].prev_x = (int)balls[i].x;
         balls[i].prev_y = (int)balls[i].y;
@@ -242,6 +266,8 @@ static void begin_volley() {
     buzzer_play(SFX_SHOOT);
 }
 
+static void end_turn();
+
 static bool hit_block(Ball* b, int c, int r) {
     const int hp = grid[r][c];
     if (hp <= 0) return false;
@@ -280,6 +306,35 @@ static bool hit_block(Ball* b, int c, int r) {
     return true;
 }
 
+static bool try_hit_block(Ball* b) {
+    int best_c = -1;
+    int best_r = -1;
+    float best_d = 1e9f;
+
+    for (int r = 0; r < MAX_ROWS; r++) {
+        for (int c = 0; c < COLS; c++) {
+            if (grid[r][c] <= 0) continue;
+            const int x = c * cell_w() + 2;
+            const int y = r * cell_h() + 4;
+            const int w = cell_w() - 4;
+            const int h = cell_h() - 4;
+            if (b->x + BALL_R < x || b->x - BALL_R > x + w || b->y + BALL_R < y || b->y - BALL_R > y + h)
+                continue;
+            const float cx = x + w * 0.5f;
+            const float cy = y + h * 0.5f;
+            const float d = (b->x - cx) * (b->x - cx) + (b->y - cy) * (b->y - cy);
+            if (d < best_d) {
+                best_d = d;
+                best_c = c;
+                best_r = r;
+            }
+        }
+    }
+
+    if (best_c < 0) return false;
+    return hit_block(b, best_c, best_r);
+}
+
 static void step_ball(Ball* b) {
     b->x += b->dx;
     b->y += b->dy;
@@ -288,12 +343,23 @@ static void step_ball(Ball* b) {
     if (b->x > PLAY_W - BALL_R) { b->x = PLAY_W - BALL_R; b->dx = -fabsf(b->dx); }
     if (b->y < BALL_R) { b->y = BALL_R; b->dy = fabsf(b->dy); }
 
-    for (int r = 0; r < MAX_ROWS; r++)
-        for (int c = 0; c < COLS; c++)
-            if (hit_block(b, c, r)) return;
+    if (try_hit_block(b)) return;
 
     if (b->y >= LAUNCH_Y - 2 && b->dy > 0)
         b->live = false;
+}
+
+static void finish_volley_if_done() {
+    if (!volley_active) return;
+    if (!any_blocks_left()) {
+        launch_left = 0;
+        for (int i = 0; i < MAX_BALLS; i++)
+            balls[i].live = false;
+        end_turn();
+        return;
+    }
+    if (launch_left <= 0 && live_ball_count() == 0)
+        end_turn();
 }
 
 static void end_turn() {
@@ -311,7 +377,6 @@ static void end_turn() {
     } else {
         level++;
         score += 80 * level;
-        buzzer_play(SFX_LEVEL);
         memset(grid, 0, sizeof(grid));
         memset(bonus, 0, sizeof(bonus));
         for (int i = 0; i < 2 + level / 3; i++)
@@ -324,15 +389,14 @@ static void physics_step() {
     if (launch_left > 0 && (int32_t)(millis() - next_launch_ms) >= 0) {
         spawn_ball(launch_dx, launch_dy);
         launch_left--;
-        next_launch_ms = millis() + LAUNCH_GAP;
+        next_launch_ms = millis() + launch_gap_ms();
     }
 
     for (int i = 0; i < MAX_BALLS; i++)
         if (balls[i].live)
             step_ball(&balls[i]);
 
-    if (volley_active && launch_left <= 0 && live_ball_count() == 0)
-        end_turn();
+    finish_volley_if_done();
 }
 
 static void sync_balls_draw() {
@@ -368,6 +432,7 @@ static void ballz_init(GameHud* hud) {
     launch_left = 0;
     volley_active = false;
     aiming = false;
+    aim_dot_n = 0;
     last_phys = millis();
     memset(grid, 0, sizeof(grid));
     memset(bonus, 0, sizeof(bonus));
@@ -412,15 +477,17 @@ void game_ballz_run(const GameEntry* cfg) {
                     aiming = true;
                     aim_px = in.play_x;
                     aim_py = in.play_y;
+                    update_aim_preview();
                 }
                 if (aiming && in.down) {
                     aim_px = in.play_x;
                     aim_py = in.play_y;
-                    ballz_redraw();
+                    update_aim_preview();
                 }
                 if (aiming && in.just_released) {
                     aim_px = in.play_x;
                     aim_py = in.play_y;
+                    clear_aim_dots();
                     begin_volley();
                 }
             }
@@ -437,10 +504,7 @@ void game_ballz_run(const GameEntry* cfg) {
             if (lives != hud->lives)
                 game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
             if (level != hud->tier) {
-                if (game_hud_advance_tier(hud, level))
-                    ballz_redraw();
-                else
-                    game_hud_set_tier(hud, level);
+                game_hud_advance_tier(hud, level);
             }
 
             if (volley_active) {

@@ -13,8 +13,8 @@
 #define TH ui_theme_get()
 #define SCROLL_TAP_PX    10
 #define LIST_VIEW_BOT    (UI_LIST_TOP + UI_LIST_VIEW_H)
-#define SCROLL_PAINT_MS  18
-#define SCROLL_PAINT_DY  3
+#define SCROLL_PAINT_MS  28
+#define SCROLL_PAINT_DY  10
 
 static void label_fit(const char* src, char* out, size_t out_sz, int max_w) {
     strncpy(out, src, out_sz - 1);
@@ -156,6 +156,39 @@ static void draw_list_viewport(GameEntry* games, int count, int scroll_y, int se
     tft.endWrite();
 }
 
+static void paint_list_scroll(GameEntry* games, int count, int scroll_y, int sel, int old_scroll) {
+    if (old_scroll < 0 || scroll_y == old_scroll) {
+        draw_list_viewport(games, count, scroll_y, sel, false);
+        return;
+    }
+
+    tft.startWrite();
+    list_viewport_begin();
+
+    const int min_scroll = scroll_y < old_scroll ? scroll_y : old_scroll;
+    const int max_scroll = scroll_y > old_scroll ? scroll_y : old_scroll;
+    const int first = min_scroll / UI_LIST_ROW_STEP - 1;
+    const int last = (max_scroll + UI_LIST_VIEW_H) / UI_LIST_ROW_STEP + 2;
+
+    for (int i = first; i <= last && i < count; i++) {
+        if (i < 0) continue;
+        const int old_cy = i * UI_LIST_ROW_STEP - old_scroll;
+        if (old_cy + UI_LIST_ROW_STEP > 0 && old_cy < UI_LIST_VIEW_H)
+            tft.fillRect(0, old_cy, SCREEN_W, UI_LIST_ROW_STEP, TH->bg);
+    }
+
+    for (int i = first; i <= last && i < count; i++) {
+        if (i < 0) continue;
+        const int cy = i * UI_LIST_ROW_STEP - scroll_y;
+        if (cy + UI_LIST_ROW_H <= 0 || cy >= UI_LIST_VIEW_H) continue;
+        draw_list_row_content(&games[i], UI_PAD, cy, i == sel, i);
+    }
+
+    list_viewport_end(false);
+    draw_scrollbar(count, scroll_y);
+    tft.endWrite();
+}
+
 static void redraw_screen(GameEntry* games, int count, int scroll_y, int sel) {
     tft.startWrite();
     tft.fillScreen(TH->bg);
@@ -249,8 +282,9 @@ int launcher_show(GameEntry* games, int count) {
                     scrolling = true;
                     const int ns = scroll_y_from_touch(last_ty, count);
                     if (ns != scroll_y) {
+                        const int prev = scroll_y;
                         scroll_y = ns;
-                        draw_list_viewport(games, count, scroll_y, sel, false);
+                        paint_list_scroll(games, count, scroll_y, sel, prev);
                         painted_scroll = scroll_y;
                         last_paint_ms = millis();
                     }
@@ -271,7 +305,8 @@ int launcher_show(GameEntry* games, int count) {
                     scroll_y = ns;
                     const uint32_t now = millis();
                     if (now - last_paint_ms >= SCROLL_PAINT_MS) {
-                        draw_list_viewport(games, count, scroll_y, sel, false);
+                        const int prev = painted_scroll;
+                        paint_list_scroll(games, count, scroll_y, sel, prev);
                         painted_scroll = scroll_y;
                         last_paint_ms = now;
                     }
@@ -287,7 +322,8 @@ int launcher_show(GameEntry* games, int count) {
                         const uint32_t now = millis();
                         if (now - last_paint_ms >= SCROLL_PAINT_MS &&
                             abs(scroll_y - painted_scroll) >= SCROLL_PAINT_DY) {
-                            draw_list_viewport(games, count, scroll_y, sel, false);
+                            const int prev = painted_scroll;
+                            paint_list_scroll(games, count, scroll_y, sel, prev);
                             painted_scroll = scroll_y;
                             last_paint_ms = now;
                         }

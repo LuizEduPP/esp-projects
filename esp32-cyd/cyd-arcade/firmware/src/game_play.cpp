@@ -291,41 +291,45 @@ void game_hud_set_tier(GameHud* hud, int value) {
     draw_status_bar(hud);
 }
 
+static void game_hud_toast_tick(GameHud* hud) {
+    if (!hud || hud->toast_until_ms == 0) return;
+    if ((int32_t)(millis() - hud->toast_until_ms) < 0) return;
+    game_play_fill_rect(hud->toast_x, hud->toast_y, hud->toast_w, hud->toast_h, game_play_field_bg());
+    hud->toast_until_ms = 0;
+    hud->resume_redraw = true;
+}
+
+static void game_hud_show_tier_toast(GameHud* hud, const char* title) {
+    const int w = 118;
+    const int h = 24;
+    const int x = (PLAY_W - w) / 2;
+    const int y = 6;
+    game_play_fill_round_rect(x, y, w, h, 5, TH->card);
+    tft.drawRoundRect(PLAY_X + x, PLAY_Y + y, w, h, 5, TH->accent);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(TH->accent_hi, TH->card);
+    tft.drawString(title, PLAY_X + x + w / 2, PLAY_Y + y + h / 2, 2);
+    hud->toast_x = (int16_t)x;
+    hud->toast_y = (int16_t)y;
+    hud->toast_w = (int16_t)w;
+    hud->toast_h = (int16_t)h;
+    hud->toast_until_ms = millis() + 1400;
+}
+
 bool game_hud_advance_tier(GameHud* hud, int new_tier) {
     if (!hud || hud->tier == new_tier) return false;
 
     const char* word = tier_label(hud->tier_kind);
     if (!word) word = "Fase";
 
-    const int strips = 4;
-    for (int i = 0; i < strips; i++) {
-        const int sh = PLAY_H / strips + 1;
-        const int sy = i * (PLAY_H / strips);
-        game_play_fill_rect(0, sy, PLAY_W, sh, ui_tint565(TH->surface, (int8_t)(8 + i * 4)));
-        delay(14);
-    }
-
     char buf[14];
     snprintf(buf, sizeof(buf), "%s %d", word, new_tier);
 
-    const int bw = 140;
-    const int bh = 50;
-    const int bx = (PLAY_W - bw) / 2;
-    const int by = PLAY_H / 2 - bh / 2;
-    game_play_fill_round_rect(bx, by, bw, bh, UI_CARD_R, TH->card);
-    tft.drawRoundRect(PLAY_X + bx, PLAY_Y + by, bw, bh, UI_CARD_R, TH->accent);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TH->text_hi, TH->card);
-    tft.drawString(buf, PLAY_X + PLAY_W / 2, PLAY_Y + by + bh / 2, 2);
-
-    buzzer_play(SFX_LEVEL);
-    delay(1300);
-    touch_wait_release();
-
     hud->tier = new_tier;
     draw_status_bar(hud);
-    game_play_clear(game_play_field_bg());
-    return true;
+    game_hud_show_tier_toast(hud, buf);
+    buzzer_play(SFX_LEVEL);
+    return false;
 }
 
 void game_hud_set_lives(GameHud* hud, int lives, int max_lives) {
@@ -351,6 +355,7 @@ void game_hud_reset_play(GameHud* hud) {
 
 bool game_hud_poll(GameHud* hud) {
     if (!hud) return true;
+    game_hud_toast_tick(hud);
     if (hud->quit) return true;
 
     if (millis() >= hud->pause_after_ms && touch_is_pressed()) {
