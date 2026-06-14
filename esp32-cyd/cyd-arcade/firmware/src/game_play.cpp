@@ -326,6 +326,11 @@ static void game_hud_show_tier_toast(GameHud* hud, const char* title) {
     hud->toast_until_ms = millis() + 1400;
 }
 
+void game_hud_show_toast(GameHud* hud, const char* title) {
+    if (!hud || !title) return;
+    game_hud_show_tier_toast(hud, title);
+}
+
 bool game_hud_advance_tier(GameHud* hud, int new_tier) {
     if (!hud || hud->tier == new_tier) return false;
 

@@ -49,6 +49,8 @@ enum {
     CAP_SLOW,
     CAP_CATCH,
     CAP_MULTI,
+    CAP_LASER,
+    CAP_LIFE,
 };
 
 typedef struct {
@@ -66,11 +68,18 @@ static bool ball_stuck;
 static bool catch_armed;
 static bool wide_pad;
 static bool slow_ball;
+static int laser_shots;
 static uint32_t wide_until, slow_until;
 static int score, lives, level;
+static int brick_combo;
+static uint32_t combo_until;
 static bool level_cleared;
 static bool hint_visible;
 static uint32_t last_phys;
+static uint32_t laser_flash_until;
+static int laser_flash_x;
+
+static GameHud* g_hud;
 
 static int cap_type;
 static float cap_x, cap_y;
@@ -196,6 +205,20 @@ static void reset_powers() {
     slow_ball = false;
     catch_armed = false;
     ball_stuck = false;
+    laser_shots = 0;
+    brick_combo = 0;
+    combo_until = 0;
+}
+
+static void reset_powers_on_death() {
+    wide_pad = false;
+    slow_ball = false;
+    catch_armed = false;
+    laser_shots = 0;
+    brick_combo = 0;
+    combo_until = 0;
+    for (int i = 1; i < MAX_BALLS; i++)
+        balls[i].live = false;
 }
 
 static void clear_bricks() {
@@ -438,7 +461,8 @@ static void draw_all_bricks() {
 static void draw_pad(int px) {
     const int pw = pad_w();
     uint16_t col = COL_PAD;
-    if (wide_pad) col = 0xFFE0;
+    if (laser_shots > 0) col = 0xF800;
+    else if (wide_pad) col = 0xFFE0;
     else if (catch_armed || ball_stuck) col = 0x07FF;
     game_play_fill_round_rect(px - pw / 2, pad_y(), pw, PAD_H, 5, col);
 }
@@ -453,6 +477,8 @@ static uint16_t cap_color(int type) {
     case CAP_SLOW:   return 0x07FF;
     case CAP_CATCH:  return 0xF81F;
     case CAP_MULTI:  return 0xFD20;
+    case CAP_LASER:  return 0xF800;
+    case CAP_LIFE:   return 0xFE19;
     default:         return 0xFFFF;
     }
 }
@@ -463,6 +489,8 @@ static const char* cap_label(int type) {
     case CAP_SLOW:   return "S";
     case CAP_CATCH:  return "C";
     case CAP_MULTI:  return "D";
+    case CAP_LASER:  return "L";
+    case CAP_LIFE:   return "+";
     default:         return "?";
     }
 }
@@ -545,11 +573,83 @@ static void breakout_redraw(GameHud* hud) {
 
 static void spawn_capsule(int cx, int cy) {
     if (cap_active || random(0, 100) >= 28) return;
-    static const int pool[] = { CAP_EXPAND, CAP_SLOW, CAP_CATCH, CAP_MULTI };
-    cap_type = pool[random(0, 4)];
+    static const int pool[] = {
+        CAP_EXPAND, CAP_SLOW, CAP_CATCH, CAP_MULTI, CAP_LASER, CAP_LIFE,
+    };
+    cap_type = pool[random(0, 6)];
     cap_x = (float)cx;
     cap_y = (float)cy;
     cap_active = true;
+}
+
+static void maybe_combo_toast() {
+    if (brick_combo < 3 || !g_hud) return;
+    if (brick_combo == 3 || brick_combo == 5 || brick_combo % 10 == 0) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "Combo x%d", brick_combo);
+        game_hud_show_toast(g_hud, buf);
+    }
+}
+
+static void add_brick_score(int r, uint8_t kind) {
+    if ((int32_t)(millis() - combo_until) > 0)
+        brick_combo = 0;
+    brick_combo++;
+    combo_until = millis() + 1800;
+    int pts = 10 + (ROWS - r) * 5 + (kind == BRICK_SILVER ? 20 : 0);
+    if (brick_combo >= 2)
+        pts += brick_combo * 3;
+    score += pts;
+    maybe_combo_toast();
+}
+
+static void bounce_ball_off_brick(Ball* b, int rx, int ry, int rw, int rh) {
+    const float bx = b->x;
+    const float by = b->y;
+    const float cx = (float)rx + rw * 0.5f;
+    const float cy = (float)ry + rh * 0.5f;
+    if (fabsf(bx - cx) > fabsf(by - cy)) {
+        b->dx = (bx < cx) ? -fabsf(b->dx) : fabsf(b->dx);
+        b->x = (bx < cx) ? (float)rx - (float)BALL_R - 0.5f
+                         : (float)(rx + rw) + (float)BALL_R + 0.5f;
+    } else {
+        b->dy = (by < cy) ? -fabsf(b->dy) : fabsf(b->dy);
+        b->y = (by < cy) ? (float)ry - (float)BALL_R - 0.5f
+                         : (float)(ry + rh) + (float)BALL_R + 0.5f;
+    }
+}
+
+static bool damage_brick_at(int r, int c, Ball* b) {
+    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return false;
+    const uint8_t kind = brick_kind[r][c];
+    if (kind == BRICK_EMPTY) return false;
+
+    int rx, ry, rw, rh;
+    brick_hit_rect(r, c, &rx, &ry, &rw, &rh);
+
+    if (kind == BRICK_GOLD) {
+        if (b) bounce_ball_off_brick(b, rx, ry, rw, rh);
+        buzzer_play(SFX_TICK);
+        return true;
+    }
+
+    if (brick_hp[r][c] > 1) {
+        brick_hp[r][c]--;
+        draw_brick(r, c);
+        buzzer_play(SFX_TICK);
+        if (b) bounce_ball_off_brick(b, rx, ry, rw, rh);
+        return true;
+    }
+
+    brick_kind[r][c] = BRICK_EMPTY;
+    add_brick_score(r, kind);
+    int dx, dy, dw, dh;
+    brick_rect(r, c, &dx, &dy, &dw, &dh);
+    spawn_capsule(dx + dw / 2, dy + dh / 2);
+    game_play_fill_rect(dx - 1, dy - 1, dw + 2, dh + 2, COL_BG);
+    buzzer_play(SFX_HIT);
+    if (b) bounce_ball_off_brick(b, rx, ry, rw, rh);
+    return true;
 }
 
 static void apply_capsule(int type) {
@@ -557,32 +657,76 @@ static void apply_capsule(int type) {
     case CAP_EXPAND:
         wide_pad = true;
         wide_until = millis() + 14000;
+        if (g_hud) game_hud_show_toast(g_hud, "Raq. larga");
         break;
     case CAP_SLOW:
         slow_ball = true;
         slow_until = millis() + 12000;
+        if (g_hud) game_hud_show_toast(g_hud, "Bola lenta");
         break;
     case CAP_CATCH:
         catch_armed = true;
+        if (g_hud) game_hud_show_toast(g_hud, "Sticky");
         break;
     case CAP_MULTI:
         for (int i = 1; i < MAX_BALLS; i++) {
             if (balls[i].live) continue;
             if (!balls[0].live) break;
             balls[i] = balls[0];
-            balls[i].dx = -balls[0].dx;
-            balls[i].dy = balls[0].dy;
+            float spd = sqrtf(balls[0].dx * balls[0].dx + balls[0].dy * balls[0].dy);
+            if (spd < 0.1f) spd = ball_speed_cap();
+            const float sign = (random(0, 2) == 0) ? -1.0f : 1.0f;
+            const float ang = sign * (0.28f + random(0, 18) * 0.01745f);
+            balls[i].dx = sinf(ang) * spd;
+            balls[i].dy = -fabsf(cosf(ang) * spd);
             balls[i].live = true;
             balls[i].pad_cd = 0;
             balls[i].prev_x = (int)balls[i].x;
             balls[i].prev_y = (int)balls[i].y;
             break;
         }
+        if (g_hud) game_hud_show_toast(g_hud, "Dupla bola");
+        break;
+    case CAP_LASER:
+        laser_shots += 5;
+        if (laser_shots > 9) laser_shots = 9;
+        if (g_hud) game_hud_show_toast(g_hud, "Laser x5");
+        break;
+    case CAP_LIFE:
+        if (lives < LIVES_MAX) {
+            lives++;
+            if (g_hud) {
+                game_hud_set_lives(g_hud, lives, LIVES_MAX);
+                game_hud_show_toast(g_hud, "+1 vida");
+            }
+        } else {
+            score += 100;
+            if (g_hud) game_hud_show_toast(g_hud, "+100 pts");
+        }
         break;
     default:
         break;
     }
     buzzer_play(SFX_RECORD);
+}
+
+static void fire_laser() {
+    if (laser_shots <= 0) return;
+    laser_shots--;
+
+    const int bw = brick_w();
+    int col = pad_x / bw;
+    if (col < 0) col = 0;
+    if (col >= COLS) col = COLS - 1;
+
+    laser_flash_x = col * bw + bw / 2;
+    laser_flash_until = millis() + 120;
+
+    for (int r = 0; r < ROWS; r++)
+        damage_brick_at(r, col, nullptr);
+
+    buzzer_play(SFX_SHOOT);
+    draw_pad(pad_x);
 }
 
 static void launch_ball() {
@@ -635,59 +779,7 @@ static bool collide_brick(Ball* b, float ox, float oy) {
     }
 
     if (hit_r < 0) return false;
-
-    const int r = hit_r;
-    const int c = hit_c;
-    const uint8_t kind = brick_kind[r][c];
-    int rx, ry, rw, rh;
-    brick_hit_rect(r, c, &rx, &ry, &rw, &rh);
-
-    const float bx = b->x;
-    const float by = b->y;
-
-    if (kind == BRICK_GOLD) {
-        const float cx = (float)rx + rw * 0.5f;
-        const float cy = (float)ry + rh * 0.5f;
-        if (fabsf(bx - cx) > fabsf(by - cy)) {
-            b->dx = (bx < cx) ? -fabsf(b->dx) : fabsf(b->dx);
-            b->x = (bx < cx) ? (float)rx - (float)BALL_R - 0.5f
-                             : (float)(rx + rw) + (float)BALL_R + 0.5f;
-        } else {
-            b->dy = (by < cy) ? -fabsf(b->dy) : fabsf(b->dy);
-            b->y = (by < cy) ? (float)ry - (float)BALL_R - 0.5f
-                             : (float)(ry + rh) + (float)BALL_R + 0.5f;
-        }
-        buzzer_play(SFX_TICK);
-        return true;
-    }
-
-    if (brick_hp[r][c] > 1) {
-        brick_hp[r][c]--;
-        draw_brick(r, c);
-        buzzer_play(SFX_TICK);
-    } else {
-        brick_kind[r][c] = BRICK_EMPTY;
-        score += 10 + (ROWS - r) * 5 + (kind == BRICK_SILVER ? 20 : 0);
-        int dx, dy, dw, dh;
-        brick_rect(r, c, &dx, &dy, &dw, &dh);
-        spawn_capsule(dx + dw / 2, dy + dh / 2);
-        game_play_fill_rect(dx - 1, dy - 1, dw + 2, dh + 2, COL_BG);
-        buzzer_play(SFX_HIT);
-    }
-
-    const float cx = (float)rx + rw * 0.5f;
-    const float cy = (float)ry + rh * 0.5f;
-    if (fabsf(bx - cx) > fabsf(by - cy)) {
-        b->dx = (bx < cx) ? -fabsf(b->dx) : fabsf(b->dx);
-        b->x = (bx < cx) ? (float)rx - (float)BALL_R - 0.5f
-                         : (float)(rx + rw) + (float)BALL_R + 0.5f;
-    } else {
-        b->dy = (by < cy) ? -fabsf(b->dy) : fabsf(b->dy);
-        b->y = (by < cy) ? (float)ry - (float)BALL_R - 0.5f
-                         : (float)(ry + rh) + (float)BALL_R + 0.5f;
-    }
-
-    return true;
+    return damage_brick_at(hit_r, hit_c, b);
 }
 
 static void normalize_ball(Ball* b) {
@@ -724,6 +816,9 @@ static bool collide_pad(Ball* b, float ox, float oy) {
         stick_ball_to_pad();
         return true;
     }
+
+    brick_combo = 0;
+    combo_until = 0;
 
     const float min_up = 1.4f;
     b->dy = -fmaxf(fabsf(b->dy), min_up);
@@ -831,14 +926,23 @@ static void physics_step() {
         lives--;
         buzzer_play(SFX_ERROR);
         ball_stuck = false;
-        catch_armed = false;
         hint_visible = false;
         clear_launch_hint();
+        reset_powers_on_death();
     }
 
     if (live_ball_count() > 0 && !bricks_left()) {
+        const int cleared = level;
         level++;
         score += 80 * level;
+        if (cleared == LEVEL_PATTERNS) {
+            score += 500;
+            if (lives < LIVES_MAX) {
+                lives++;
+                if (g_hud) game_hud_set_lives(g_hud, lives, LIVES_MAX);
+            }
+            if (g_hud) game_hud_show_toast(g_hud, "Campanha OK!");
+        }
         init_level();
         level_cleared = true;
     }
@@ -852,6 +956,39 @@ static bool pad_near_any_ball() {
             return true;
     }
     return false;
+}
+
+static void draw_laser_flash() {
+    if ((int32_t)(millis() - laser_flash_until) >= 0) return;
+    const int y0 = brick_top();
+    const int h = pad_y() - y0;
+    if (h <= 0) return;
+    game_play_fill_rect(laser_flash_x - 2, y0, 4, h, 0xF800);
+}
+
+static void draw_power_chip(int* x, int y, uint16_t col, const char* lab) {
+    game_play_fill_round_rect(*x, y, 14, 12, 3, col);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(0x0000, col);
+    tft.drawString(lab, PLAY_X + *x + 7, PLAY_Y + y + 6, 1);
+    *x += 16;
+}
+
+static void draw_power_strip() {
+    const int y = 2;
+    const int strip_w = 96;
+    game_play_fill_rect(0, y, strip_w, 14, COL_BG);
+    redraw_bricks_in_rect(0, y, strip_w, 14);
+
+    int x = 4;
+    if (wide_pad && millis() < wide_until) draw_power_chip(&x, y, 0x07E0, "E");
+    if (slow_ball && millis() < slow_until) draw_power_chip(&x, y, 0x07FF, "S");
+    if (catch_armed) draw_power_chip(&x, y, 0xF81F, "C");
+    if (laser_shots > 0) {
+        char buf[4];
+        snprintf(buf, sizeof(buf), "%d", laser_shots);
+        draw_power_chip(&x, y, 0xF800, buf);
+    }
 }
 
 static void sync_draw(int* prev_pad, int prev_px[], int prev_py[]) {
@@ -894,9 +1031,13 @@ static void sync_draw(int* prev_pad, int prev_px[], int prev_py[]) {
             prev_py[0] = by;
         }
     }
+
+    draw_power_strip();
+    draw_laser_flash();
 }
 
 static void breakout_init(GameHud* hud) {
+    g_hud = hud;
     score = 0;
     lives = LIVES_MAX;
     level = 1;
@@ -948,6 +1089,9 @@ void game_breakout_run(const GameEntry* cfg) {
                 pad_x = constrain((int)in.play_x, pw / 2, PLAY_W - pw / 2);
                 if ((!any_live || ball_stuck) && in.just_pressed)
                     launch_ball();
+                else if (any_live && !ball_stuck && !waiting_to_launch() &&
+                         laser_shots > 0 && in.just_pressed)
+                    fire_laser();
             }
 
             if (waiting_to_launch()) {
@@ -969,9 +1113,13 @@ void game_breakout_run(const GameEntry* cfg) {
                         prev_bx[i] = -1;
                         prev_by[i] = -1;
                     }
+                    erase_pad_at(prev_pad);
+                    draw_pad(pad_x);
                 }
                 if (level_cleared) {
                     game_hud_advance_tier(hud, level);
+                    if (level == LEVEL_PATTERNS + 1 && lives < LIVES_MAX)
+                        game_hud_set_lives(hud, lives, LIVES_MAX);
                     breakout_redraw(hud);
                     prev_pad = pad_x;
                     for (int i = 0; i < MAX_BALLS; i++) {

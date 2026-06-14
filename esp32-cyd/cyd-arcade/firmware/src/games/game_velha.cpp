@@ -70,16 +70,111 @@ static bool find_move_for(int player, int* out_r, int* out_c) {
     return false;
 }
 
-static void random_move(int* out_r, int* out_c) {
+static int count_winning_moves(int player) {
+    int n = 0;
+    for (int r = 0; r < GRID; r++) {
+        for (int c = 0; c < GRID; c++) {
+            if (board[r][c]) continue;
+            board[r][c] = (int8_t)player;
+            if (check_winner() == player) n++;
+            board[r][c] = 0;
+        }
+    }
+    return n;
+}
+
+static bool find_fork_for(int player, int* out_r, int* out_c) {
+    for (int r = 0; r < GRID; r++) {
+        for (int c = 0; c < GRID; c++) {
+            if (board[r][c]) continue;
+            board[r][c] = (int8_t)player;
+            const bool fork = count_winning_moves(player) >= 2;
+            board[r][c] = 0;
+            if (fork) {
+                *out_r = r;
+                *out_c = c;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static bool block_opponent_fork(int* out_r, int* out_c) {
+    int fr = -1, fc = -1;
+    if (!find_fork_for(1, &fr, &fc))
+        return false;
+
+    for (int r = 0; r < GRID; r++) {
+        for (int c = 0; c < GRID; c++) {
+            if (board[r][c]) continue;
+            board[r][c] = 2;
+            const bool still_fork = find_fork_for(1, &fr, &fc);
+            board[r][c] = 0;
+            if (!still_fork) {
+                *out_r = r;
+                *out_c = c;
+                return true;
+            }
+        }
+    }
+
+    if (!board[fr][fc]) {
+        *out_r = fr;
+        *out_c = fc;
+        return true;
+    }
+    return false;
+}
+
+static bool opposite_corner_move(int* out_r, int* out_c) {
+    static const int pairs[4][4] = {
+        {0, 0, 2, 2}, {2, 2, 0, 0}, {0, 2, 2, 0}, {2, 0, 0, 2},
+    };
+    for (int i = 0; i < 4; i++) {
+        const int o_r = pairs[i][0], o_c = pairs[i][1];
+        const int p_r = pairs[i][2], p_c = pairs[i][3];
+        if (board[o_r][o_c] == 1 && !board[p_r][p_c]) {
+            *out_r = p_r;
+            *out_c = p_c;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool pick_corner(int* out_r, int* out_c) {
+    static const int cr[4][2] = {{0, 0}, {0, 2}, {2, 0}, {2, 2}};
+    int avail[4];
+    int n = 0;
+    for (int i = 0; i < 4; i++) {
+        if (!board[cr[i][0]][cr[i][1]])
+            avail[n++] = i;
+    }
+    if (n == 0) return false;
+    const int pick = avail[random(0, n)];
+    *out_r = cr[pick][0];
+    *out_c = cr[pick][1];
+    return true;
+}
+
+static bool pick_any_empty(int* out_r, int* out_c) {
     int empty[9];
     int n = 0;
     for (int r = 0; r < GRID; r++)
         for (int c = 0; c < GRID; c++)
             if (!board[r][c]) empty[n++] = cell_index(r, c);
-    if (n == 0) return;
+    if (n == 0) return false;
     const int pick = empty[random(0, n)];
     *out_r = pick / GRID;
     *out_c = pick % GRID;
+    return true;
+}
+
+static bool place_cpu(int r, int c) {
+    if (r < 0 || c < 0 || board[r][c]) return false;
+    board[r][c] = 2;
+    return true;
 }
 
 static int minimax_score(int player, int depth, int alpha, int beta);
@@ -100,7 +195,56 @@ static void cpu_move_strong() {
             }
         }
     }
-    if (br >= 0) board[br][bc] = 2;
+    place_cpu(br, bc);
+}
+
+/* Heuristica classica — forte, mas nao invencivel como minimax */
+static void cpu_move_heuristic() {
+    int r = -1, c = -1;
+
+    if (find_move_for(2, &r, &c)) { place_cpu(r, c); return; }
+    if (find_move_for(1, &r, &c)) { place_cpu(r, c); return; }
+    if (find_fork_for(2, &r, &c)) { place_cpu(r, c); return; }
+    if (block_opponent_fork(&r, &c)) { place_cpu(r, c); return; }
+    if (!board[1][1]) { place_cpu(1, 1); return; }
+    if (opposite_corner_move(&r, &c)) { place_cpu(r, c); return; }
+    if (pick_corner(&r, &c)) { place_cpu(r, c); return; }
+    if (pick_any_empty(&r, &c)) place_cpu(r, c);
+}
+
+/*
+ * Fase 0 — novato: quase aleatorio, raramente bloqueia.
+ * Fase 1 — aprendiz: bloqueia sempre, ataca as vezes, prefere centro.
+ * Fase 2 — tatico: heuristica completa (fork, cantos, etc.).
+ * Fase 3+ — mestre: minimax perfeito.
+ */
+static void cpu_move_for_phase(int phase) {
+    int r = -1, c = -1;
+
+    if (phase >= 3) {
+        cpu_move_strong();
+        return;
+    }
+
+    if (phase >= 2) {
+        cpu_move_heuristic();
+        return;
+    }
+
+    if (phase >= 1) {
+        if (find_move_for(2, &r, &c)) { place_cpu(r, c); return; }
+        if (find_move_for(1, &r, &c)) { place_cpu(r, c); return; }
+        if (!board[1][1] && random(0, 100) < 70) { place_cpu(1, 1); return; }
+        if (random(0, 100) < 55 && pick_corner(&r, &c)) { place_cpu(r, c); return; }
+        if (pick_any_empty(&r, &c)) place_cpu(r, c);
+        return;
+    }
+
+    /* phase 0 */
+    if (random(0, 100) < 30 && find_move_for(1, &r, &c)) { place_cpu(r, c); return; }
+    if (random(0, 100) < 20 && find_move_for(2, &r, &c)) { place_cpu(r, c); return; }
+    if (random(0, 100) < 25 && !board[1][1]) { place_cpu(1, 1); return; }
+    if (pick_any_empty(&r, &c)) place_cpu(r, c);
 }
 
 static int minimax_score(int player, int depth, int alpha, int beta) {
@@ -140,21 +284,11 @@ static int minimax_score(int player, int depth, int alpha, int beta) {
     return best;
 }
 
-static void cpu_move_weak() {
-    int r = -1, c = -1;
-    const int roll = random(0, 100);
-
-    if (roll < 50) {
-        random_move(&r, &c);
-    } else if (roll < 75) {
-        if (!find_move_for(1, &r, &c))
-            random_move(&r, &c);
-    } else {
-        if (!find_move_for(2, &r, &c))
-            random_move(&r, &c);
-    }
-
-    if (r >= 0) board[r][c] = 2;
+static void show_cpu_phase_toast(GameHud* hud, int phase) {
+    if (!hud) return;
+    static const char* labels[] = {"CPU facil", "CPU medio", "CPU forte", "CPU mestre"};
+    const int idx = phase < 0 ? 0 : (phase > 3 ? 3 : phase);
+    game_hud_show_toast(hud, labels[idx]);
 }
 
 static void draw_x(int cx, int cy, int m) {
@@ -325,10 +459,10 @@ void game_velha_run(const GameEntry* cfg) {
                     if (round_lost && !two_player) {
                         game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
                         if (cpu_wins != hud->tier) {
-                            if (game_hud_advance_tier(hud, cpu_wins))
-                                draw_grid();
-                            else
-                                game_hud_set_tier(hud, cpu_wins);
+                            game_hud_set_tier(hud, cpu_wins);
+                            show_cpu_phase_toast(hud, cpu_wins);
+                            buzzer_play(SFX_LEVEL);
+                            draw_grid();
                         }
                         if (lives <= 0) {
                             dead = true;
@@ -378,10 +512,7 @@ void game_velha_run(const GameEntry* cfg) {
                     continue;
                 }
 
-                if (cpu_wins >= 2)
-                    cpu_move_strong();
-                else
-                    cpu_move_weak();
+                cpu_move_for_phase(cpu_wins);
                 draw_grid();
 
                 w = check_winner();

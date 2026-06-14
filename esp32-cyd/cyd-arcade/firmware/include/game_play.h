@@ -49,6 +49,7 @@ void game_hud_set_score_visible(GameHud* hud, bool visible);
 void game_hud_set_tier_mode(GameHud* hud, HudTierKind kind, bool show_at_zero);
 void game_hud_set_tier(GameHud* hud, int value);
 bool game_hud_advance_tier(GameHud* hud, int new_tier);
+void game_hud_show_toast(GameHud* hud, const char* title);
 void game_hud_set_lives(GameHud* hud, int lives, int max_lives);
 void game_play_toast(const char* title, const char* sub, uint16_t stroke, uint16_t bg);
 void game_hud_reset_play(GameHud* hud);
