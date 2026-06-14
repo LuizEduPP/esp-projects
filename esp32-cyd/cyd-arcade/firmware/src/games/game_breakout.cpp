@@ -222,6 +222,7 @@ static void physics_step() {
         ball_x = (float)pad_x;
         ball_y = (float)(pad_y() - BALL_R - 4);
         hint_visible = false;
+        game_play_clear_hint(COL_BG);
     }
 
     collide_brick();

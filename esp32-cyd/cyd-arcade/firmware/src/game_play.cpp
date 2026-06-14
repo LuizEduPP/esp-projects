@@ -379,7 +379,9 @@ bool game_hud_consume_resume_redraw(GameHud* hud) {
 GameEndAction game_hud_end_game(GameHud* hud, int score, bool won) {
     if (!hud) return GAME_END_MENU;
 
-    const bool record = score_store_save(hud->engine, score);
+    const bool record = hud->score_lower_better
+                            ? score_store_save_lower(hud->engine, score)
+                            : score_store_save(hud->engine, score);
     if (record && score > 0)
         buzzer_play(SFX_RECORD);
     else if (won)
@@ -422,7 +424,8 @@ GameEndAction game_hud_end_game(GameHud* hud, int score, bool won) {
     char buf[32];
     int body_y = oy + 64;
     tft.setTextDatum(MC_DATUM);
-    snprintf(buf, sizeof(buf), "Pontos %d", score);
+    snprintf(buf, sizeof(buf), "%s %d",
+             hud->score_tag[0] ? hud->score_tag : "Pontos", score);
     tft.setTextColor(TH->text_hi, TH->card);
     tft.drawString(buf, SCREEN_CX, body_y, 2);
 

@@ -273,8 +273,7 @@ static void sync_draw() {
     const int bx = (int)ball_x;
     const int by = (int)ball_y;
     if (bx != prev_bx || by != prev_by) {
-        if (!serving)
-            erase_ball(prev_bx, prev_by);
+        erase_ball(prev_bx, prev_by);
         draw_ball(bx, by);
         prev_bx = bx;
         prev_by = by;

@@ -11,6 +11,8 @@ static const GameEntry k_builtin[] = {
     {"Simon",       "simon",    0xFF0000, 480},
     {"Minesweeper", "mines",    0xC0C0C0, 0},
     {"Velha",       "velha",    0x00D4FF, 0},
+    {"Memoria",     "memoria",  0xFF69B4, 0},
+    {"Ballz",       "ballz",    0xFFA500, 0},
 };
 
 int game_catalog_count() {

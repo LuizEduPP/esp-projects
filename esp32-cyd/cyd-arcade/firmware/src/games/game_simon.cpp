@@ -75,7 +75,8 @@ static void begin_sequence() {
 }
 
 static void start_round() {
-    seq[seq_len++] = (uint8_t)random(0, 4);
+    if (seq_len < (int)(sizeof(seq) - 1))
+        seq[seq_len++] = (uint8_t)random(0, 4);
     begin_sequence();
 }
 

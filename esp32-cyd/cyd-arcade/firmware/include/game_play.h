@@ -30,6 +30,7 @@ typedef struct {
     bool quit;
     bool resume_redraw;
     bool tier_show_zero;
+    bool score_lower_better;
     uint32_t pause_after_ms;
     HudTierKind tier_kind;
 } GameHud;

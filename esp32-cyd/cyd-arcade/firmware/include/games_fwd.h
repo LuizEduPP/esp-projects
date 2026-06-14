@@ -9,3 +9,5 @@ void game_dodge_run(const GameEntry* cfg);
 void game_simon_run(const GameEntry* cfg);
 void game_mines_run(const GameEntry* cfg);
 void game_velha_run(const GameEntry* cfg);
+void game_memoria_run(const GameEntry* cfg);
+void game_ballz_run(const GameEntry* cfg);

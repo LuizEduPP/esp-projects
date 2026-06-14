@@ -126,6 +126,7 @@ static void mines_layout() {
 static void mines_init(GameHud* hud) {
     mines_layout();
     score = 0;
+    lives = GAME_LIVES_DEFAULT;
     mines_reset_board();
     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
 }

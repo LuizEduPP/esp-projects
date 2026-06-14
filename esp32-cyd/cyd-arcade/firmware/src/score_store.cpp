@@ -15,6 +15,8 @@ static const char* name_key_for(const char* engine) {
     case ENGINE_SIMON: return "nm_simon";
     case ENGINE_MINES: return "nm_mines";
     case ENGINE_VELHA: return "nm_velha";
+    case ENGINE_MEMORIA: return "nm_mem";
+    case ENGINE_BALLZ: return "nm_ballz";
     default: return nullptr;
     }
 }
@@ -39,6 +41,22 @@ bool score_store_save(const char* engine, int score) {
         prefs.putInt(key, score);
         prefs.end();
         Serial.printf("[SCORE] %s novo recorde %d\n", engine, score);
+        return true;
+    }
+    prefs.end();
+    return false;
+}
+
+bool score_store_save_lower(const char* engine, int score) {
+    const char* key = engine_score_key(engine);
+    if (!key || score <= 0) return false;
+    Preferences prefs;
+    prefs.begin("cyd-arcade", false);
+    const int prev = prefs.getInt(key, 0);
+    if (prev == 0 || score < prev) {
+        prefs.putInt(key, score);
+        prefs.end();
+        Serial.printf("[SCORE] %s melhor %d\n", engine, score);
         return true;
     }
     prefs.end();
