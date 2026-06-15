@@ -15,7 +15,8 @@ static const GameEntry k_builtin[] = {
     {"Ballz",       "ballz",    0xFFA500, 0},
     {"Sandbox",     "sandbox",   0xD4A017, 0},
     {"Paint",       "paint",    0xFF00FF, 0},
-    {"Circus Charlie", "circus", 0xFF3060, 16},
+    /* TEMP: Circus Charlie desativado no menu */
+    /* {"Circus Charlie", "circus", 0xFF3060, 16}, */
 };
 
 int game_catalog_count() {
