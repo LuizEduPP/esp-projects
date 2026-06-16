@@ -1,7 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "display.h"
 #include "hw_config.h"
 #include "ui_theme.h"
@@ -330,29 +330,29 @@ static void sandbox_clear() {
     memset(prev, 0, sizeof(prev));
     game_play_fill_rect(0, 0, PLAY_W, CANVAS_H, game_play_field_bg());
     draw_toolbar();
-    buzzer_play(SFX_SELECT);
+    audio_play(SFX_SELECT);
 }
 
 static void scroll_materials(int delta) {
     const int next = scroll_off + delta;
     if (next < 0 || next > scroll_max()) {
-        buzzer_play(SFX_ERROR);
+        audio_play(SFX_ERROR);
         return;
     }
     scroll_off = next;
     draw_toolbar();
-    buzzer_play(SFX_TICK);
+    audio_play(SFX_TICK);
 }
 
 static void brush_resize(int delta) {
     const int next = brush_r + delta;
     if (next < BRUSH_MIN || next > BRUSH_MAX) {
-        buzzer_play(SFX_ERROR);
+        audio_play(SFX_ERROR);
         return;
     }
     brush_r = next;
     draw_toolbar();
-    buzzer_play(SFX_TICK);
+    audio_play(SFX_TICK);
 }
 
 static void spawn_at(int px, int py) {
@@ -737,14 +737,14 @@ void game_sandbox_run(const GameEntry* cfg) {
             } else if (hit == 99) {
                 erasing = !erasing;
                 draw_toolbar();
-                buzzer_play(SFX_SELECT);
+                audio_play(SFX_SELECT);
             } else if (hit >= 0) {
                 mat_idx = hit;
                 erasing = false;
                 ensure_mat_visible();
                 draw_toolbar();
                 show_mat_toast(hit);
-                buzzer_play(SFX_TICK);
+                audio_play(SFX_TICK);
             } else if (in.play_y < CANVAS_H) {
                 painting = true;
                 last_px = in.play_x;

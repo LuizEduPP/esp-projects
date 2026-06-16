@@ -1,7 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "display.h"
 #include "hw_config.h"
 #include "ui_draw.h"
@@ -212,7 +212,7 @@ void game_memoria_run(const GameEntry* cfg) {
                 if (pick < 0 || open[pick] || solved[pick]) continue;
 
                 open[pick] = true;
-                buzzer_play(SFX_FLIP);
+                audio_play(SFX_FLIP);
                 game_frame_draw_now();
                 draw_card(pick % COLS, pick / COLS, true);
 
@@ -224,7 +224,7 @@ void game_memoria_run(const GameEntry* cfg) {
                     second_pick = pick;
                     if (deck[first_pick] == deck[pick]) {
                         match_streak++;
-                        buzzer_play(match_streak >= 3 ? SFX_RECORD : SFX_MATCH);
+                        audio_play(match_streak >= 3 ? SFX_RECORD : SFX_MATCH);
                         solved[first_pick] = solved[pick] = true;
                         open[first_pick] = open[pick] = false;
                         first_pick = -1;
@@ -235,11 +235,11 @@ void game_memoria_run(const GameEntry* cfg) {
                             if (!solved[k]) all = false;
                         if (all) {
                             won = true;
-                            buzzer_play(SFX_WIN);
+                            audio_play(SFX_WIN);
                         }
                     } else {
                         match_streak = 0;
-                        buzzer_play(SFX_MISS);
+                        audio_play(SFX_MISS);
                         input_lock = true;
                         lock_until = millis() + LOCK_MS;
                     }

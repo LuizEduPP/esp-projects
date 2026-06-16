@@ -1,7 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "hw_config.h"
 #include <Arduino.h>
 #include <math.h>
@@ -223,9 +223,9 @@ static bool paddle_hit(int pad_x, int pad_top, bool from_above) {
             rally_hits++;
             if (rally_hits >= 4 && rally_hits % 4 == 0) {
                 score += 2;
-                buzzer_play(SFX_SCORE);
+                audio_play(SFX_SCORE);
             } else {
-                buzzer_play(SFX_HIT);
+                audio_play(SFX_HIT);
             }
             return true;
         }
@@ -239,9 +239,9 @@ static bool paddle_hit(int pad_x, int pad_top, bool from_above) {
             rally_hits++;
             if (rally_hits >= 4 && rally_hits % 4 == 0) {
                 score += 2;
-                buzzer_play(SFX_SCORE);
+                audio_play(SFX_SCORE);
             } else {
-                buzzer_play(SFX_HIT);
+                audio_play(SFX_HIT);
             }
             return true;
         }
@@ -275,13 +275,13 @@ static int physics_step() {
 
         if (ball_y < -BALL_R) {
             score++;
-            buzzer_play(SFX_SCORE);
+            audio_play(SFX_SCORE);
             serve_ball(true);
             return PONG_OK;
         }
         if (ball_y > PLAY_H + BALL_R) {
             lives--;
-            buzzer_play(SFX_ERROR);
+            audio_play(SFX_ERROR);
             if (lives <= 0)
                 return PONG_LOST;
             serve_ball(false);

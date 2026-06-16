@@ -2,7 +2,7 @@
 #include "game_catalog.h"
 #include "game_input.h"
 #include "ui_theme.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "hw_config.h"
 #include <Arduino.h>
 
@@ -114,7 +114,7 @@ static void advance_sequence() {
         flash_btn = seq[step_idx];
         game_frame_draw_now();
         draw_btn(flash_btn, true);
-        buzzer_simon_tone(flash_btn);
+        audio_simon_tone(flash_btn);
         flash_until = millis() + (uint32_t)s_flash_on;
         return;
     }
@@ -140,7 +140,7 @@ static void advance_sequence() {
         flash_btn = seq[step_idx];
         game_frame_draw_now();
         draw_btn(flash_btn, true);
-        buzzer_simon_tone(flash_btn);
+        audio_simon_tone(flash_btn);
         flash_until = millis() + (uint32_t)s_flash_on;
     }
 }
@@ -179,12 +179,12 @@ void game_simon_run(const GameEntry* cfg) {
                 if (b < 0) continue;
                 game_frame_draw_now();
                 draw_btn(b, true);
-                buzzer_simon_tone(b);
+                audio_simon_tone(b);
                 delay(220);
                 game_frame_draw_now();
                 draw_btn(b, false);
                 if (b != seq[input_idx]) {
-                    buzzer_play(SFX_ERROR);
+                    audio_play(SFX_ERROR);
                     streak = 0;
                     lives--;
                     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
@@ -200,8 +200,8 @@ void game_simon_run(const GameEntry* cfg) {
                     streak++;
                     score = seq_len + streak * 3;
                     game_hud_set_score(hud, score);
-                    if (streak >= 3) buzzer_play(SFX_RECORD);
-                    else buzzer_play(SFX_SCORE);
+                    if (streak >= 3) audio_play(SFX_RECORD);
+                    else audio_play(SFX_SCORE);
                     if (game_hud_advance_tier(hud, seq_len))
                         simon_redraw();
                     delay(350);

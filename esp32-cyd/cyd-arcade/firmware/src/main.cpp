@@ -7,7 +7,7 @@
 #include "ui_launcher.h"
 #include "ui_settings.h"
 #include "game_runtime.h"
-#include "buzzer.h"
+#include "audio.h"
 
 static GameEntry games[MAX_GAMES];
 
@@ -33,18 +33,17 @@ void setup() {
 
     Serial.printf("[INIT] heap=%u games=%d cal=%d\n",
                   ESP.getFreeHeap(), game_catalog_count(), touch_has_saved_calibration());
-    Serial.end();
 
-    buzzer_init();
     display_splash("CYD-ARCADE");
-    buzzer_play(SFX_STARTUP);
-    if (display_splash_wait(SPLASH_MS)) {
-        touch_clear_calibration();
-    }
+    display_splash_wait(SPLASH_MS);
+    audio_init();
+    audio_play(SFX_STARTUP);
+    Serial.println("[BOOT] pronto");
 }
 
 void loop() {
     if (!touch_has_saved_calibration()) {
+        audio_stop();
         ui_calib_run();
         return;
     }
@@ -55,6 +54,7 @@ void loop() {
     const int sel = launcher_show(games, n);
     if (sel == LAUNCHER_SETTINGS) {
         if (ui_settings_show() == UI_SETTINGS_CALIBRATE) {
+            audio_stop();
             touch_clear_calibration();
             ui_calib_run();
         }

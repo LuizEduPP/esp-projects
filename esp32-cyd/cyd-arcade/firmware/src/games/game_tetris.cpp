@@ -1,7 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "display.h"
 #include "hw_config.h"
 #include "ui_draw.h"
@@ -283,13 +283,13 @@ static void lock_piece(GameHud* hud) {
     const int n = clear_lines();
     if (n > 0) {
         static const int pts[] = {0, 100, 300, 500, 800};
-        buzzer_play(SFX_LINE);
+        audio_play(SFX_LINE);
         score += pts[n < 5 ? n : 4];
         lines += n;
         update_level(hud);
         if (drop_ms > 180) drop_ms -= (uint32_t)n * 12;
     } else {
-        buzzer_play(SFX_DROP);
+        audio_play(SFX_DROP);
     }
 }
 
@@ -333,7 +333,7 @@ static bool rotate_piece() {
 
 static bool tetris_lose_life(GameHud* hud) {
     lives--;
-    buzzer_play(SFX_ERROR);
+    audio_play(SFX_ERROR);
     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
     if (lives <= 0) return false;
     for (int y = 0; y < BH; y++)
@@ -377,7 +377,7 @@ static bool handle_input(GameHud* hud, GameInput* in, GameDrag* drag, uint32_t* 
 
         const int sv = game_drag_step_v(drag, in, 22);
         if (sv < 0) {
-            if (rotate_piece()) buzzer_play(SFX_SELECT);
+            if (rotate_piece()) audio_play(SFX_SELECT);
         }
     }
 

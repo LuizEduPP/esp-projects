@@ -1,5 +1,5 @@
 #include "ui_settings.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "display.h"
 #include "hw_config.h"
 #include "touch_input.h"
@@ -70,7 +70,7 @@ static void draw_brightness_bar() {
 }
 
 static void draw_sound_toggle() {
-    const bool on = buzzer_sound_on();
+    const bool on = audio_on();
     const uint16_t bg = on ? TH->accent : TH->card;
     tft.fillRoundRect(BAR_X, VOL_BAR_Y, BAR_W, BAR_H, 6, bg);
     tft.drawRoundRect(BAR_X, VOL_BAR_Y, BAR_W, BAR_H, 6, TH->border);
@@ -130,7 +130,7 @@ static int hit_btn(int16_t tx, int16_t ty) {
 
 int ui_settings_show() {
     build_layout();
-    buzzer_init();
+    audio_init();
     draw_screen();
     touch_wait_release();
 
@@ -147,10 +147,10 @@ int ui_settings_show() {
                 display_brightness_step(1);
                 draw_brightness_bar();
             } else if (id == BTN_SOUND_TOGGLE) {
-                buzzer_sound_toggle();
+                audio_toggle();
                 draw_sound_toggle();
-                if (buzzer_sound_on())
-                    buzzer_play(SFX_TICK);
+                if (audio_on())
+                    audio_play(SFX_TICK);
             } else if (id == BTN_CALIB) {
                 touch_wait_release();
                 return UI_SETTINGS_CALIBRATE;

@@ -2,7 +2,7 @@
 #include "game_catalog.h"
 #include "game_input.h"
 #include "circus_sprites.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "hw_config.h"
 #include "display.h"
 #include <Arduino.h>
@@ -444,7 +444,7 @@ static void try_score_jar(int i, int sx) {
     if (pcx > (float)sx && pcx < (float)(sx + JAR_W)) {
         jar_scored[i] = true;
         score += 200;
-        buzzer_play(SFX_TICK);
+        audio_play(SFX_TICK);
     }
 }
 
@@ -456,10 +456,10 @@ static void try_score_ring(RingPair* r, int sx) {
         r->scored = true;
         if (r->item) {
             score += 1100;
-            buzzer_play(SFX_RECORD);
+            audio_play(SFX_RECORD);
         } else {
             score += 100;
-            buzzer_play(SFX_TICK);
+            audio_play(SFX_TICK);
         }
     }
 }
@@ -517,7 +517,7 @@ static void handle_touch(const GameInput* in) {
         jump_origin_x = player_base_x;
         jumping = true;
         jump_start = millis();
-        buzzer_play(SFX_SHOOT);
+        audio_play(SFX_SHOOT);
     }
 }
 
@@ -553,7 +553,7 @@ static void step_physics(GameHud* hud, const GameInput* in) {
         try_score_jar(i, sx);
         if (collide_jar(sx)) {
             lives--;
-            buzzer_play(SFX_ERROR);
+            audio_play(SFX_ERROR);
             game_hud_set_lives(hud, lives, LIVES_MAX);
             player_respawn();
             if (lives <= 0) return;
@@ -569,7 +569,7 @@ static void step_physics(GameHud* hud, const GameInput* in) {
         try_score_ring(&rings[i], sx);
         if (collide_ring(&rings[i], sx)) {
             lives--;
-            buzzer_play(SFX_ERROR);
+            audio_play(SFX_ERROR);
             game_hud_set_lives(hud, lives, LIVES_MAX);
             player_respawn();
             if (lives <= 0) return;
@@ -584,7 +584,7 @@ static void step_physics(GameHud* hud, const GameInput* in) {
         stage_clear_until = millis() + 1200;
         score += bonus;
         bonus = 5000;
-        buzzer_play(SFX_LEVEL);
+        audio_play(SFX_LEVEL);
         game_hud_show_toast(hud, "Palco!");
     }
 

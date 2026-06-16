@@ -1,7 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "display.h"
 #include "hw_config.h"
 #include <Arduino.h>
@@ -132,11 +132,11 @@ static void toggle_flag(int x, int y) {
     if (state[y][x] == ST_FLAG) {
         state[y][x] = ST_COVER;
         flag_count--;
-        buzzer_play(SFX_SELECT);
+        audio_play(SFX_SELECT);
     } else if (state[y][x] == ST_COVER && flag_count < MINES) {
         state[y][x] = ST_FLAG;
         flag_count++;
-        buzzer_play(SFX_FLIP);
+        audio_play(SFX_FLIP);
     } else {
         return;
     }
@@ -184,11 +184,11 @@ static void chord_open(int x, int y, GameHud* hud) {
         }
     }
     if (hit) {
-        buzzer_play(SFX_BOMB);
+        audio_play(SFX_BOMB);
         lives--;
         game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
     } else {
-        buzzer_play(SFX_TICK);
+        audio_play(SFX_TICK);
     }
     score = revealed * 10;
     game_hud_set_score(hud, score);
@@ -206,13 +206,13 @@ static void reveal_cell(int x, int y, GameHud* hud) {
     if (board[y][x] == -1) {
         state[y][x] = ST_MINE;
         draw_cell(x, y);
-        buzzer_play(SFX_BOMB);
+        audio_play(SFX_BOMB);
         lives--;
         game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
         return;
     }
     flood(x, y);
-    buzzer_play(SFX_TICK);
+    audio_play(SFX_TICK);
     score = revealed * 10;
     game_hud_set_score(hud, score);
 }

@@ -1,7 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "display.h"
 #include "hw_config.h"
 #include "ui_theme.h"
@@ -493,18 +493,18 @@ static void paint_clear() {
     dot_n = 0;
     game_play_fill_rect(0, 0, PLAY_W, CANVAS_H, game_play_field_bg());
     draw_toolbar();
-    buzzer_play(SFX_SELECT);
+    audio_play(SFX_SELECT);
 }
 
 static void brush_resize(int delta) {
     const int next = brush_r + delta;
     if (next < BRUSH_MIN || next > BRUSH_MAX) {
-        buzzer_play(SFX_ERROR);
+        audio_play(SFX_ERROR);
         return;
     }
     brush_r = next;
     draw_toolbar();
-    buzzer_play(SFX_TICK);
+    audio_play(SFX_TICK);
 }
 
 static void picker_seed_from(uint16_t col) {
@@ -518,7 +518,7 @@ static void open_picker() {
     pick_drag = PICK_DRAG_NONE;
     picker_seed_from(use_custom ? custom_color : MAIN_PALETTE[color_idx]);
     draw_picker_modal();
-    buzzer_play(SFX_TICK);
+    audio_play(SFX_TICK);
 }
 
 static void close_picker(bool apply) {
@@ -578,14 +578,14 @@ void game_paint_run(const GameEntry* cfg) {
                 const int hit = picker_hit(in.play_x, in.play_y);
                 if (hit == PICKER_HIT_CLOSE) {
                     close_picker(false);
-                    buzzer_play(SFX_SELECT);
+                    audio_play(SFX_SELECT);
                 } else if (hit == PICKER_HIT_OK) {
                     close_picker(true);
-                    buzzer_play(SFX_SELECT);
+                    audio_play(SFX_SELECT);
                 } else if (hit == PICK_DRAG_SV || hit == PICK_DRAG_HUE) {
                     pick_drag = hit;
                     picker_drag(in.play_x, in.play_y, hit);
-                    buzzer_play(SFX_TICK);
+                    audio_play(SFX_TICK);
                 }
             } else if (in.down && pick_drag != PICK_DRAG_NONE) {
                 picker_drag(in.play_x, in.play_y, pick_drag);
@@ -609,7 +609,7 @@ void game_paint_run(const GameEntry* cfg) {
             } else if (hit == 99) {
                 erasing = !erasing;
                 draw_toolbar();
-                buzzer_play(SFX_SELECT);
+                audio_play(SFX_SELECT);
             } else if (hit == PICKER_HIT_OPEN) {
                 open_picker();
             } else if (hit >= 0 && hit < MAIN_COLORS) {
@@ -617,7 +617,7 @@ void game_paint_run(const GameEntry* cfg) {
                 use_custom = false;
                 erasing = false;
                 draw_toolbar();
-                buzzer_play(SFX_TICK);
+                audio_play(SFX_TICK);
             } else if (in.play_y < CANVAS_H) {
                 drawing = true;
                 last_x = in.play_x;

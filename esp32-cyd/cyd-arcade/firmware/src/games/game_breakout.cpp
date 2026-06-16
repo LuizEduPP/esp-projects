@@ -1,7 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "display.h"
 #include "hw_config.h"
 #include "ui_theme.h"
@@ -638,14 +638,14 @@ static bool damage_brick_at(int r, int c, Ball* b) {
 
     if (kind == BRICK_GOLD) {
         if (b) bounce_ball_off_brick(b, rx, ry, rw, rh);
-        buzzer_play(SFX_TICK);
+        audio_play(SFX_TICK);
         return true;
     }
 
     if (brick_hp[r][c] > 1) {
         brick_hp[r][c]--;
         draw_brick(r, c);
-        buzzer_play(SFX_TICK);
+        audio_play(SFX_TICK);
         if (b) bounce_ball_off_brick(b, rx, ry, rw, rh);
         return true;
     }
@@ -656,7 +656,7 @@ static bool damage_brick_at(int r, int c, Ball* b) {
     brick_rect(r, c, &dx, &dy, &dw, &dh);
     spawn_capsule(dx + dw / 2, dy + dh / 2);
     game_play_fill_rect(dx - 1, dy - 1, dw + 2, dh + 2, COL_BG);
-    buzzer_play(SFX_HIT);
+    audio_play(SFX_HIT);
     if (b) bounce_ball_off_brick(b, rx, ry, rw, rh);
     return true;
 }
@@ -716,7 +716,7 @@ static void apply_capsule(int type) {
     default:
         break;
     }
-    buzzer_play(SFX_RECORD);
+    audio_play(SFX_RECORD);
     power_mask = 0xFFFF;
 }
 
@@ -741,7 +741,7 @@ static void fire_laser() {
     if (lh > 0)
         game_play_fill_rect(laser_flash_x - 2, y0, 4, lh, 0xF800);
 
-    buzzer_play(SFX_SHOOT);
+    audio_play(SFX_SHOOT);
     draw_pad(pad_x);
     power_mask = 0xFFFF;
 }
@@ -760,7 +760,7 @@ static void launch_ball() {
     ball_stuck = false;
     hint_visible = false;
     clear_launch_hint();
-    buzzer_play(SFX_SHOOT);
+    audio_play(SFX_SHOOT);
 }
 
 static void stick_ball_to_pad() {
@@ -845,7 +845,7 @@ static bool collide_pad(Ball* b, float ox, float oy) {
     if (fabsf(b->dx) < 0.6f) b->dx = b->dx < 0.0f ? -0.6f : 0.6f;
     normalize_ball(b);
     if (b->dy > -min_up) b->dy = -min_up;
-    buzzer_play(SFX_TICK);
+    audio_play(SFX_TICK);
     return true;
 }
 
@@ -941,7 +941,7 @@ static void physics_step() {
 
     if (had_live && live_ball_count() == 0) {
         lives--;
-        buzzer_play(SFX_ERROR);
+        audio_play(SFX_ERROR);
         ball_stuck = false;
         hint_visible = false;
         clear_launch_hint();

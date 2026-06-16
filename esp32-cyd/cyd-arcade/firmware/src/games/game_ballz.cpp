@@ -1,7 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "display.h"
 #include "hw_config.h"
 #include "ui_draw.h"
@@ -263,7 +263,7 @@ static void begin_volley() {
     volley_active = true;
     volley_combo = 0;
     aiming = false;
-    buzzer_play(SFX_SHOOT);
+    audio_play(SFX_SHOOT);
 }
 
 static void end_turn();
@@ -282,14 +282,14 @@ static bool hit_block(Ball* b, int c, int r) {
     score += 10 + volley_combo;
     volley_combo++;
     if (volley_combo > 0 && volley_combo % 6 == 0)
-        buzzer_play(SFX_RECORD);
+        audio_play(SFX_RECORD);
     else if (grid[r][c] <= 0)
-        buzzer_play(SFX_HIT);
+        audio_play(SFX_HIT);
     if (grid[r][c] <= 0) {
         if (bonus[r][c]) {
             ball_stock++;
             bonus[r][c] = false;
-            buzzer_play(SFX_SCORE);
+            audio_play(SFX_SCORE);
             draw_stock();
         }
         game_play_fill_rect(x - 1, y - 1, w + 2, h + 2, COL_BG);
@@ -383,7 +383,7 @@ static void end_turn() {
         shift_blocks_down();
         if (blocks_in_danger()) {
             lives--;
-            buzzer_play(SFX_ERROR);
+            audio_play(SFX_ERROR);
             clear_danger_rows();
             if (ball_stock < START_BALLS)
                 ball_stock = START_BALLS;

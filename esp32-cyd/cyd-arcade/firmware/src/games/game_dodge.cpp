@@ -1,7 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "hw_config.h"
 #include "ui_draw.h"
 #include "ui_theme.h"
@@ -141,7 +141,7 @@ static bool step_game() {
         if (obs_y[i] > PLAY_H) {
             obs_on[i] = false;
             score += 10;
-            buzzer_play(SFX_TICK);
+            audio_play(SFX_TICK);
             continue;
         }
         draw_obs(i);
@@ -152,7 +152,7 @@ static bool step_game() {
             if (obs_coin[i]) {
                 obs_on[i] = false;
                 score += 25;
-                buzzer_play(SFX_RECORD);
+                audio_play(SFX_RECORD);
                 continue;
             }
             return false;
@@ -250,7 +250,7 @@ void game_dodge_run(const GameEntry* cfg) {
                 last_step = millis();
                 if (!step_game()) {
                     lives--;
-                    buzzer_play(SFX_ERROR);
+                    audio_play(SFX_ERROR);
                     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
                     if (lives <= 0) {
                         dead = true;

@@ -1,7 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "ui_theme.h"
 #include "display.h"
 #include "hw_config.h"
@@ -398,18 +398,18 @@ static void begin_round_wait(bool won, bool lost, bool draw) {
     wait_until = millis() + ROUND_MS;
 
     if (draw) {
-        buzzer_play(SFX_SELECT);
+        audio_play(SFX_SELECT);
     } else if (won && !two_player) {
         wins++;
-        buzzer_play(SFX_WIN);
+        audio_play(SFX_WIN);
     } else if (won) {
-        buzzer_play(SFX_WIN);
+        audio_play(SFX_WIN);
     } else if (lost) {
         if (!two_player) {
             lives--;
             cpu_wins++;
         }
-        buzzer_play(SFX_ERROR);
+        audio_play(SFX_ERROR);
     }
 }
 
@@ -461,7 +461,7 @@ void game_velha_run(const GameEntry* cfg) {
                         if (cpu_wins != hud->tier) {
                             game_hud_set_tier(hud, cpu_wins);
                             show_cpu_phase_toast(hud, cpu_wins);
-                            buzzer_play(SFX_LEVEL);
+                            audio_play(SFX_LEVEL);
                             draw_grid();
                         }
                         if (lives <= 0) {
@@ -490,7 +490,7 @@ void game_velha_run(const GameEntry* cfg) {
                 const int8_t mark = two_player ? turn : 1;
                 board[r][c] = mark;
                 draw_mark(r, c);
-                buzzer_play(SFX_TICK);
+                audio_play(SFX_TICK);
 
                 int w = check_winner();
                 if (w) {

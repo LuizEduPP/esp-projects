@@ -1,7 +1,7 @@
 #include "game_play.h"
 #include "game_catalog.h"
 #include "game_input.h"
-#include "buzzer.h"
+#include "audio.h"
 #include "hw_config.h"
 #include <Arduino.h>
 #include <stdio.h>
@@ -145,7 +145,7 @@ static void handle_drag(GameInput* in, GameDrag* drag) {
 
 static bool snake_lose_life(GameHud* hud) {
     lives--;
-    buzzer_play(SFX_ERROR);
+    audio_play(SFX_ERROR);
     game_hud_set_lives(hud, lives, GAME_LIVES_DEFAULT);
     if (lives <= 0) return false;
     step_ms = base_step_ms;
@@ -251,7 +251,7 @@ void game_snake_run(const GameEntry* cfg) {
                     if (len > 1)
                         draw_body_link(tail_x, tail_y, body_x[len - 2], body_y[len - 2], COL_BODY);
                     draw_seg(tail_x, tail_y, COL_BODY, false);
-                    buzzer_play(food_star ? SFX_RECORD : SFX_SCORE);
+                    audio_play(food_star ? SFX_RECORD : SFX_SCORE);
                     const int new_phase = score / 60 + 1;
                     if (new_phase != phase) {
                         phase = new_phase;

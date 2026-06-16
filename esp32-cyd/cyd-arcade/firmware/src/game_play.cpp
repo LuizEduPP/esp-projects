@@ -8,7 +8,7 @@
 #include "ui_icons.h"
 #include "ui_keyboard.h"
 #include "ui_theme.h"
-#include "buzzer.h"
+#include "audio.h"
 #include <Arduino.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -344,7 +344,7 @@ bool game_hud_advance_tier(GameHud* hud, int new_tier) {
     hud->tier = new_tier;
     draw_status_bar(hud);
     game_hud_show_tier_toast(hud, buf);
-    buzzer_play(SFX_LEVEL);
+    audio_play(SFX_LEVEL);
     return false;
 }
 
@@ -404,11 +404,11 @@ GameEndAction game_hud_end_game(GameHud* hud, int score, bool won) {
                             ? score_store_save_lower(hud->engine, score)
                             : score_store_save(hud->engine, score);
     if (record && score > 0)
-        buzzer_play(SFX_RECORD);
+        audio_play(SFX_RECORD);
     else if (won)
-        buzzer_play(SFX_WIN);
+        audio_play(SFX_WIN);
     else
-        buzzer_play(SFX_LOSE);
+        audio_play(SFX_LOSE);
 
     hud->best = score_store_get(hud->engine);
     score_store_get_name(hud->engine, hud->best_name, sizeof(hud->best_name));

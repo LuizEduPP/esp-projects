@@ -2,11 +2,16 @@
 #include "hw_config.h"
 #include <Arduino.h>
 #include <Preferences.h>
-#include <SPI.h>
-#include <XPT2046_Touchscreen.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <XPT2046_Bitbang.h>
 
-static SPIClass s_touch_spi(VSPI);
-static XPT2046_Touchscreen s_ts(TOUCH_PIN_CS, TOUCH_PIN_IRQ);
+/* CYD oficial: touch em software SPI (bitbang) para coexistir com display + audio.
+ * https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display/blob/main/TROUBLESHOOTING.md
+ * https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display/tree/main/Examples/Basics/8-Buttons
+ */
+static XPT2046_Bitbang s_ts(TOUCH_PIN_MOSI, TOUCH_PIN_MISO, TOUCH_PIN_CLK, TOUCH_PIN_CS);
+static SemaphoreHandle_t s_touch_mtx = nullptr;
 
 static CydTouchCal cal;
 static bool use_custom_cal = false;
@@ -43,6 +48,19 @@ static CydTouchCal default_calibration() {
     return {(int16_t)RAW_Y_LO, (int16_t)RAW_Y_HI, (int16_t)RAW_X_LO, (int16_t)RAW_X_HI};
 }
 
+static bool read_point(int16_t* rx, int16_t* ry) {
+    if (!s_touch_mtx || xSemaphoreTake(s_touch_mtx, pdMS_TO_TICKS(12)) != pdTRUE)
+        return false;
+
+    const TouchPoint p = s_ts.getTouch();
+    xSemaphoreGive(s_touch_mtx);
+
+    if (p.zRaw < 100) return false;
+    *rx = (int16_t)p.xRaw;
+    *ry = (int16_t)p.yRaw;
+    return true;
+}
+
 void touch_set_calibration(CydTouchCal c) {
     cal = c;
     use_custom_cal = true;
@@ -56,9 +74,9 @@ void touch_set_calibration(CydTouchCal c) {
 }
 
 void touch_init() {
-    s_touch_spi.begin(TOUCH_PIN_CLK, TOUCH_PIN_MISO, TOUCH_PIN_MOSI, TOUCH_PIN_CS);
-    s_ts.begin(s_touch_spi);
-    s_ts.setRotation(1);
+    if (!s_touch_mtx)
+        s_touch_mtx = xSemaphoreCreateMutex();
+    s_ts.begin();
 
     cal = default_calibration();
     use_custom_cal = false;
@@ -72,20 +90,25 @@ void touch_init() {
     }
     prefs.end();
 
-    Serial.printf("[TOUCH] XPT2046 CS=%d cal=%d\n", TOUCH_PIN_CS, use_custom_cal);
+    Serial.printf("[TOUCH] XPT2046_Bitbang MOSI=%d MISO=%d CLK=%d CS=%d cal=%d\n",
+                  TOUCH_PIN_MOSI, TOUCH_PIN_MISO, TOUCH_PIN_CLK, TOUCH_PIN_CS, use_custom_cal);
+}
+
+void touch_reinit() {
+    if (s_touch_mtx)
+        xSemaphoreTake(s_touch_mtx, portMAX_DELAY);
+    s_ts.begin();
+    if (s_touch_mtx)
+        xSemaphoreGive(s_touch_mtx);
 }
 
 bool touch_read_raw(int16_t* rx, int16_t* ry) {
-    if (!s_ts.touched()) return false;
-    TS_Point p = s_ts.getPoint();
-    *rx = (int16_t)p.x;
-    *ry = (int16_t)p.y;
-    return true;
+    return read_point(rx, ry);
 }
 
 void touch_poll() {
     int16_t rx, ry;
-    if (touch_read_raw(&rx, &ry)) {
+    if (read_point(&rx, &ry)) {
         map_screen(rx, ry, (int16_t*)&scr_x, (int16_t*)&scr_y);
         pressed = true;
     } else {

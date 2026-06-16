@@ -7,6 +7,7 @@ struct CydTouchCal {
 };
 
 void touch_init();
+void touch_reinit();
 void touch_poll();
 void touch_wait_release();
 bool touch_is_pressed();

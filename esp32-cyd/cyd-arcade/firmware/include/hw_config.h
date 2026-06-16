@@ -17,9 +17,7 @@
 #define LED_G_PIN 16
 #define LED_B_PIN 17
 
-#define BUZZER_PIN       1
-#define BUZZER_LEDC_CH   4
-#define BUZZER_LEDC_BITS 10
+#define SPEAKER_PIN        26  /* ESP32-2432S028: AUDIO / alto-falante 1.5W */
 
 /* Layout UI — tokens compartilhados */
 #define UI_PAD           12

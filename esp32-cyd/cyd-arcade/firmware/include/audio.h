@@ -20,12 +20,12 @@ typedef enum {
     SFX_MATCH,
     SFX_MISS,
     SFX_SHOOT,
-} BuzzerSfx;
+} AudioSfx;
 
-void buzzer_init();
-void buzzer_stop();
-void buzzer_tone(uint16_t freq_hz, uint16_t duration_ms);
-void buzzer_play(BuzzerSfx sfx);
-void buzzer_simon_tone(int index);
-bool buzzer_sound_on();
-void buzzer_sound_toggle();
+void audio_init();
+void audio_stop();
+void audio_tone(uint16_t freq_hz, uint16_t duration_ms);
+void audio_play(AudioSfx sfx);
+void audio_simon_tone(int index);
+bool audio_on();
+void audio_toggle();
