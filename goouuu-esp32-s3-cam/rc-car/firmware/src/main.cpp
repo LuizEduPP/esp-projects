@@ -15,9 +15,16 @@
 
 static WebServer gServer(80);
 static portMUX_TYPE gCamMux = portMUX_INITIALIZER_UNLOCKED;
+static bool gCamOk = false;
+static uint32_t gCaptureCount = 0;
+static uint32_t gControlCount = 0;
 
 static void cors() {
   gServer.sendHeader("Access-Control-Allow-Origin", "*");
+}
+
+static void logReq(const char *path) {
+  Serial.printf("[http] %s %s\n", gServer.method() == HTTP_GET ? "GET" : "POST", path);
 }
 
 static bool cameraBegin() {
@@ -51,17 +58,20 @@ static bool cameraBegin() {
 }
 
 static void handleCapture() {
+  logReq("/capture");
+  gCaptureCount++;
   portENTER_CRITICAL(&gCamMux);
   camera_fb_t *fb = esp_camera_fb_get();
   portEXIT_CRITICAL(&gCamMux);
   if (!fb) {
+    Serial.println("[http] capture FALHOU");
     gServer.send(503, "text/plain", "busy");
     return;
   }
+  Serial.printf("[http] capture OK %ux%u %u bytes\n", fb->width, fb->height, fb->len);
   cors();
   gServer.send_P(200, "image/jpeg", reinterpret_cast<const char *>(fb->buf), fb->len);
   esp_camera_fb_return(fb);
-  motorAfterCapture();
 }
 
 static int jsonInt(const String &body, const char *key) {
@@ -71,45 +81,104 @@ static int jsonInt(const String &body, const char *key) {
 }
 
 static void handleControl() {
+  logReq("/control");
+  gControlCount++;
   if (gServer.method() != HTTP_POST) {
     gServer.send(405, "text/plain", "POST");
     return;
   }
   const String &body = gServer.arg("plain");
-  motorSet(jsonInt(body, "left"), jsonInt(body, "right"));
+  Serial.printf("[http] body: %s\n", body.c_str());
+  const int l = jsonInt(body, "left");
+  const int r = jsonInt(body, "right");
+  Serial.printf("[http] parsed L=%d R=%d\n", l, r);
+  motorSetTagged(l, r, "http");
   cors();
-  gServer.send(200, "application/json", "{\"ok\":true}");
+  String resp = "{\"ok\":true,\"left\":";
+  resp += l;
+  resp += ",\"right\":";
+  resp += r;
+  resp += ",\"motor\":";
+  resp += motorDiagJson();
+  resp += "}";
+  gServer.send(200, "application/json", resp);
+}
+
+static void handleDiag() {
+  logReq("/diag");
+  cors();
+  String j = "{\"ip\":\"";
+  j += WiFi.localIP().toString();
+  j += "\",\"camera\":";
+  j += gCamOk ? "true" : "false";
+  j += ",\"captures\":";
+  j += gCaptureCount;
+  j += ",\"controls\":";
+  j += gControlCount;
+  j += ",\"heap\":";
+  j += ESP.getFreeHeap();
+  j += ",\"motor\":";
+  j += motorDiagJson();
+  j += "}";
+  gServer.send(200, "application/json", j);
+}
+
+static void handleTest() {
+  logReq("/test");
+  Serial.println("[http] /test — bateria no ESP (bloqueia ~12s)");
+  motorRunSelfTest();
+  cors();
+  String j = "{\"ok\":true,\"motor\":";
+  j += motorDiagJson();
+  j += "}";
+  gServer.send(200, "application/json", j);
 }
 
 static void handleStatus() {
+  logReq("/status");
   cors();
-  gServer.send(200, "application/json",
-                "{\"ip\":\"" + WiFi.localIP().toString() + "\"}");
+  String j = "{\"ip\":\"";
+  j += WiFi.localIP().toString();
+  j += "\",\"motor\":";
+  j += motorDiagJson();
+  j += "}";
+  gServer.send(200, "application/json", j);
 }
 
 void setup() {
   Serial.begin(115200);
-  if (!cameraBegin()) {
-    Serial.println("ERRO camera");
-    return;
+  delay(300);
+  Serial.println("\n[boot] RC car diag firmware");
+
+  motorBegin();
+
+  gCamOk = cameraBegin();
+  Serial.printf("[boot] camera %s\n", gCamOk ? "OK" : "FALHOU");
+  if (!gCamOk) {
+    Serial.println("[boot] motores funcionam sem camera");
   }
+
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; ++i) {
     delay(500);
+    Serial.print(".");
   }
+  Serial.println();
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("ERRO wifi");
+    Serial.println("[boot] ERRO wifi — motores via serial apenas");
     return;
   }
-  Serial.println(WiFi.localIP());
+  Serial.printf("[boot] IP %s\n", WiFi.localIP().toString().c_str());
+  Serial.println("[boot] GET /diag  POST /control  POST /test  GET /capture");
 
   gServer.on("/capture", HTTP_GET, handleCapture);
   gServer.on("/control", HTTP_POST, handleControl);
+  gServer.on("/diag", HTTP_GET, handleDiag);
+  gServer.on("/test", HTTP_POST, handleTest);
   gServer.on("/status", HTTP_GET, handleStatus);
   gServer.begin();
-  motorBegin();  // depois da camera (LEDC ch1 = XCLK)
 }
 
 void loop() {

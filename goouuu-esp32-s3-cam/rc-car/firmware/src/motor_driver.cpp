@@ -3,17 +3,16 @@
 
 #include "driver/gpio.h"
 
-static constexpr uint8_t kDigital = 255;
-static constexpr uint32_t kPwmHz = 25000;
 static constexpr unsigned long kCmdTimeoutMs = 4000;
 
-// {GPIO, LEDC} — ch1 reservado ao XCLK da câmera
-static const struct {
-  uint8_t gpio;
-  uint8_t ch;
-} kOut[] = {
-    {PIN_L_IA1, 0}, {PIN_L_IB1, 2}, {PIN_L_IA2, 3}, {PIN_L_IB2, 4},
-    {PIN_R_IA1, 5}, {PIN_R_IB1, kDigital}, {PIN_R_IA2, 6}, {PIN_R_IB2, 7},
+static const char *kPinNames[] = {
+    "L_IA1", "L_IB1", "L_IA2", "L_IB2",
+    "R_IA1", "R_IB1", "R_IA2", "R_IB2",
+};
+
+static const uint8_t kGpio[] = {
+    PIN_L_IA1, PIN_L_IB1, PIN_L_IA2, PIN_L_IB2,
+    PIN_R_IA1, PIN_R_IB1, PIN_R_IA2, PIN_R_IB2,
 };
 
 static bool gReady = false;
@@ -21,70 +20,89 @@ static bool gRunning = false;
 static int gLeft = 0;
 static int gRight = 0;
 static unsigned long gLastCmdMs = 0;
+static unsigned long gSetCount = 0;
+static unsigned long gStopCount = 0;
+static char gLastTag[32] = "boot";
 
-static void writeOut(int i, uint8_t duty) {
-  const uint8_t gpio = kOut[i].gpio;
-  if (kOut[i].ch == kDigital) {
-    digitalWrite(gpio, duty > 127 ? HIGH : LOW);
-    return;
-  }
-  if (gReady) {
-    ledcWrite(kOut[i].ch, duty);
-  }
+static void pinOut(uint8_t gpio, bool on) {
+  digitalWrite(gpio, on ? HIGH : LOW);
 }
 
-static void drivePair(int a, int b, int speed) {
+static void drivePair(uint8_t ia, uint8_t ib, int speed) {
   speed = constrain(speed, -255, 255);
-  const uint8_t duty = static_cast<uint8_t>(abs(speed));
   if (speed == 0) {
-    writeOut(a, 0);
-    writeOut(b, 0);
+    pinOut(ia, false);
+    pinOut(ib, false);
     return;
   }
   if (speed > 0) {
-    writeOut(b, 0);
-    writeOut(a, duty);
+    pinOut(ib, false);
+    pinOut(ia, true);
   } else {
-    writeOut(a, 0);
-    writeOut(b, duty);
+    pinOut(ia, false);
+    pinOut(ib, true);
   }
+}
+
+static void logPinStates() {
+  Serial.print("[motor] GPIO leitura:");
+  for (uint8_t i = 0; i < 8; ++i) {
+    Serial.printf(" %s(%d)=%d", kPinNames[i], kGpio[i], digitalRead(kGpio[i]));
+  }
+  Serial.println();
 }
 
 static void apply(int left, int right) {
   if (!gReady) {
+    Serial.println("[motor] ERRO apply sem init");
     return;
   }
-  drivePair(0, 1, left);
-  drivePair(2, 3, left);
-  drivePair(4, 5, right);
-  drivePair(6, 7, right);
+  drivePair(kGpio[0], kGpio[1], left);
+  drivePair(kGpio[2], kGpio[3], left);
+  drivePair(kGpio[4], kGpio[5], right);
+  drivePair(kGpio[6], kGpio[7], right);
   gRunning = left != 0 || right != 0;
+  logPinStates();
 }
 
 void motorBegin() {
-  pinMode(PIN_R_IB1, OUTPUT);
-  digitalWrite(PIN_R_IB1, LOW);
-  for (const auto &o : kOut) {
-    if (o.ch == kDigital) {
-      continue;
-    }
-    ledcDetachPin(o.gpio);
-    ledcSetup(o.ch, kPwmHz, 8);
-    ledcAttachPin(o.gpio, o.ch);
-    ledcWrite(o.ch, 0);
+  Serial.println("[motor] init GPIO (digital HIGH/LOW)");
+  for (uint8_t i = 0; i < 8; ++i) {
+    const uint8_t pin = kGpio[i];
+    gpio_reset_pin(static_cast<gpio_num_t>(pin));
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, LOW);
+    Serial.printf("[motor]   %s GPIO%d -> OUT LOW\n", kPinNames[i], pin);
   }
   gReady = true;
   gRunning = false;
+  strncpy(gLastTag, "init", sizeof(gLastTag));
 }
 
 void motorSet(int left, int right) {
+  motorSetTagged(left, right, "set");
+}
+
+void motorSetTagged(int left, int right, const char *tag) {
   if (!gReady) {
     motorBegin();
+  }
+  if (tag) {
+    strncpy(gLastTag, tag, sizeof(gLastTag) - 1);
+    gLastTag[sizeof(gLastTag) - 1] = '\0';
   }
   gLeft = constrain(left, -255, 255);
   gRight = constrain(right, -255, 255);
   gLastCmdMs = millis();
+  gSetCount++;
+  if (gLeft == 0 && gRight == 0) {
+    gStopCount++;
+  }
+  Serial.printf("[motor] SET L=%d R=%d tag=%s #%lu\n", gLeft, gRight, gLastTag, gSetCount);
   apply(gLeft, gRight);
+  if (gLeft != 0 || gRight != 0) {
+    Serial.println("[motor] >>> COMANDO ATIVO — GPIOs IA devem estar =1 <<<");
+  }
 }
 
 void motorPoll() {
@@ -92,15 +110,72 @@ void motorPoll() {
     return;
   }
   if (gRunning) {
+    Serial.println("[motor] TIMEOUT -> stop");
+    strncpy(gLastTag, "timeout", sizeof(gLastTag));
     gLeft = 0;
     gRight = 0;
     apply(0, 0);
   }
 }
 
-void motorAfterCapture() {
-  motorBegin();
-  if (gLastCmdMs > 0 && millis() - gLastCmdMs <= kCmdTimeoutMs) {
-    apply(gLeft, gRight);
+void motorAfterCapture() {}
+
+String motorDiagJson() {
+  String j = "{";
+  j += "\"ready\":" + String(gReady ? "true" : "false");
+  j += ",\"running\":" + String(gRunning ? "true" : "false");
+  j += ",\"left\":" + String(gLeft);
+  j += ",\"right\":" + String(gRight);
+  j += ",\"lastCmdMs\":" + String(gLastCmdMs);
+  j += ",\"cmdAgeMs\":" + String(gLastCmdMs ? millis() - gLastCmdMs : 0);
+  j += ",\"timeoutMs\":" + String(kCmdTimeoutMs);
+  j += ",\"setCount\":" + String(gSetCount);
+  j += ",\"stopCount\":" + String(gStopCount);
+  j += ",\"lastTag\":\"" + String(gLastTag) + "\"";
+  j += ",\"uptimeMs\":" + String(millis());
+  j += ",\"pins\":[";
+  for (uint8_t i = 0; i < 8; ++i) {
+    if (i) {
+      j += ",";
+    }
+    j += "{\"name\":\"" + String(kPinNames[i]) + "\"";
+    j += ",\"gpio\":" + String(kGpio[i]);
+    j += ",\"level\":" + String(digitalRead(kGpio[i]));
+    j += ",\"expected\":\"";
+    j += (gRunning ? "active" : "idle");
+    j += "\"}";
   }
+  j += "]}";
+  return j;
+}
+
+void motorRunSelfTest() {
+  struct Step {
+    int l;
+    int r;
+    const char *tag;
+    uint16_t ms;
+  };
+  static const Step kSteps[] = {
+      {0, 0, "T0_stop", 800},
+      {200, 200, "T1_frente", 2000},
+      {0, 0, "T2_stop", 800},
+      {200, 0, "T3_gira_esq", 1500},
+      {0, 0, "T4_stop", 800},
+      {0, 200, "T5_gira_dir", 1500},
+      {0, 0, "T6_stop", 800},
+      {-200, -200, "T7_tras", 1500},
+      {0, 0, "T8_stop", 800},
+  };
+
+  Serial.println("[test] === bateria motores (GPIO digital) ===");
+  for (const auto &s : kSteps) {
+    strncpy(gLastTag, s.tag, sizeof(gLastTag));
+    Serial.printf("[test] %s L=%d R=%d (%ums)\n", s.tag, s.l, s.r, s.ms);
+    motorSet(s.l, s.r);
+    delay(s.ms);
+  }
+  strncpy(gLastTag, "test_done", sizeof(gLastTag));
+  Serial.println("[test] === fim ===");
+  Serial.println(motorDiagJson());
 }

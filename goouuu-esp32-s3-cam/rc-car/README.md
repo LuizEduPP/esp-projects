@@ -3,14 +3,19 @@
 Pinagem: `firmware/include/pins.h`
 
 ```bash
-yarn rc-car:upload   # flash ESP32
-yarn rc-car:ai       # LM Studio + painel http://localhost:8765
+yarn rc-car:upload
+yarn rc-car:monitor    # logs serial [motor] [http] [test]
+yarn rc-car:diag       # bateria HTTP + motor-diag.log
+yarn rc-car:ai
 ```
 
-ESP32 expõe `GET /capture`, `POST /control` (`{"left":n,"right":n}`), `GET /status`.
+### Endpoints + logs
 
-Detecção: modelo vision → `person`, `confidence`, `cx`, `cy` → script calcula motores com histerese.
+| Endpoint | Log serial | Descrição |
+|----------|------------|-----------|
+| `GET /diag` | `[http] GET /diag` | Estado completo + nível de cada GPIO |
+| `POST /control` | `[motor] SET L= R=` + leitura GPIO | Comando motor |
+| `POST /test` | `[test] T0..T8` | Bateria no ESP (~12s) |
+| `GET /capture` | `[http] capture OK` | Foto JPEG |
 
-Teste motor: `curl -X POST http://IP/control -H 'Content-Type: application/json' -d '{"left":180,"right":180}'`
-
-Variáveis: `ESP_URL`, `LM_MODEL`, `MIN_CONFIDENCE`, `VIEW_PORT` — ver `scripts/ai-follow.mjs`.
+Interpretação: se `GPIO level=1` no diag mas motor não gira → **fiação/alimentação**. Se `level=0` com L/R≠0 → bug software.

@@ -14,7 +14,7 @@
 
 #define CAM_LEDC_CHANNEL  LEDC_CHANNEL_1
 #define CAM_LEDC_TIMER    LEDC_TIMER_1
-// Motores: ledcAttach() por GPIO (auto-canal); GPIO48 = digital
+// Motores = GPIO digital (sem LEDC/PWM). Camera usa LEDC ch1 no GPIO15.
 
 #define CAM_PIN_PWDN   -1
 #define CAM_PIN_RESET  -1

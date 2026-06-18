@@ -11,6 +11,8 @@
     "rc-car:flash": "yarn --cwd goouuu-esp32-s3-cam/rc-car fw:flash",
     "rc-car:monitor": "yarn --cwd goouuu-esp32-s3-cam/rc-car fw:monitor",
     "rc-car:ai": "yarn --cwd goouuu-esp32-s3-cam/rc-car ai:follow",
+    "rc-car:diag": "yarn --cwd goouuu-esp32-s3-cam/rc-car motor:diag",
+    "rc-car:test-drive": "TEST_DRIVE=1 yarn --cwd goouuu-esp32-s3-cam/rc-car ai:follow",
     "cyd-gb:build": "yarn --cwd esp32-cyd/cyd-gb fw:build",
     "cyd-gb:flash": "yarn --cwd esp32-cyd/cyd-gb fw:flash",
     "cyd-gb:install": "yarn --cwd esp32-cyd/cyd-gb fw:install",

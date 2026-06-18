@@ -18,6 +18,8 @@ const CFG = {
   offFrames: Number(process.env.PERSON_OFF_FRAMES ?? "4"),
   baseSpeed: Number(process.env.BASE_SPEED ?? "130"),
   turnGain: Number(process.env.TURN_GAIN ?? "380"),
+  testDrive: process.env.TEST_DRIVE === "1",
+  testSpeed: Number(process.env.TEST_SPEED ?? "200"),
 };
 
 const PROMPT =
@@ -87,7 +89,11 @@ function analyzeModel(text) {
   if (state.onStreak >= CFG.onFrames) state.personLocked = true;
   if (state.offStreak >= CFG.offFrames) state.personLocked = false;
 
-  const motors = state.personLocked ? computeMotors(cx, cy) : { left: 0, right: 0 };
+  const motors = CFG.testDrive
+    ? { left: CFG.testSpeed, right: CFG.testSpeed }
+    : state.personLocked
+      ? computeMotors(cx, cy)
+      : { left: 0, right: 0 };
 
   return {
     personRaw,
@@ -338,6 +344,9 @@ function startViewer() {
 async function main() {
   console.log(`RC seguidor | ESP=${CFG.esp} | ${CFG.model}`);
   console.log(`conf>=${CFG.minConfidence} histerese ${CFG.onFrames}/${CFG.offFrames} frames`);
+  if (CFG.testDrive) {
+    console.log(`*** TEST_DRIVE=1 — motores fixos L=${CFG.testSpeed} R=${CFG.testSpeed} (ignora IA) ***`);
+  }
   startViewer();
 
   try {

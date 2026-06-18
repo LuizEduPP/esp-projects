@@ -8,6 +8,7 @@
     "fw:flash": "cd firmware && ../scripts/pio.sh run && ../scripts/pio.sh run -t upload",
     "fw:monitor": "cd firmware && ../scripts/pio.sh device monitor -b 115200 --filter direct",
     "fw:test": "cd firmware && ../scripts/pio.sh run -t upload && ../scripts/pio.sh device monitor -b 115200",
-    "ai:follow": "node scripts/ai-follow.mjs"
+    "ai:follow": "node scripts/ai-follow.mjs",
+    "motor:diag": "node scripts/motor-diag.mjs"
   }
 }
