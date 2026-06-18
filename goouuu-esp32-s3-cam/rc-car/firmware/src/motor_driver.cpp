@@ -3,85 +3,96 @@
 
 #include "driver/gpio.h"
 
-static constexpr uint8_t kMotorPins[] = {
-    PIN_L_IA1, PIN_L_IB1, PIN_L_IA2, PIN_L_IB2,
-    PIN_R_IA1, PIN_R_IB1, PIN_R_IA2, PIN_R_IB2,
+struct MotorOut {
+  uint8_t gpio;
+  uint8_t ledc;  // 255 = digital (GPIO48)
 };
 
-// Camera XCLK uses LEDC channel 1 — never use ch 1 for motors.
-static constexpr uint8_t kLedcCh[] = {0, 2, 3, 4, 5, 0, 6, 7};
+static const MotorOut kLeft[] = {
+    {PIN_L_IA1, MOTOR_LEDC_L_IA1},
+    {PIN_L_IB1, MOTOR_LEDC_L_IB1},
+    {PIN_L_IA2, MOTOR_LEDC_L_IA2},
+    {PIN_L_IB2, MOTOR_LEDC_L_IB2},
+};
+
+static const MotorOut kRight[] = {
+    {PIN_R_IA1, MOTOR_LEDC_R_IA1},
+    {PIN_R_IB1, MOTOR_LEDC_R_IB1},
+    {PIN_R_IA2, MOTOR_LEDC_R_IA2},
+    {PIN_R_IB2, MOTOR_LEDC_R_IB2},
+};
 
 static constexpr uint32_t kPwmHz = 25000;
 static constexpr uint8_t kPwmBits = 8;
 static bool gReady = false;
 
-static void disableRgbLed() {
+static void rgbLedAsGpio() {
   ledcDetachPin(PIN_RGB_LED);
   gpio_reset_pin(static_cast<gpio_num_t>(PIN_RGB_LED));
   pinMode(PIN_RGB_LED, OUTPUT);
   digitalWrite(PIN_RGB_LED, LOW);
 }
 
-static void writePin(uint8_t ch, uint8_t duty) {
-  const uint8_t pin = kMotorPins[ch];
-  if (pin == PIN_RGB_LED) {
-    digitalWrite(PIN_RGB_LED, duty > 127 ? HIGH : LOW);
+static void writeOut(const MotorOut &out, uint8_t duty) {
+  if (out.ledc == 255) {
+    digitalWrite(out.gpio, duty > 127 ? HIGH : LOW);
     return;
   }
-  ledcWrite(kLedcCh[ch], duty);
+  ledcWrite(out.ledc, duty);
 }
 
-static void drivePair(uint8_t chA, uint8_t chB, int speed) {
+static void driveSide(const MotorOut *pair, int speed) {
   speed = constrain(speed, -255, 255);
   const uint8_t duty = static_cast<uint8_t>(abs(speed));
 
   if (speed == 0) {
-    writePin(chA, 0);
-    writePin(chB, 0);
+    writeOut(pair[0], 0);
+    writeOut(pair[1], 0);
     return;
   }
   if (speed > 0) {
-    writePin(chB, 0);
-    writePin(chA, duty);
+    writeOut(pair[1], 0);
+    writeOut(pair[0], duty);
   } else {
-    writePin(chA, 0);
-    writePin(chB, duty);
+    writeOut(pair[0], 0);
+    writeOut(pair[1], duty);
   }
+}
+
+static void setupPwmPin(const MotorOut &out) {
+  if (out.ledc == 255) {
+    return;
+  }
+  gpio_reset_pin(static_cast<gpio_num_t>(out.gpio));
+  ledcSetup(out.ledc, kPwmHz, kPwmBits);
+  ledcAttachPin(out.gpio, out.ledc);
+  ledcWrite(out.ledc, 0);
 }
 
 void motorBegin() {
   if (gReady) {
     return;
   }
-  disableRgbLed();
-  for (uint8_t ch = 0; ch < sizeof(kMotorPins); ++ch) {
-    const uint8_t pin = kMotorPins[ch];
-    if (pin == PIN_RGB_LED) {
-      continue;
-    }
-    const uint8_t lc = kLedcCh[ch];
-    gpio_reset_pin(static_cast<gpio_num_t>(pin));
-    ledcSetup(lc, kPwmHz, kPwmBits);
-    ledcAttachPin(pin, lc);
-    ledcWrite(lc, 0);
+  rgbLedAsGpio();
+  for (const auto &out : kLeft) {
+    setupPwmPin(out);
+  }
+  for (const auto &out : kRight) {
+    setupPwmPin(out);
   }
   gReady = true;
 }
 
 void motorDrive(int left, int right) {
   motorBegin();
-  drivePair(0, 1, left);
-  drivePair(2, 3, left);
-  drivePair(4, 5, right);
-  drivePair(6, 7, right);
+  driveSide(kLeft, left);
+  driveSide(kRight, right);
 }
 
 void motorStop() {
   if (!gReady) {
     return;
   }
-  drivePair(0, 1, 0);
-  drivePair(2, 3, 0);
-  drivePair(4, 5, 0);
-  drivePair(6, 7, 0);
+  driveSide(kLeft, 0);
+  driveSide(kRight, 0);
 }
