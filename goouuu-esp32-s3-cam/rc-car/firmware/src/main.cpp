@@ -1,228 +1,177 @@
 #include <Arduino.h>
-#include <NimBLEDevice.h>
+#include <WebServer.h>
+#include <WiFi.h>
+#include <esp_camera.h>
 
 #include "motor_driver.h"
 #include "pins.h"
 
-// Nome curto — cabe no anuncio BLE (max 31 bytes)
-static constexpr const char *kBleName = "GOOUUU-RC";
+#ifndef WIFI_SSID
+#define WIFI_SSID "SUA_REDE_WIFI"
+#endif
+#ifndef WIFI_PASS
+#define WIFI_PASS "SUA_SENHA_WIFI"
+#endif
 
-// Nordic UART (NUS) — CircuitMagic BLE Controller
-static constexpr const char *kNusService = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E";
-static constexpr const char *kNusRx = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E";
-static constexpr const char *kNusTx = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E";
+static WebServer server(80);
+static portMUX_TYPE gCamMux = portMUX_INITIALIZER_UNLOCKED;
+static int gLeft = 0;
+static int gRight = 0;
+static unsigned long gLastCmdMs = 0;
+static constexpr unsigned long kCmdTimeoutMs = 4000;
 
-static constexpr int kDefaultSpeed = 200;
+static bool cameraBegin() {
+  camera_config_t cfg = {};
+  cfg.ledc_channel = LEDC_CHANNEL_1;
+  cfg.ledc_timer = LEDC_TIMER_1;
+  cfg.pin_d0 = CAM_PIN_D0;
+  cfg.pin_d1 = CAM_PIN_D1;
+  cfg.pin_d2 = CAM_PIN_D2;
+  cfg.pin_d3 = CAM_PIN_D3;
+  cfg.pin_d4 = CAM_PIN_D4;
+  cfg.pin_d5 = CAM_PIN_D5;
+  cfg.pin_d6 = CAM_PIN_D6;
+  cfg.pin_d7 = CAM_PIN_D7;
+  cfg.pin_xclk = CAM_PIN_XCLK;
+  cfg.pin_pclk = CAM_PIN_PCLK;
+  cfg.pin_vsync = CAM_PIN_VSYNC;
+  cfg.pin_href = CAM_PIN_HREF;
+  cfg.pin_sccb_sda = CAM_PIN_SIOD;
+  cfg.pin_sccb_scl = CAM_PIN_SIOC;
+  cfg.pin_pwdn = CAM_PIN_PWDN;
+  cfg.pin_reset = CAM_PIN_RESET;
+  cfg.xclk_freq_hz = 20000000;
+  cfg.frame_size = FRAMESIZE_QVGA;
+  cfg.pixel_format = PIXFORMAT_JPEG;
+  cfg.grab_mode = CAMERA_GRAB_LATEST;
+  cfg.fb_location = CAMERA_FB_IN_PSRAM;
+  cfg.jpeg_quality = 14;
+  cfg.fb_count = 2;
 
-static void driveTank(int left, int right) {
-  if (left == 0 && right == 0) {
-    motorStop();
-  } else {
-    motorDrive(constrain(left, -255, 255), constrain(right, -255, 255));
-  }
+  return esp_camera_init(&cfg) == ESP_OK;
 }
 
-static void driveJoystick(int x, int y) {
-  if (abs(x) < 12 && abs(y) < 12) {
-    motorStop();
+static camera_fb_t *captureFrame() {
+  portENTER_CRITICAL(&gCamMux);
+  camera_fb_t *fb = esp_camera_fb_get();
+  portEXIT_CRITICAL(&gCamMux);
+  return fb;
+}
+
+static void handleCapture() {
+  camera_fb_t *fb = captureFrame();
+  if (!fb) {
+    server.send(503, "text/plain", "camera busy");
     return;
   }
-  const int fwd = map(y, -100, 100, -255, 255);
-  const int turn = map(x, -100, 100, -255, 255);
-  driveTank(constrain(fwd + turn, -255, 255), constrain(fwd - turn, -255, 255));
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send_P(200, "image/jpeg", reinterpret_cast<const char *>(fb->buf), fb->len);
+  esp_camera_fb_return(fb);
 }
 
-static void driveJoystick255(int x, int y) {
-  driveJoystick((x - 128) * 100 / 128, (y - 128) * 100 / 128);
-}
-
-static bool parseTwoInts(const std::string &data, int &a, int &b) {
-  return sscanf(data.c_str(), "%d,%d", &a, &b) == 2 ||
-         sscanf(data.c_str(), "%d;%d", &a, &b) == 2 ||
-         sscanf(data.c_str(), "%d %d", &a, &b) == 2 ||
-         sscanf(data.c_str(), "%d:%d", &a, &b) == 2;
-}
-
-static bool applyLetter(char cmd) {
-  const int s = kDefaultSpeed;
-  switch (cmd) {
-    case 'F':
-    case 'U':
-      driveTank(s, s);
-      return true;
-    case 'B':
-    case 'D':
-      driveTank(-s, -s);
-      return true;
-    case 'L':
-      driveTank(-s, s);
-      return true;
-    case 'R':
-      driveTank(s, -s);
-      return true;
-    case 'S':
-    case 'X':
-      motorStop();
-      return true;
-    case 'W':
-      driveTank(s, s);
-      return true;
-    case 'A':
-      driveTank(-s, s);
-      return true;
-    default:
-      return false;
+static int parseIntField(const String &body, const char *key) {
+  const String token = String("\"") + key + "\":";
+  const int pos = body.indexOf(token);
+  if (pos < 0) {
+    return 0;
   }
+  return body.substring(pos + token.length()).toInt();
 }
 
-static bool applyDigit(char cmd) {
-  switch (cmd) {
-    case '1':
-    case '8':
-      driveTank(kDefaultSpeed, kDefaultSpeed);
-      return true;
-    case '2':
-    case '5':
-      driveTank(-kDefaultSpeed, -kDefaultSpeed);
-      return true;
-    case '4':
-      driveTank(-kDefaultSpeed, kDefaultSpeed);
-      return true;
-    case '6':
-      driveTank(kDefaultSpeed, -kDefaultSpeed);
-      return true;
-    case '0':
-    case '3':
-    case '7':
-    case '9':
-      motorStop();
-      return true;
-    default:
-      return false;
-  }
-}
-
-static void handleBleDrive(const std::string &data) {
-  if (data.empty()) {
-    motorStop();
+static void handleControl() {
+  if (server.method() != HTTP_POST) {
+    server.send(405, "text/plain", "POST only");
     return;
   }
 
-  if (data.find("\xE2\x86\x91") != std::string::npos) {
-    driveTank(kDefaultSpeed, kDefaultSpeed);
-    return;
-  }
-  if (data.find("\xE2\x86\x93") != std::string::npos) {
-    driveTank(-kDefaultSpeed, -kDefaultSpeed);
-    return;
-  }
-  if (data.find("\xE2\x86\x90") != std::string::npos) {
-    driveTank(-kDefaultSpeed, kDefaultSpeed);
-    return;
-  }
-  if (data.find("\xE2\x86\x92") != std::string::npos) {
-    driveTank(kDefaultSpeed, -kDefaultSpeed);
-    return;
-  }
+  const String body = server.arg("plain");
+  gLeft = constrain(parseIntField(body, "left"), -255, 255);
+  gRight = constrain(parseIntField(body, "right"), -255, 255);
+  gLastCmdMs = millis();
+  motorDrive(gLeft, gRight);
 
-  int a = 0;
-  int b = 0;
-  if (parseTwoInts(data, a, b)) {
-    if (a == 0 && b == 0) {
-      motorStop();
-      return;
-    }
-    if (a >= 0 && a <= 255 && b >= 0 && b <= 255) {
-      driveJoystick255(a, b);
-      return;
-    }
-    if (abs(a) <= 100 && abs(b) <= 100) {
-      driveJoystick(a, b);
-      return;
-    }
-    driveTank(a, b);
-    return;
-  }
+  Serial.printf("control L=%d R=%d\n", gLeft, gRight);
 
-  bool handled = false;
-  for (unsigned char raw : data) {
-    if (raw == '\r' || raw == '\n' || raw == ' ' || raw == ',') {
-      continue;
-    }
-    const char c = static_cast<char>(toupper(raw));
-    if (c == '^' || c == 'I') {
-      driveTank(kDefaultSpeed, kDefaultSpeed);
-      handled = true;
-      continue;
-    }
-    if (c == 'V' || c == 'J') {
-      driveTank(-kDefaultSpeed, -kDefaultSpeed);
-      handled = true;
-      continue;
-    }
-    if (c == '<' || c == 'G') {
-      driveTank(-kDefaultSpeed, kDefaultSpeed);
-      handled = true;
-      continue;
-    }
-    if (c == '>' || c == 'H') {
-      driveTank(kDefaultSpeed, -kDefaultSpeed);
-      handled = true;
-      continue;
-    }
-    if (applyLetter(c) || applyDigit(c)) {
-      handled = true;
-    }
-  }
-  if (!handled) {
-    motorStop();
-  }
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, "application/json", "{\"ok\":true}");
 }
 
-class BleServerCallbacks : public NimBLEServerCallbacks {
-  void onDisconnect(NimBLEServer *server) override {
-    motorStop();
-    server->startAdvertising();
+static void handleStatus() {
+  String json = "{\"ip\":\"";
+  json += WiFi.localIP().toString();
+  json += "\",\"left\":";
+  json += gLeft;
+  json += ",\"right\":";
+  json += gRight;
+  json += "}";
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, "application/json", json);
+}
+
+static void handleOptions() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+  server.send(204);
+}
+
+static bool wifiBegin() {
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+  Serial.print("WiFi");
+  for (int i = 0; i < 40; ++i) {
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println(" OK");
+      Serial.print("IP: ");
+      Serial.println(WiFi.localIP());
+      return true;
+    }
+    Serial.print(".");
+    delay(500);
   }
-};
+  Serial.println(" FALHOU");
+  return false;
+}
 
-class BleRxCallbacks : public NimBLECharacteristicCallbacks {
-  void onWrite(NimBLECharacteristic *characteristic) override {
-    handleBleDrive(characteristic->getValue());
-  }
-};
-
-static void bleBegin() {
-  NimBLEDevice::init(kBleName);
-  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
-
-  NimBLEServer *server = NimBLEDevice::createServer();
-  server->setCallbacks(new BleServerCallbacks());
-
-  NimBLEService *service = server->createService(kNusService);
-  NimBLECharacteristic *rx = service->createCharacteristic(
-      kNusRx, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-  rx->setCallbacks(new BleRxCallbacks());
-  NimBLECharacteristic *tx = service->createCharacteristic(
-      kNusTx, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
-  service->start();
-
-  // So o nome no anuncio — UUID descoberto apos conectar
-  NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
-  advertising->setName(kBleName);
-  advertising->start();
+static void serverBegin() {
+  server.on("/capture", HTTP_GET, handleCapture);
+  server.on("/control", HTTP_POST, handleControl);
+  server.on("/control", HTTP_OPTIONS, handleOptions);
+  server.on("/status", HTTP_GET, handleStatus);
+  server.onNotFound([]() { server.send(404, "text/plain", "not found"); });
+  server.begin();
+  Serial.println("HTTP: GET /capture  POST /control  GET /status");
 }
 
 void setup() {
-  ledcDetachPin(PIN_RGB_LED);
-  pinMode(PIN_RGB_LED, OUTPUT);
-  digitalWrite(PIN_RGB_LED, LOW);
-  bleBegin();
+  Serial.begin(115200);
+  delay(500);
+  Serial.println("RC seguidor IA (LM Studio) — init");
+
+  if (!cameraBegin()) {
+    Serial.println("ERRO: camera");
+    return;
+  }
+  Serial.println("Camera OK");
+
+  if (!wifiBegin()) {
+    return;
+  }
+
+  serverBegin();
+  motorBegin();
+  motorStop();
 }
 
 void loop() {
-  if (NimBLEDevice::getServer()->getConnectedCount() == 0) {
-    NimBLEDevice::startAdvertising();
+  server.handleClient();
+
+  if (gLastCmdMs == 0 || millis() - gLastCmdMs > kCmdTimeoutMs) {
+    motorStop();
+    return;
   }
-  delay(1000);
+
+  motorDrive(gLeft, gRight);
 }

@@ -8,6 +8,9 @@ static constexpr uint8_t kMotorPins[] = {
     PIN_R_IA1, PIN_R_IB1, PIN_R_IA2, PIN_R_IB2,
 };
 
+// Camera XCLK uses LEDC channel 1 — never use ch 1 for motors.
+static constexpr uint8_t kLedcCh[] = {0, 2, 3, 4, 5, 0, 6, 7};
+
 static constexpr uint32_t kPwmHz = 25000;
 static constexpr uint8_t kPwmBits = 8;
 static bool gReady = false;
@@ -25,7 +28,7 @@ static void writePin(uint8_t ch, uint8_t duty) {
     digitalWrite(PIN_RGB_LED, duty > 127 ? HIGH : LOW);
     return;
   }
-  ledcWrite(ch, duty);
+  ledcWrite(kLedcCh[ch], duty);
 }
 
 static void drivePair(uint8_t chA, uint8_t chB, int speed) {
@@ -56,10 +59,11 @@ void motorBegin() {
     if (pin == PIN_RGB_LED) {
       continue;
     }
+    const uint8_t lc = kLedcCh[ch];
     gpio_reset_pin(static_cast<gpio_num_t>(pin));
-    ledcSetup(ch, kPwmHz, kPwmBits);
-    ledcAttachPin(pin, ch);
-    ledcWrite(ch, 0);
+    ledcSetup(lc, kPwmHz, kPwmBits);
+    ledcAttachPin(pin, lc);
+    ledcWrite(lc, 0);
   }
   gReady = true;
 }
