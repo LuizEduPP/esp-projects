@@ -18,13 +18,16 @@ static portMUX_TYPE gCamMux = portMUX_INITIALIZER_UNLOCKED;
 static bool gCamOk = false;
 static uint32_t gCaptureCount = 0;
 static uint32_t gControlCount = 0;
+static unsigned long gBootMs = 0;
 
 static void cors() {
   gServer.sendHeader("Access-Control-Allow-Origin", "*");
 }
 
 static void logReq(const char *path) {
-  Serial.printf("[http] %s %s\n", gServer.method() == HTTP_GET ? "GET" : "POST", path);
+  Serial.printf("[http] %s %s | client=%s | uptime=%lums\n",
+                gServer.method() == HTTP_GET ? "GET" : "POST", path,
+                gServer.client().remoteIP().toString().c_str(), millis() - gBootMs);
 }
 
 static bool cameraBegin() {
@@ -91,7 +94,10 @@ static void handleControl() {
   Serial.printf("[http] body: %s\n", body.c_str());
   const int l = jsonInt(body, "left");
   const int r = jsonInt(body, "right");
-  Serial.printf("[http] parsed L=%d R=%d\n", l, r);
+  if (body.indexOf("\"left\"") < 0 || body.indexOf("\"right\"") < 0) {
+    Serial.println("[http] AVISO JSON sem left/right — usando 0");
+  }
+  Serial.printf("[http] parsed L=%d R=%d (control #%lu)\n", l, r, gControlCount);
   motorSetTagged(l, r, "http");
   cors();
   String resp = "{\"ok\":true,\"left\":";
@@ -101,6 +107,8 @@ static void handleControl() {
   resp += ",\"motor\":";
   resp += motorDiagJson();
   resp += "}";
+  Serial.printf("[http] /control -> running=%s\n",
+                (l != 0 || r != 0) ? "SIM" : "NAO");
   gServer.send(200, "application/json", resp);
 }
 
@@ -148,7 +156,9 @@ static void handleStatus() {
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("\n[boot] RC car diag firmware");
+  gBootMs = millis();
+  Serial.println("\n[boot] ========== RC car diag ==========");
+  Serial.printf("[boot] heap=%u psram=%u\n", ESP.getFreeHeap(), ESP.getFreePsram());
 
   motorBegin();
 
@@ -170,8 +180,10 @@ void setup() {
     Serial.println("[boot] ERRO wifi — motores via serial apenas");
     return;
   }
-  Serial.printf("[boot] IP %s\n", WiFi.localIP().toString().c_str());
-  Serial.println("[boot] GET /diag  POST /control  POST /test  GET /capture");
+  Serial.printf("[boot] IP %s rssi=%d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
+  Serial.println("[boot] endpoints: GET /capture /diag /status | POST /control /test");
+  Serial.println("[boot] logs: [http]=rede [motor]=motores [status]=heartbeat 5s");
+  Serial.println("[boot] =====================================");
 
   gServer.on("/capture", HTTP_GET, handleCapture);
   gServer.on("/control", HTTP_POST, handleControl);
@@ -184,4 +196,5 @@ void setup() {
 void loop() {
   gServer.handleClient();
   motorPoll();
+  motorLogHeartbeat();
 }

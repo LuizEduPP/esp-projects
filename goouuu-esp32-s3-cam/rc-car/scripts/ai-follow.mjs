@@ -11,12 +11,12 @@ const CFG = {
   lm: process.env.LM_URL ?? "http://127.0.0.1:1234/v1/chat/completions",
   model: process.env.LM_MODEL ?? "mistralai/ministral-3-3b",
   intervalMs: Number(process.env.INTERVAL_MS ?? "800"),
-  keepaliveMs: Number(process.env.KEEPALIVE_MS ?? "300"),
+  keepaliveMs: Number(process.env.KEEPALIVE_MS ?? "250"),
   viewPort: Number(process.env.VIEW_PORT ?? "8765"),
-  minConfidence: Number(process.env.MIN_CONFIDENCE ?? "0.75"),
-  onFrames: Number(process.env.PERSON_ON_FRAMES ?? "2"),
-  offFrames: Number(process.env.PERSON_OFF_FRAMES ?? "4"),
-  baseSpeed: Number(process.env.BASE_SPEED ?? "130"),
+  minConfidence: Number(process.env.MIN_CONFIDENCE ?? "0.55"),
+  onFrames: Number(process.env.PERSON_ON_FRAMES ?? "1"),
+  offFrames: Number(process.env.PERSON_OFF_FRAMES ?? "3"),
+  baseSpeed: Number(process.env.BASE_SPEED ?? "255"),
   turnGain: Number(process.env.TURN_GAIN ?? "380"),
   testDrive: process.env.TEST_DRIVE === "1",
   testSpeed: Number(process.env.TEST_SPEED ?? "200"),
@@ -91,7 +91,7 @@ function analyzeModel(text) {
 
   const motors = CFG.testDrive
     ? { left: CFG.testSpeed, right: CFG.testSpeed }
-    : state.personLocked
+    : state.personLocked || seen
       ? computeMotors(cx, cy)
       : { left: 0, right: 0 };
 
@@ -152,7 +152,11 @@ async function askVision(b64) {
   return (msg.content || msg.reasoning_content || "").trim();
 }
 
+const lastDrive = { left: 0, right: 0 };
+
 async function sendDrive(left, right) {
+  lastDrive.left = left;
+  lastDrive.right = right;
   await espFetch("/control", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -161,23 +165,22 @@ async function sendDrive(left, right) {
   });
 }
 
-async function keepalive(left, right, ms) {
-  if (left === 0 && right === 0) {
-    await sleep(ms);
-    return;
-  }
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    await sleep(Math.min(CFG.keepaliveMs, end - Date.now()));
+/** Reenvia ultimo comando durante inferencia LM (~5s) para nao estourar timeout do ESP. */
+function startMotorKeeper() {
+  setInterval(async () => {
+    if (lastDrive.left === 0 && lastDrive.right === 0) return;
     try {
-      await sendDrive(left, right);
+      await espFetch("/control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lastDrive),
+        signal: AbortSignal.timeout(3000),
+      });
     } catch {
       /* ignore */
     }
-  }
+  }, CFG.keepaliveMs);
 }
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── loop ──────────────────────────────────────────────────────────────────
 async function tick() {
@@ -193,7 +196,7 @@ async function tick() {
   state.at = new Date().toISOString();
   state.error = null;
 
-  const tag = det.personLocked ? "SEGUINDO" : det.seen ? "avaliando" : "livre";
+  const tag = det.personLocked ? "SEGUINDO" : det.seen ? "DETECTADO" : "livre";
   console.log(
     `[${state.at}] ${state.ms}ms ${tag} conf=${det.confidence.toFixed(2)} ` +
       `cx=${det.cx.toFixed(2)} L=${det.left} R=${det.right} | ${det.note || answer.slice(0, 60)}`,
@@ -348,6 +351,7 @@ async function main() {
     console.log(`*** TEST_DRIVE=1 — motores fixos L=${CFG.testSpeed} R=${CFG.testSpeed} (ignora IA) ***`);
   }
   startViewer();
+  startMotorKeeper();
 
   try {
     const st = await (await espFetch("/status", { signal: AbortSignal.timeout(5000) })).json();
@@ -370,7 +374,7 @@ async function main() {
         /* ignore */
       }
     }
-    await keepalive(det.left, det.right, CFG.intervalMs);
+    await new Promise((r) => setTimeout(r, CFG.intervalMs));
   }
 }
 
