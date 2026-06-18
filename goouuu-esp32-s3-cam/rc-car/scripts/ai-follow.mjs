@@ -31,8 +31,7 @@ const PROMPT =
 // ── estado ────────────────────────────────────────────────────────────────
 const state = {
   frame: null,
-  detection: null,
-  drive: { left: 0, right: 0 },
+  det: null,
   ms: 0,
   at: "",
   error: null,
@@ -98,8 +97,6 @@ function analyzeModel(text) {
     cy,
     note,
     seen,
-    modelLeft: motors.left,
-    modelRight: motors.right,
     left: motors.left,
     right: motors.right,
     raw: text.trim(),
@@ -185,8 +182,7 @@ async function tick() {
   await sendDrive(det.left, det.right);
 
   state.frame = buf;
-  state.detection = det;
-  state.drive = { left: det.left, right: det.right };
+  state.det = det;
   state.ms = Date.now() - t0;
   state.at = new Date().toISOString();
   state.error = null;
@@ -317,19 +313,13 @@ function startViewer() {
       return;
     }
     if (path === "/api/state") {
-      const d = state.detection ?? {};
+      const d = state.det ?? {};
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          personRaw: d.personRaw ?? false,
-          personLocked: d.personLocked ?? false,
-          seen: d.seen ?? false,
-          confidence: d.confidence ?? 0,
-          cx: d.cx ?? 0.5,
-          cy: d.cy ?? 0.5,
-          note: d.note ?? "",
-          left: state.drive.left,
-          right: state.drive.right,
+          ...d,
+          left: d.left ?? 0,
+          right: d.right ?? 0,
           answer: d.raw ?? "",
           ms: state.ms,
           at: state.at,

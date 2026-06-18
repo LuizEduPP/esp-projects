@@ -3,5 +3,6 @@
 #include <Arduino.h>
 
 void motorBegin();
-void motorDrive(int left, int right);
-void motorStop();
+void motorSet(int left, int right);
+void motorPoll();
+void motorAfterCapture();
