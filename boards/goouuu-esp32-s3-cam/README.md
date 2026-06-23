@@ -20,7 +20,8 @@ Firmware for the **GOOUUU ESP32-S3-CAM** board (ESP32-S3 + OV2640 camera on modu
 From the monorepo root:
 
 ```bash
-yarn mini-games:setup    # Linux, once — udev
+yarn setup               # Linux, once — udev (all boards)
+yarn mini-games:setup    # same as yarn setup
 yarn mini-games:build
 yarn mini-games:flash
 yarn mini-games:monitor

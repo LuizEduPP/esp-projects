@@ -1,0 +1,12 @@
+{
+  "name": "esp32-cyd-arcade",
+  "private": true,
+  "scripts": {
+    "fw:build": "cd firmware && bash ../../../scripts/pio.sh run",
+    "fw:erase": "cd firmware && bash ../../../scripts/pio.sh run -t erase",
+    "fw:flash": "cd firmware && bash ../../../scripts/pio.sh run && bash ../../../scripts/pio.sh run -t upload",
+    "fw:install": "cd firmware && bash ../../../scripts/pio.sh run -t erase && bash ../../../scripts/pio.sh run -t upload",
+    "fw:monitor": "cd firmware && bash ../../../scripts/pio.sh device monitor -b 115200 --filter direct",
+    "preview:circus": "python3 -m http.server 8765"
+  }
+}
