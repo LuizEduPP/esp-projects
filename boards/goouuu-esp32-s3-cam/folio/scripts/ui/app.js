@@ -80,8 +80,8 @@ const SECTIONS = [
     { path: "perception.autoEnhance", label: "Auto brilho", type: "bool" },
     { path: "perception.vision.jpegQuality", label: "JPEG p/ LM", type: "number" },
     { path: "perception.vision.maxPasses", label: "Passes imagem", type: "number" },
-    { path: "perception.vision.targetBrightness", label: "Brilho alvo", type: "number", step: "0.05" },
-    { path: "perception.vision.maxGain", label: "Ganho máx.", type: "number", step: "0.1" },
+    { path: "perception.vision.targetBrightness", label: "Brilho alvo", type: "number", step: "0.01" },
+    { path: "perception.vision.maxGain", label: "Ganho máx.", type: "number", step: "0.01" },
     { path: "perception.storeSounds", label: "Guardar sons", type: "bool" },
     { path: "perception.soundMinEnergy", label: "Energia som mín.", type: "number", step: "0.001" },
     { path: "perception.soundMinConfidence", label: "Confiança som mín.", type: "number", step: "0.05" },
@@ -486,7 +486,7 @@ $("cfg-form").onsubmit = async (e) => {
   document.querySelectorAll("[data-path]").forEach((el) => {
     let v = el.value;
     if (el.tagName === "SELECT" && el.querySelector('option[value="true"]')) v = v === "true";
-    else if (el.type === "number") v = v === "" ? null : Number(v);
+    else if (el.type === "number") v = v === "" ? null : Number(String(v).replace(",", "."));
     else if (v === "") v = null;
     set(patch, el.dataset.path, v);
   });
