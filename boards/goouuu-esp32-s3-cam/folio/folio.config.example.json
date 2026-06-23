@@ -26,7 +26,8 @@
     "whisperTimeoutMs": 120000,
     "whisperLanguage": null,
     "pipelineBatch": 4,
-    "retentionDays": 7
+    "retentionDays": 7,
+    "retentionSweepMs": 21600000
   },
   "pipeline": {
     "enabled": true,
@@ -45,7 +46,13 @@
   },
   "episodes": {
     "gapMin": 12,
-    "frameAlignMs": 60000
+    "frameAlignMs": 60000,
+    "graphEdge": {
+      "themed": 0.8,
+      "decided": 0.7,
+      "open": 0.75,
+      "rejected": 0.9
+    }
   },
   "memory": {
     "enabled": true,

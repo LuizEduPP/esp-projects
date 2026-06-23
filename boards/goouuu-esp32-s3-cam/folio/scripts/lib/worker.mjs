@@ -15,8 +15,6 @@ import { captionFrame } from "./lm.mjs";
 import { isSpeechChunk, transcribeWav } from "./whisper.mjs";
 import { writeWav } from "./util.mjs";
 
-const RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000;
-
 let lastFrameLmAt = 0;
 
 function deleteChunkFile(path) {
@@ -97,7 +95,7 @@ export function runRetentionPass() {
 
 export function startRetentionLoop() {
   runRetentionPass();
-  setInterval(runRetentionPass, RETENTION_INTERVAL_MS);
+  setInterval(runRetentionPass, CFG.audioRetentionSweepMs);
 }
 
 export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {

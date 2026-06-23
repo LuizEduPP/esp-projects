@@ -10,6 +10,7 @@ static const char *SPOOL_AUDIO = "/sdcard/folio/audio";
 static const char *SPOOL_FRAMES = "/sdcard/folio/frames";
 
 static bool gSpoolOk = false;
+static bool gSpoolAbsent = false;
 static unsigned long gLastMountTryMs = 0;
 
 static bool cardMounted() { return SD_MMC.cardType() != CARD_NONE; }
@@ -134,12 +135,21 @@ static uint32_t countInDir(const char *dir, const char *dataExt) {
 }
 
 bool spoolBegin() {
+  if (gSpoolAbsent) {
+    return false;
+  }
   SD_MMC.setPins(SD_PIN_CLK, SD_PIN_CMD, SD_PIN_D0);
   if (cardMounted()) {
     SD_MMC.end();
   }
-  if (!SD_MMC.begin(SD_MOUNT, true)) {
+  if (!SD_MMC.begin(SD_MOUNT, true, false)) {
     gSpoolOk = false;
+    if (SD_MMC.cardType() == CARD_NONE) {
+      if (!gSpoolAbsent) {
+        Serial.println("[spool] no SD — push-only (offline spool disabled)");
+      }
+      gSpoolAbsent = true;
+    }
     return false;
   }
   if (!cardMounted()) {
@@ -164,7 +174,7 @@ bool spoolEnsure() {
 }
 
 void spoolTick() {
-  if (spoolOk()) {
+  if (spoolOk() || gSpoolAbsent) {
     return;
   }
   const unsigned long now = millis();
@@ -174,6 +184,8 @@ void spoolTick() {
   gLastMountTryMs = now;
   if (spoolBegin()) {
     Serial.println("[spool] SD re-mounted");
+  } else if (SD_MMC.cardType() == CARD_NONE) {
+    gSpoolAbsent = true;
   }
 }
 

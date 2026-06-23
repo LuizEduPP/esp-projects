@@ -429,8 +429,8 @@ export function clearEpisodesForDay(db, day) {
     db.prepare("DELETE FROM episode_frames WHERE episode_id = ?").run(ep.id);
   }
   db.prepare("DELETE FROM episodes WHERE day = ?").run(day);
-  db.prepare("DELETE FROM graph_nodes WHERE day = ?").run(day);
   db.prepare("DELETE FROM graph_edges WHERE day = ?").run(day);
+  db.prepare("DELETE FROM graph_nodes WHERE day = ?").run(day);
 }
 
 export function insertEpisode(db, ep) {
@@ -596,6 +596,7 @@ export function openDb() {
   const db = new DatabaseSync(PATHS.db());
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA busy_timeout = 5000;");
+  db.exec("PRAGMA foreign_keys = ON;");
   db.exec(DB_SCHEMA);
   migrateDb(db);
   dbSingleton = db;

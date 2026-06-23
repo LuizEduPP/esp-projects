@@ -247,6 +247,7 @@ function buildCfgFromFile(file = getFileData()) {
     whisperLanguage: cfgStr(file, "audio.whisperLanguage", "FOLIO_WHISPER_LANGUAGE") || null,
     pipelineAudioBatch: cfgNum(file, "audio.pipelineBatch", "FOLIO_PIPELINE_AUDIO_BATCH"),
     audioRetentionDays: cfgNum(file, "audio.retentionDays", "FOLIO_AUDIO_RETENTION_DAYS"),
+    audioRetentionSweepMs: cfgNum(file, "audio.retentionSweepMs", "FOLIO_AUDIO_RETENTION_SWEEP_MS"),
 
     pipelineIntervalMs: cfgNum(file, "pipeline.intervalMs", "FOLIO_PIPELINE_INTERVAL_MS"),
     pipelineEnabled: cfgBool(file, "pipeline.enabled", "FOLIO_PIPELINE"),
@@ -256,6 +257,10 @@ function buildCfgFromFile(file = getFileData()) {
 
     episodeGapMin: cfgNum(file, "episodes.gapMin", "FOLIO_EPISODE_GAP_MIN"),
     episodeFrameAlignMs: cfgNum(file, "episodes.frameAlignMs", "FOLIO_EPISODE_FRAME_ALIGN_MS"),
+    episodeGraphThemedConfidence: cfgNum(file, "episodes.graphEdge.themed", "FOLIO_EP_GRAPH_THEMED"),
+    episodeGraphDecidedConfidence: cfgNum(file, "episodes.graphEdge.decided", "FOLIO_EP_GRAPH_DECIDED"),
+    episodeGraphOpenConfidence: cfgNum(file, "episodes.graphEdge.open", "FOLIO_EP_GRAPH_OPEN"),
+    episodeGraphRejectedConfidence: cfgNum(file, "episodes.graphEdge.rejected", "FOLIO_EP_GRAPH_REJECTED"),
 
     workerBacklogHigh: cfgNum(file, "worker.backlogHigh", "FOLIO_WORKER_BACKLOG_HIGH"),
     workerBacklogMedium: cfgNum(file, "worker.backlogMedium", "FOLIO_WORKER_BACKLOG_MEDIUM"),

@@ -205,6 +205,7 @@ audio{width:100%;height:40px;border-radius:8px}
         <div class="field"><label>Locale</label><input name="locale" id="cfg-locale"/></div>
         <div class="field"><label>Speech threshold</label><input name="speechEnergyThreshold" id="cfg-speech" type="number" step="0.001"/></div>
         <div class="field"><label>Pipeline interval (ms)</label><input name="pipelineIntervalMs" id="cfg-pipe-int" type="number"/></div>
+        <div class="field"><label>Retention sweep (ms)</label><input name="retentionSweepMs" id="cfg-ret-sweep" type="number"/></div>
         <div class="field"><label>Frame caption gap (ms)</label><input name="captionIntervalMs" id="cfg-cap-int" type="number"/></div>
       </div>
       <div class="settings-section">Worker (queue scaling)</div>
@@ -244,6 +245,11 @@ audio{width:100%;height:40px;border-radius:8px}
         <div class="field"><label>Min fact length</label><input name="minFactTextLength" id="cfg-mem-fact-len" type="number"/></div>
         <div class="field"><label>Fallback lexical</label>
           <select name="fallbackLexical" id="cfg-mem-fallback">
+            <option value="false">false</option><option value="true">true</option>
+          </select>
+        </div>
+        <div class="field"><label>Use embeddings</label>
+          <select name="useEmbeddings" id="cfg-mem-embed">
             <option value="false">false</option><option value="true">true</option>
           </select>
         </div>
@@ -461,6 +467,7 @@ async function loadSettings(){
   $('cfg-locale').value=cfg.locale;
   $('cfg-speech').value=cfg.audio.speechEnergyThreshold;
   $('cfg-pipe-int').value=cfg.pipeline.intervalMs;
+  $('cfg-ret-sweep').value=cfg.audio.retentionSweepMs;
   $('cfg-cap-int').value=cfg.frames.captionIntervalMs;
   $('cfg-worker-high').value=cfg.worker.backlogHigh;
   $('cfg-worker-med').value=cfg.worker.backlogMedium;
@@ -483,6 +490,7 @@ async function loadSettings(){
   $('cfg-mem-profile').value=cfg.memory.profileLimit;
   $('cfg-mem-fact-len').value=cfg.memory.minFactTextLength;
   $('cfg-mem-fallback').value=String(cfg.memory.fallbackLexical);
+  $('cfg-mem-embed').value=String(cfg.memory.useEmbeddings);
   $('cfg-meta').textContent=`Brain config v${cfg.version||'?'} · ${cfg.configPath||'defaults'}`;
   const lines=(dev.devices||[]).map(d=>{
     const ok=d.node_config_applied===dev.brain_config_version;
@@ -495,7 +503,7 @@ $('settings-form').onsubmit=async e=>{
   e.preventDefault();
   const body={
     locale:$('cfg-locale').value,
-    audio:{speechEnergyThreshold:Number($('cfg-speech').value)},
+    audio:{speechEnergyThreshold:Number($('cfg-speech').value),retentionSweepMs:Number($('cfg-ret-sweep').value)},
     pipeline:{intervalMs:Number($('cfg-pipe-int').value)},
     worker:{
       backlogHigh:Number($('cfg-worker-high').value),
@@ -528,6 +536,7 @@ $('settings-form').onsubmit=async e=>{
       profileLimit:Number($('cfg-mem-profile').value),
       minFactTextLength:Number($('cfg-mem-fact-len').value),
       fallbackLexical:$('cfg-mem-fallback').value==='true',
+      useEmbeddings:$('cfg-mem-embed').value==='true',
     },
   };
   const res=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

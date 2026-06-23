@@ -92,7 +92,7 @@ static bool fetchFromBrain() {
   const String version = jsonString(body, "version");
   if (version.length() > 0) {
     version.toCharArray(gCfg.version, sizeof(gCfg.version));
-    snprintf(gVersionHeader, sizeof(gVersionHeader), "%s", gCfg.version.c_str());
+    snprintf(gVersionHeader, sizeof(gVersionHeader), "%s", gCfg.version);
   }
 
   gCfg.frameIntervalMs = (uint32_t)jsonNestedLong(body, "frames", "captureIntervalMs",

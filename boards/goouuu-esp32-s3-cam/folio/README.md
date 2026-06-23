@@ -151,6 +151,7 @@ ESP polls `/api/node/config` every `node.statusIntervalMs` and sends `X-Folio-Co
 | `audio.whisperModel` | `FOLIO_WHISPER_MODEL` | `base` | Whisper model size |
 | `audio.pipelineBatch` | `FOLIO_PIPELINE_AUDIO_BATCH` | `4` | Chunks per worker tick |
 | `audio.retentionDays` | `FOLIO_AUDIO_RETENTION_DAYS` | `7` | Keep PCM with transcript |
+| `audio.retentionSweepMs` | `FOLIO_AUDIO_RETENTION_SWEEP_MS` | `21600000` | Interval for stale-audio prune (6h) |
 | `pipeline.intervalMs` | `FOLIO_PIPELINE_INTERVAL_MS` | `30000` | Queue worker interval |
 | `worker.backlogHigh` | `FOLIO_WORKER_BACKLOG_HIGH` | `200` | Pending audio count → scale batch ×3 |
 | `worker.backlogMedium` | `FOLIO_WORKER_BACKLOG_MEDIUM` | `50` | Pending audio count → scale batch ×2 |
@@ -160,6 +161,7 @@ ESP polls `/api/node/config` every `node.statusIntervalMs` and sends `X-Folio-Co
 | `digest.passDTemperature` | `FOLIO_DIGEST_PASS_D_TEMP` | `0.35` | Pass D prose LM temperature |
 | `episodes.gapMin` | `FOLIO_EPISODE_GAP_MIN` | `12` | Silence minutes → new episode |
 | `episodes.frameAlignMs` | `FOLIO_EPISODE_FRAME_ALIGN_MS` | `60000` | Frame↔episode alignment window |
+| `episodes.graphEdge.*` | `FOLIO_EP_GRAPH_*` | themed `0.8`, decided `0.7`, open `0.75`, rejected `0.9` | Day-graph edge confidence |
 | `memory.lookbackDays` | `FOLIO_MEMORY_LOOKBACK_DAYS` | `90` | RAG retrieval window |
 | `memory.retrieveLimit` | `FOLIO_MEMORY_RETRIEVE` | `14` | Max memory chunks per digest |
 | `memory.minScore` | `FOLIO_MEMORY_MIN_SCORE` | `0.08` | Min cosine score for RAG hit |

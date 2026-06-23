@@ -196,7 +196,7 @@ export function buildGraphFromEpisodes(db, day, episodes) {
         to_node: themeNode,
         relation: "themed",
         evidence_json: JSON.stringify([`ep:${ep.id}`]),
-        confidence: 0.8,
+        confidence: CFG.episodeGraphThemedConfidence,
       });
     }
 
@@ -208,7 +208,7 @@ export function buildGraphFromEpisodes(db, day, episodes) {
         to_node: decNode,
         relation: "decided",
         evidence_json: JSON.stringify(d.evidence ?? []),
-        confidence: d.confidence ?? 0.7,
+        confidence: d.confidence ?? CFG.episodeGraphDecidedConfidence,
       });
     }
 
@@ -220,7 +220,7 @@ export function buildGraphFromEpisodes(db, day, episodes) {
         to_node: qNode,
         relation: "left_open",
         evidence_json: JSON.stringify([`ep:${ep.id}`]),
-        confidence: 0.75,
+        confidence: CFG.episodeGraphOpenConfidence,
       });
     }
 
@@ -232,7 +232,7 @@ export function buildGraphFromEpisodes(db, day, episodes) {
         to_node: rNode,
         relation: "rejected",
         evidence_json: JSON.stringify([`ep:${ep.id}`]),
-        confidence: 0.9,
+        confidence: CFG.episodeGraphRejectedConfidence,
       });
     }
   }
