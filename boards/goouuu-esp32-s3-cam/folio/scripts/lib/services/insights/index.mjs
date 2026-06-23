@@ -91,16 +91,20 @@ async function generateInsightsJson(db, day, stats, ragHits) {
     : "(sem memória anterior relevante)";
 
   const system =
-    "You analyze a passive home witness archive. Return JSON only. " +
-    "No markdown. Insights must be factual, cite times/entities when possible. " +
-    "NOT a diary letter — short observational bullets about who, sounds, patterns. " +
+    "You observe a home passively — like a perceptive friend who lives there. " +
+    "Write in natural language, concrete and warm, never like a security report or JSON template. " +
+    "Return JSON only (no markdown). " +
     promptLanguageRule();
 
   const user =
-    `Day ${day} stats:\n${JSON.stringify(stats, null, 2)}\n\n` +
-    `Relevant memory (last ${CFG.memoryLookbackDays}d):\n${ragBlock}\n\n` +
+    `What happened on ${day}:\n${JSON.stringify(stats, null, 2)}\n\n` +
+    `Memory from past days:\n${ragBlock}\n\n` +
     "Schema: " +
-    '{"insights":["string"],"patterns":["string"],"entities":[{"id":"string","name":"string","kind":"person|pet|other","notes":"string"}]}';
+    '{"summary":"2-4 sentences — what the day felt like, who was around, notable moments",' +
+    '"moments":["short highlights with time when known, e.g. 14:30 alguém falou sobre…"],' +
+    '"insights":["optional deeper observations"],' +
+    '"patterns":["recurring habits only if evidence exists"],' +
+    '"entities":[{"id":"speaker:xyz|pet:dog|…","name":"…","kind":"person|pet|other","notes":"…"}]}';
 
   return chatJson({
     model: modelId(ModelSlot.DEEP),
@@ -188,6 +192,8 @@ export async function runDayInsights(db, day, { force = false } = {}) {
       day,
       stats_json: JSON.stringify(stats),
       insights_json: JSON.stringify({
+        summary: insightsPayload.summary ?? "",
+        moments: insightsPayload.moments ?? [],
         insights: insightsPayload.insights ?? [],
         patterns: insightsPayload.patterns ?? [],
       }),
@@ -262,13 +268,25 @@ export function startInsightsLoop(intervalMs = CFG.insightsIntervalMs) {
 export function getInsightsForApi(db, day) {
   const row = getDayInsights(db, day);
   if (!row) {
-    return { day, stats: null, insights: [], patterns: [], entities: [], updated_at: null };
+    return {
+      day,
+      stats: null,
+      summary: null,
+      moments: [],
+      insights: [],
+      patterns: [],
+      entities: [],
+      updated_at: null,
+    };
   }
+  const parsed = JSON.parse(row.insights_json || "{}");
   return {
     day,
     stats: JSON.parse(row.stats_json || "{}"),
-    insights: JSON.parse(row.insights_json || "{}").insights ?? [],
-    patterns: JSON.parse(row.insights_json || "{}").patterns ?? [],
+    summary: parsed.summary ?? null,
+    moments: parsed.moments ?? [],
+    insights: parsed.insights ?? [],
+    patterns: parsed.patterns ?? [],
     entities: JSON.parse(row.entities_json || "[]"),
     updated_at: row.updated_at,
     runtime: insightRuntime(),

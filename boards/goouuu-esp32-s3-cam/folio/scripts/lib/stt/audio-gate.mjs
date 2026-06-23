@@ -34,16 +34,13 @@ export function isSpeechChunk(energy, threshold = CFG.speechEnergyThreshold) {
   return energy >= threshold;
 }
 
-export function isAmbientChunk(energy, threshold = CFG.ambientEnergyThreshold) {
-  return energy >= threshold;
-}
-
+/** Store only voiced segments — no ambient/noise archive. */
 export function shouldStoreAudioChunk(pcmBuffer, energyOverride = null) {
   if (pcmIsEmpty(pcmBuffer)) {
     return { store: false, energy: 0, reason: "empty" };
   }
   const energy = energyOverride ?? pcmEnergy(pcmBuffer);
-  if (!isAmbientChunk(energy)) {
+  if (!isSpeechChunk(energy)) {
     return { store: false, energy, reason: "quiet" };
   }
   return { store: true, energy, reason: null };

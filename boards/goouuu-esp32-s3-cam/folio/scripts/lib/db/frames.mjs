@@ -26,6 +26,16 @@ export function getFrame(db, id) {
   return db.prepare("SELECT * FROM frames WHERE id = ?").get(id);
 }
 
+export function lastProcessedFrame(db) {
+  return db
+    .prepare(
+      `SELECT id, caption, scene_json, captured_at FROM frames
+       WHERE processed = 1 AND caption IS NOT NULL AND caption != ''
+       ORDER BY captured_at DESC LIMIT 1`,
+    )
+    .get();
+}
+
 export function framesForDay(db, day) {
   const { start, end } = dayBounds(day);
   return db

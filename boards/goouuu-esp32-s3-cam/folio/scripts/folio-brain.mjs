@@ -32,13 +32,13 @@ function main() {
       `audio: chunk=${CFG.audioChunkMs}ms rate=${CFG.audioSampleRate} ` +
         `speech≥${CFG.speechEnergyThreshold} retention=${CFG.audioRetentionDays}d`,
     );
-    console.log(`models: ${CFG.modelFast} · locale: ${activeLocale()} (${promptLanguageName()})`);
+    console.log(`lm: ${CFG.lmBaseUrl} · locale: ${activeLocale()} (${promptLanguageName()})`);
     const whisperLang = CFG.whisperLanguage ? whisperLanguageCode() : "auto";
     console.log(
       `whisper: ${CFG.whisperBin} model=${CFG.whisperModel} device=${CFG.whisperDevice} ` +
         `lang=${whisperLang} cuda=${isCudaAvailable() ? "yes" : "no"}`,
     );
-    console.log("[config] hot reload: OpenAI/Whisper/locale apply on save — restart only for port/dataDir");
+    console.log("[config] hot reload: LM/Whisper/locale apply on save — restart only for port/dataDir");
   });
 
   if (CFG.pipelineEnabled) {

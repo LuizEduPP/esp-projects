@@ -3,14 +3,37 @@ const $ = (id) => document.getElementById(id);
 let day = new URLSearchParams(location.search).get("day") || new Date().toISOString().slice(0, 10);
 let filter = "all";
 let cfgCache = null;
-let openAiModels = { chat: [], embed: [], rerank: [], ok: false };
+let lmModels = { chat: [], embed: [], rerank: [], ok: false };
+let timelineGroups = [];
 let speakerNames = {};
 
+function humanDayMeta(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    const diff = Date.now() - d.getTime();
+    if (diff < 120_000) return "agora há pouco";
+    if (diff < 3_600_000) return `há ${Math.round(diff / 60_000)} min`;
+    return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return time(iso);
+  }
+}
+
+function entityBlurb(e) {
+  let pat = {};
+  try { pat = JSON.parse(e.patterns_json || "{}"); } catch { /* */ }
+  if (pat.utterances_today) return `${pat.utterances_today} falas hoje`;
+  if (pat.barks_today) return `${pat.barks_today} latidos`;
+  if (pat.notes) return pat.notes;
+  return e.kind === "person" ? "por aqui" : "";
+}
+
 const PHASE_LABEL = {
-  index: "Indexando memória",
-  rag: "RAG",
-  insights: "Gerando insights",
-  error: "Erro",
+  index: "Organizando memória…",
+  rag: "Lembrando do passado…",
+  insights: "Entendendo o dia…",
+  error: "Algo deu errado",
   done: "Pronto",
 };
 
@@ -25,35 +48,48 @@ const SECTIONS = [
   { title: "Geral", fields: [
     { path: "locale", label: "Idioma", type: "select", options: LOCALE_OPTS },
     { path: "port", label: "Porta HTTP", type: "number" },
-    { path: "dataDir", label: "Pasta de dados", type: "text" },
+    { path: "dataDir", label: "Pasta de dados", type: "text", placeholder: "~/.folio" },
   ]},
-  { title: "OpenAI API", fields: [
-    { path: "openai.baseUrl", label: "Base URL", type: "text" },
-    { path: "openai.apiKey", label: "API key", type: "password" },
-    { path: "openai.model", label: "Modelo visão", type: "lmSelect", pool: "chat" },
-    { path: "openai.modelDeep", label: "Modelo insights", type: "lmSelect", pool: "chat", emptyOption: "(igual visão)" },
+  { title: "LM local", hint: "LM Studio na sua máquina — sem API externa", fields: [
+    { path: "lm.url", label: "URL", type: "text", placeholder: "http://127.0.0.1:1234/v1" },
+    { path: "lm.model", label: "Modelo visão", type: "lmSelect", pool: "chat" },
+    { path: "lm.modelDeep", label: "Modelo insights", type: "lmSelect", pool: "chat", emptyOption: "(igual visão)" },
   ]},
-  { title: "Áudio", fields: [
-    { path: "audio.chunkMs", label: "Chunk (ms)", type: "number" },
-    { path: "audio.speechEnergyThreshold", label: "Limiar fala", type: "number", step: "0.001" },
-    { path: "audio.ambientEnergyThreshold", label: "Limiar som", type: "number", step: "0.001" },
+  { title: "Áudio · VAD", hint: "Grava só quando detecta voz (estilo Omi)", fields: [
+    { path: "audio.vad.frameMs", label: "Frame (ms)", type: "number" },
+    { path: "audio.speechEnergyThreshold", label: "Limiar voz", type: "number", step: "0.001" },
+    { path: "audio.vad.debounceMs", label: "Debounce (ms)", type: "number" },
+    { path: "audio.vad.silenceMs", label: "Silêncio p/ parar (ms)", type: "number" },
+    { path: "audio.vad.prerollMs", label: "Pré-roll (ms)", type: "number" },
     { path: "audio.retentionDays", label: "Retenção PCM (dias)", type: "number" },
   ]},
-  { title: "Whisper", fields: [
+  { title: "Whisper local", fields: [
     { path: "audio.whisperModel", label: "Modelo", type: "select", options: WHISPER_MODELS },
     { path: "audio.whisperDevice", label: "Device", type: "select", options: ["cuda", "auto", "cpu", "mps"] },
+    { path: "audio.whisperLanguage", label: "Idioma STT", type: "select", options: WHISPER_LANG_OPTS.map((o) => o.v), labels: WHISPER_LANG_OPTS },
   ]},
   { title: "Câmera", fields: [
     { path: "frames.captureIntervalMs", label: "Captura (ms)", type: "number" },
     { path: "frames.captionIntervalMs", label: "Caption (ms)", type: "number" },
+    { path: "frames.jpegQuality", label: "JPEG quality", type: "number" },
+    { path: "frames.size", label: "Resolução", type: "select", options: ["QVGA", "VGA", "SVGA", "CIF"] },
   ]},
-  { title: "Pipeline & insights", fields: [
+  { title: "Pipeline", fields: [
     { path: "pipeline.enabled", label: "Worker", type: "bool" },
     { path: "pipeline.intervalMs", label: "Worker (ms)", type: "number" },
     { path: "insights.auto", label: "Insights auto", type: "bool" },
     { path: "insights.intervalMs", label: "Insights (ms)", type: "number" },
-    { path: "memory.enabled", label: "Memória RAG", type: "bool" },
-    { path: "memory.useEmbeddings", label: "Embeddings", type: "bool" },
+    { path: "insights.temperature", label: "Insights temp", type: "number", step: "0.05" },
+  ]},
+  { title: "Memória", hint: "Busca lexical local; embeddings opcional via LM local", fields: [
+    { path: "memory.enabled", label: "RAG ativo", type: "bool" },
+    { path: "memory.useEmbeddings", label: "Embeddings (LM local)", type: "bool" },
+    { path: "memory.embeddingModel", label: "Modelo embed", type: "lmSelect", pool: "embed", emptyOption: "(lexical)" },
+    { path: "memory.retrieveLimit", label: "Hits por busca", type: "number" },
+  ]},
+  { title: "ESP32", fields: [
+    { path: "node.wifiRetryMs", label: "WiFi retry (ms)", type: "number" },
+    { path: "node.statusIntervalMs", label: "Poll config (ms)", type: "number" },
   ]},
 ];
 
@@ -127,81 +163,109 @@ function renderInsights(ins) {
   const alert = $("insights-alert");
   if (rt.error) {
     alert.hidden = false;
-    alert.textContent = `Insights falhou: ${rt.error}`;
+    alert.textContent = `Não consegui entender o dia: ${rt.error}`;
     alert.className = "digest-alert error";
   } else if (rt.busy) {
     alert.hidden = false;
-    alert.textContent = PHASE_LABEL[rt.phase] || "Processando…";
+    alert.textContent = PHASE_LABEL[rt.phase] || "Pensando…";
     alert.className = "digest-alert";
   } else {
     alert.hidden = true;
   }
 
-  const mins = Math.round((ins.status?.interval_ms || 300000) / 60000);
   $("insights-meta").textContent = ins.updated_at
-    ? `Atualizado ${time(ins.updated_at)} · auto ~${mins} min`
-    : (ins.status?.needed ? "Aguardando witness / pipeline" : "Sem witness neste dia");
+    ? humanDayMeta(ins.updated_at)
+    : (ins.status?.needed ? "Coletando momentos…" : "Dia tranquilo até agora");
 
   const st = ins.stats || {};
-  $("insights-stats").innerHTML = [
-    ["Frames", st.frames ?? 0],
-    ["Falas", st.utterances ?? 0],
-    ["Sons", Object.values(st.sounds || {}).reduce((a, b) => a + b, 0)],
-  ].map(([k, v]) => `<span class="chip">${k} ${v}</span>`).join("");
+  const speech = st.utterances ?? 0;
+  const scenes = st.frames ?? 0;
+  const summaryEl = $("insights-summary");
+  if (ins.summary) {
+    summaryEl.textContent = ins.summary;
+    summaryEl.classList.remove("muted");
+  } else if (speech + scenes > 0) {
+    summaryEl.textContent =
+      speech && scenes
+        ? `${scenes} cena${scenes > 1 ? "s" : ""} e ${speech} fala${speech > 1 ? "s" : ""} registradas — resumo em breve.`
+        : speech
+          ? `${speech} fala${speech > 1 ? "s" : ""} capturada${speech > 1 ? "s" : ""}.`
+          : `${scenes} cena${scenes > 1 ? "s" : ""} do ambiente.`;
+    summaryEl.classList.add("muted");
+  } else {
+    summaryEl.textContent = "O ambiente está quieto. Quando houver voz ou movimento, aparece aqui.";
+    summaryEl.classList.add("muted");
+  }
+
+  const moments = ins.moments || [];
+  $("insights-moments").innerHTML = moments.length
+    ? moments.map((m) => `<div class="moment-chip">${esc(m)}</div>`).join("")
+    : "";
 
   const entities = ins.entities || [];
   $("insights-entities").innerHTML = entities.length
-    ? entities.map((e) => {
-      let pat = {};
-      try { pat = JSON.parse(e.patterns_json || "{}"); } catch { /* */ }
-      return `<article class="entity-card"><strong>${esc(e.display_name)}</strong>
-        <span class="muted">${esc(e.kind)}</span>
-        <p class="muted">${esc(pat.notes || pat.utterances_today ? `${pat.utterances_today || 0} falas` : pat.barks_today ? `${pat.barks_today} latidos` : "")}</p></article>`;
-    }).join("")
-    : '<p class="muted">Nenhuma entidade detectada ainda — faça enroll de voz.</p>';
+    ? entities.map((e) =>
+      `<article class="entity-card"><strong>${esc(e.display_name)}</strong>
+        <p class="muted">${esc(entityBlurb(e))}</p></article>`,
+    ).join("")
+    : "";
 
   const insights = ins.insights || [];
-  $("insights-list").innerHTML = insights.length
-    ? insights.map((t) => `<li>${esc(t)}</li>`).join("")
-    : "<li class='muted'>Insights aparecem quando há witness processado.</li>";
-
   const patterns = ins.patterns || [];
-  $("patterns-list").innerHTML = patterns.length
-    ? patterns.map((t) => `<li>${esc(t)}</li>`).join("")
-    : "<li class='muted'>—</li>";
+  $("insights-list").innerHTML = insights.map((t) => `<li>${esc(t)}</li>`).join("");
+  $("patterns-list").innerHTML = patterns.map((t) => `<li>${esc(t)}</li>`).join("");
+  $("insights-more").open = insights.length + patterns.length > 0;
 }
 
-function renderWitness(items) {
-  const list = items.filter((i) => {
-    if (filter === "frames") return i.type === "frame";
-    if (filter === "speech") return i.type === "audio" && i.speech;
-    if (filter === "sound") return i.type === "audio" && !i.speech;
-    return i.type === "frame" || i.type === "audio";
-  }).sort((a, b) => b.at.localeCompare(a.at));
+function renderWitnessGroups(groups) {
+  const list = groups.filter((g) => {
+    if (filter === "frames") return g.type === "scene" || g.type === "frame_pending";
+    if (filter === "speech") return g.type === "speech";
+    return true;
+  });
 
   if (!list.length) {
-    $("witness-feed").innerHTML = '<p class="muted" style="padding:16px">Nada neste filtro.</p>';
+    $("witness-feed").innerHTML = '<p class="empty-feed">Nada por aqui ainda.</p>';
     return;
   }
 
-  $("witness-feed").innerHTML = list.map((i) => {
-    if (i.type === "frame") {
-      return `<article class="witness-item"><time class="witness-time">${time(i.at)}</time>
-        <div><div class="witness-kind">Frame</div><img src="/api/frame/${i.frame_id}" alt="" loading="lazy"/>
-        <p class="muted">${i.caption ? esc(i.caption) : "Aguardando caption…"}</p></div></article>`;
+  $("witness-feed").innerHTML = list.map((g) => {
+    const hourMark = g.showHour
+      ? `<div class="hour-mark">${esc(g.hour_label)}</div>`
+      : "";
+
+    if (g.type === "speech") {
+      const who = g.speaker_id ? (speakerNames[g.speaker_id] || g.speaker_id) : null;
+      const lines = g.lines.map((ln) => {
+        const aud = ln.has_pcm
+          ? `<audio controls preload="none" src="/api/audio/${ln.chunk_id}"></audio>`
+          : "";
+        return `<p class="speech-line">${aud}${esc(ln.text)}</p>`;
+      }).join("");
+      return `${hourMark}<article class="witness-group speech">
+        <header>${who ? esc(who) : "Alguém falou"} · ${humanDayMeta(g.at)}</header>
+        ${lines}
+      </article>`;
     }
-    const kind = i.speech ? "Fala" : (i.sound_label || "Som");
-    const cls = i.speech ? "speech" : "sound";
-    const who = i.speaker_id ? (speakerNames[i.speaker_id] || i.speaker_id) : null;
-    const txt = i.text
-      ? `<blockquote>${who ? `<strong>${esc(who)}:</strong> ` : ""}${esc(i.text)}</blockquote>`
-      : (i.processed ? `<p class="muted">${esc(i.sound_label || "Sem transcrição")}</p>` : '<p class="muted">Fila…</p>');
-    const aud = i.has_pcm ? `<audio controls preload="none" src="/api/audio/${i.chunk_id}"></audio>` : "";
-    return `<article class="witness-item"><time class="witness-time">${time(i.at)}</time>
-      <div><div class="witness-kind ${cls}">${esc(kind)}</div>${aud}${txt}</div></article>`;
+
+    if (g.type === "scene") {
+      const fid = g.frame_ids[g.frame_ids.length - 1];
+      const repeat = g.count > 1 ? `<span class="repeat-note">· ${g.count}× sem mudança</span>` : "";
+      return `${hourMark}<article class="witness-group scene">
+        <header>Cena · ${humanDayMeta(g.at)}${repeat}</header>
+        <img src="/api/frame/${fid}" alt="" loading="lazy"/>
+        <p>${esc(g.caption)}</p>
+      </article>`;
+    }
+
+    const fid = g.frame_ids?.[0];
+    return `${hourMark}<article class="witness-group pending">
+      <header>Processando imagem…</header>
+      ${fid ? `<img src="/api/frame/${fid}" alt="" loading="lazy" class="dim"/>` : ""}
+    </article>`;
   }).join("");
 
-  $("witness-feed").querySelectorAll("img").forEach((img) => {
+  $("witness-feed").querySelectorAll("img:not(.dim)").forEach((img) => {
     img.onclick = () => { $("lb-img").src = img.src; $("lightbox").classList.add("open"); };
   });
 }
@@ -214,11 +278,10 @@ async function loadStatus(ins = {}) {
   const pa = q.pending?.audio || 0;
   const pf = q.pending?.frames || 0;
   const rt = ins.runtime || {};
-  const live = rt.busy ? `<span class="chip live">${PHASE_LABEL[rt.phase] || "insights"}</span>` : "";
+  const live = rt.busy ? `<span class="chip live">${PHASE_LABEL[rt.phase] || "pensando"}</span>` : "";
   $("status-chips").innerHTML =
     live +
-    (pa + pf ? `<span class="chip warn">${pa} áudio · ${pf} frames</span>` : "") +
-    `<span class="chip ok">${h.memory_chunks ?? 0} mem</span>`;
+    (pa + pf ? `<span class="chip warn">${pa + pf} na fila</span>` : "");
 }
 
 async function loadDay() {
@@ -233,14 +296,17 @@ async function loadDay() {
     if (e.speaker_id) speakerNames[e.speaker_id] = e.display_name;
   }
 
+  timelineGroups = tl.groups || [];
   const items = tl.items || [];
-  const fr = items.filter((i) => i.type === "frame").length;
-  const sp = items.filter((i) => i.type === "audio" && i.speech).length;
-  const snd = items.filter((i) => i.type === "audio" && !i.speech).length;
-  $("witness-stats").textContent = `${fr} frames · ${sp} fala · ${snd} sons`;
+  const fr = items.filter((i) => i.type === "frame" && i.caption).length;
+  const sp = items.filter((i) => i.type === "audio" && i.text).length;
+  $("witness-stats").textContent =
+    timelineGroups.length
+      ? `${timelineGroups.length} momento${timelineGroups.length > 1 ? "s" : ""}`
+      : "Aguardando…";
 
   renderInsights(ins);
-  renderWitness(items);
+  renderWitnessGroups(timelineGroups);
   loadStatus(ins);
 }
 
@@ -263,8 +329,9 @@ async function loadSystem() {
 }
 
 function buildConfigForm() {
-  $("cfg-form").innerHTML = SECTIONS.map((sec) =>
-    `<h3>${sec.title}</h3><div class="grid2">${sec.fields.map((f) => {
+  $("cfg-form").innerHTML = SECTIONS.map((sec) => {
+    const hint = sec.hint ? `<p class="muted cfg-hint">${esc(sec.hint)}</p>` : "";
+    const fields = sec.fields.map((f) => {
       const id = `f-${f.path.replace(/\./g, "-")}`;
       if (f.type === "bool") {
         return `<div class="field"><label for="${id}">${f.label}</label>
@@ -279,17 +346,19 @@ function buildConfigForm() {
           .map((o) => `<option value="${typeof o === "string" ? o : o.v}">${typeof o === "string" ? o : o.l}</option>`).join("");
         return `<div class="field"><label for="${id}">${f.label}</label><select id="${id}" data-path="${f.path}">${opts}</select></div>`;
       }
+      const ph = f.placeholder ? ` placeholder="${esc(f.placeholder)}"` : "";
       return `<div class="field"><label for="${id}">${f.label}</label>
-        <input id="${id}" data-path="${f.path}" type="${f.type || "text"}" ${f.step ? `step="${f.step}"` : ""}/></div>`;
-    }).join("")}</div>`,
-  ).join("");
+        <input id="${id}" data-path="${f.path}" type="${f.type || "text"}"${ph} ${f.step ? `step="${f.step}"` : ""}/></div>`;
+    }).join("");
+    return `<section class="cfg-section"><h3>${sec.title}</h3>${hint}<div class="grid2">${fields}</div></section>`;
+  }).join("");
 }
 
 function fillLmSelects() {
   document.querySelectorAll("[data-lm-pool]").forEach((sel) => {
     const pool = sel.dataset.lmPool;
     const cur = sel.value;
-    const list = openAiModels[pool] || [];
+    const list = lmModels[pool] || [];
     let html = sel.dataset.empty ? `<option value="">${sel.dataset.empty}</option>` : "";
     html += list.map((id) => `<option value="${esc(id)}">${esc(id)}</option>`).join("");
     if (!list.length) html += '<option value="" disabled>(offline)</option>';
@@ -298,12 +367,14 @@ function fillLmSelects() {
   });
 }
 
-async function refreshOpenAiModels() {
-  const r = await fetch("/api/openai/models").then((x) => x.json());
+async function refreshLmModels() {
+  const r = await fetch("/api/lm/models").then((x) => x.json());
   if (r.ok) {
-    openAiModels = r;
-    $("cfg-openai-status").textContent = `${r.chat.length} modelos`;
+    lmModels = r;
+    $("cfg-lm-status").textContent = `${r.chat.length} modelos locais`;
     fillLmSelects();
+  } else {
+    $("cfg-lm-status").textContent = r.error || "LM offline";
   }
 }
 
@@ -323,8 +394,12 @@ function loadConfigForm() {
   fetch("/api/config").then((r) => r.json()).then(async (cfg) => {
     cfgCache = cfg;
     $("cfg-info").textContent = cfg.configPath || "defaults";
+    const rt = cfg.runtime || {};
+    $("cfg-runtime").textContent = rt.lmUrl
+      ? `LM ${rt.lmUrl} · whisper ${rt.models?.whisper} (${rt.whisperDeviceEffective})`
+      : "";
     applyConfigToForm(cfg);
-    await refreshOpenAiModels();
+    await refreshLmModels();
     applyConfigToForm(cfg);
   });
 }
@@ -388,7 +463,7 @@ $("cfg-form").onsubmit = async (e) => {
   toast("Config salva");
 };
 $("cfg-reload").onclick = loadConfigForm;
-$("cfg-openai-refresh").onclick = refreshOpenAiModels;
+$("cfg-lm-refresh").onclick = refreshLmModels;
 $("lb-close").onclick = () => $("lightbox").classList.remove("open");
 
 loadDay();

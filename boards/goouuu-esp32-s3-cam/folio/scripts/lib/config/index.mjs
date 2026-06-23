@@ -137,28 +137,135 @@ function resolveWhisperDevice(fileVal, envVal) {
 let configPath = null;
 let fileData = clone(DEFAULT_CONFIG);
 
-function migrateLegacyLmConfig(file) {
-  const lm = file?.lm;
-  if (!lm || typeof lm !== "object") {
-    return false;
+function migrateOpenAiToLm(file) {
+  let changed = false;
+  if (file.openai && typeof file.openai === "object") {
+    if (!file.lm || typeof file.lm !== "object") {
+      file.lm = {};
+    }
+    const o = file.openai;
+    if (o.baseUrl && file.lm.url == null) {
+      file.lm.url = normalizeOpenAiBase(o.baseUrl);
+    }
+    if (o.model && file.lm.model == null) {
+      file.lm.model = o.model;
+    }
+    if (o.modelDeep != null && file.lm.modelDeep == null) {
+      file.lm.modelDeep = o.modelDeep;
+    }
+    delete file.openai;
+    changed = true;
   }
-  if (!file.openai || typeof file.openai !== "object") {
-    file.openai = {};
+  // Legacy flat lm.modelFast
+  if (file.lm?.modelFast && !file.lm.model) {
+    file.lm.model = file.lm.modelFast;
+    delete file.lm.modelFast;
+    changed = true;
   }
-  if (lm.url && file.openai.baseUrl == null) {
-    file.openai.baseUrl = normalizeOpenAiBase(lm.url);
+  return changed;
+}
+
+/** Drop legacy keys; ensure lm, insights, audio.vad. */
+function migrateConfigSchema(file) {
+  let changed = false;
+
+  if (file.digest && typeof file.digest === "object") {
+    if (!file.insights || typeof file.insights !== "object") {
+      file.insights = {};
+    }
+    const d = file.digest;
+    if (d.auto != null && file.insights.auto == null) {
+      file.insights.auto = d.auto;
+    }
+    if (d.passDTemperature != null && file.insights.temperature == null) {
+      file.insights.temperature = d.passDTemperature;
+    }
+    delete file.digest;
+    changed = true;
   }
-  if (lm.model && file.openai.model == null) {
-    file.openai.model = lm.model;
+
+  if (file.episodes) {
+    delete file.episodes;
+    changed = true;
   }
-  if (lm.modelFast && file.openai.model == null) {
-    file.openai.model = lm.modelFast;
+
+  if (!file.insights || typeof file.insights !== "object") {
+    file.insights = { ...DEFAULT_CONFIG.insights };
+    changed = true;
+  } else {
+    for (const [k, v] of Object.entries(DEFAULT_CONFIG.insights)) {
+      if (file.insights[k] == null && v != null) {
+        file.insights[k] = v;
+        changed = true;
+      }
+    }
   }
-  if (lm.modelDeep != null && file.openai.modelDeep == null) {
-    file.openai.modelDeep = lm.modelDeep;
+
+  if (!file.lm || typeof file.lm !== "object") {
+    file.lm = { ...DEFAULT_CONFIG.lm };
+    changed = true;
   }
-  delete file.lm;
-  return true;
+
+  if (!file.audio || typeof file.audio !== "object") {
+    file.audio = { ...DEFAULT_CONFIG.audio };
+    changed = true;
+  } else {
+    if (file.audio.chunkMs != null) {
+      delete file.audio.chunkMs;
+      changed = true;
+    }
+    if (file.audio.ambientEnergyThreshold != null) {
+      delete file.audio.ambientEnergyThreshold;
+      changed = true;
+    }
+    if (file.audio.chunkMs != null && !file.audio.vad?.frameMs) {
+      if (!file.audio.vad) {
+        file.audio.vad = { ...DEFAULT_CONFIG.audio.vad };
+      }
+      file.audio.vad.frameMs = file.audio.chunkMs;
+      changed = true;
+    }
+    if (!file.audio.vad || typeof file.audio.vad !== "object") {
+      file.audio.vad = { ...DEFAULT_CONFIG.audio.vad };
+      changed = true;
+    } else {
+      for (const [k, v] of Object.entries(DEFAULT_CONFIG.audio.vad)) {
+        if (file.audio.vad[k] == null && v != null) {
+          file.audio.vad[k] = v;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  if (file.memory?.embeddingsUrl != null) {
+    delete file.memory.embeddingsUrl;
+    changed = true;
+  }
+  if (file.memory?.rerank?.url != null) {
+    delete file.memory.rerank.url;
+    changed = true;
+  }
+
+  return changed;
+}
+
+function persistFileConfig(path, data) {
+  writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+}
+
+function runConfigMigrations(file, path) {
+  const lm = migrateOpenAiToLm(file);
+  const schema = migrateConfigSchema(file);
+  if (lm || schema) {
+    persistFileConfig(path, file);
+    if (lm) {
+      console.log(`[config] migrated openai.* → lm.* (local only) in ${path}`);
+    }
+    if (schema) {
+      console.log(`[config] migrated schema (lm, vad, insights) in ${path}`);
+    }
+  }
 }
 
 function loadFileConfig() {
@@ -166,10 +273,7 @@ function loadFileConfig() {
     if (existsSync(path)) {
       configPath = path;
       fileData = deepMerge(clone(DEFAULT_CONFIG), JSON.parse(readFileSync(path, "utf8")));
-      if (migrateLegacyLmConfig(fileData)) {
-        writeFileSync(path, `${JSON.stringify(fileData, null, 2)}\n`, "utf8");
-        console.log(`[config] migrated legacy lm.* → openai.* in ${path}`);
-      }
+      runConfigMigrations(fileData, path);
       return;
     }
   }
@@ -196,8 +300,10 @@ export function nodeConfigVersion(data = fileData) {
       size: data.frames?.size,
     },
     audio: {
-      chunkMs: data.audio?.chunkMs,
+      chunkMs: data.audio?.vad?.frameMs ?? data.audio?.chunkMs,
       sampleRate: data.audio?.sampleRate,
+      speechEnergyThreshold: data.audio?.speechEnergyThreshold,
+      vad: data.audio?.vad,
     },
     node: data.node,
   };
@@ -223,6 +329,7 @@ export function editableConfig() {
       whisperDeviceEffective: CFG.whisperDevice,
       cudaAvailable: cudaAvailable(),
       speechEnergyThreshold: CFG.speechEnergyThreshold,
+      lmUrl: CFG.lmBaseUrl,
       models: runtimeModels(),
     },
     ...clone(fileData),
@@ -243,8 +350,10 @@ export function nodeConfigPayload() {
       sizeId: frameSizeId(size),
     },
     audio: {
-      chunkMs: audio.chunkMs,
+      chunkMs: audio.vad?.frameMs ?? audio.chunkMs ?? DEFAULT_CONFIG.audio.vad.frameMs,
       sampleRate: audio.sampleRate,
+      speechEnergyThreshold: audio.speechEnergyThreshold,
+      vad: { ...audio.vad },
     },
     node: { ...node },
     compileTimeNote:
@@ -270,10 +379,10 @@ function patchNeedsRestart(patch, prefix = "") {
 
 export function saveConfigPatch(patch) {
   fileData = deepMerge(fileData, patch);
-  migrateLegacyLmConfig(fileData);
+  runConfigMigrations(fileData, configPath ?? configPaths()[configPaths().length - 1]);
   const targetPath = configPath ?? configPaths()[configPaths().length - 1];
   mkdirSync(dirname(targetPath), { recursive: true });
-  writeFileSync(targetPath, `${JSON.stringify(fileData, null, 2)}\n`, "utf8");
+  persistFileConfig(targetPath, fileData);
   configPath = targetPath;
   const version = nodeConfigVersion();
   return {
@@ -284,35 +393,25 @@ export function saveConfigPatch(patch) {
   };
 }
 
-function resolveOpenAiBase(file) {
-  const fromOpenAi =
+function resolveLmBase(file) {
+  const url =
+    envStr(getPath(file, "lm.url"), "LM_URL", null) ||
     envStr(getPath(file, "openai.baseUrl"), "OPENAI_BASE_URL", null) ||
-    envStr(getPath(file, "openai.baseUrl"), "FOLIO_OPENAI_BASE_URL", null);
-  if (fromOpenAi) {
-    return normalizeOpenAiBase(fromOpenAi);
+    envStr(getPath(file, "lm.url"), "FOLIO_LM_URL", null);
+  if (url) {
+    return normalizeOpenAiBase(url);
   }
-  const legacy = envStr(getPath(file, "lm.url"), "LM_URL", null);
-  if (legacy) {
-    return normalizeOpenAiBase(legacy);
-  }
-  return normalizeOpenAiBase(getPath(DEFAULT_CONFIG, "openai.baseUrl"));
-}
-
-function resolveOpenAiApiKey(file) {
-  const key =
-    envStr(getPath(file, "openai.apiKey"), "OPENAI_API_KEY", "") ||
-    envStr(getPath(file, "openai.apiKey"), "FOLIO_OPENAI_API_KEY", "");
-  return key || null;
+  return normalizeOpenAiBase(getPath(DEFAULT_CONFIG, "lm.url"));
 }
 
 function resolveLmModels(file) {
   const model =
+    cfgStr(file, "lm.model", "LM_MODEL") ||
     cfgStr(file, "openai.model", "OPENAI_MODEL") ||
-    cfgStr(file, "lm.model", "FOLIO_LM_MODEL") ||
     cfgStr(file, "lm.modelFast", "FOLIO_MODEL_FAST");
   const deep =
+    cfgStr(file, "lm.modelDeep", "LM_MODEL_DEEP") ||
     cfgStr(file, "openai.modelDeep", "OPENAI_MODEL_DEEP") ||
-    cfgStr(file, "lm.modelDeep", "FOLIO_MODEL_DEEP") ||
     model;
   return { modelFast: model, modelDeep: deep };
 }
@@ -326,10 +425,16 @@ function buildCfgFromFile(file = getFileData()) {
     port: cfgNum(file, "port", "FOLIO_PORT"),
     dataDir,
 
-    openaiBaseUrl: resolveOpenAiBase(file),
-    openaiApiKey: resolveOpenAiApiKey(file),
+    lmBaseUrl: resolveLmBase(file),
+    openaiBaseUrl: resolveLmBase(file),
+    openaiApiKey: null,
     modelFast,
     modelDeep,
+
+    vadFrameMs: cfgNum(file, "audio.vad.frameMs", "FOLIO_VAD_FRAME_MS"),
+    vadDebounceMs: cfgNum(file, "audio.vad.debounceMs", "FOLIO_VAD_DEBOUNCE_MS"),
+    vadSilenceMs: cfgNum(file, "audio.vad.silenceMs", "FOLIO_VAD_SILENCE_MS"),
+    vadPrerollMs: cfgNum(file, "audio.vad.prerollMs", "FOLIO_VAD_PREROLL_MS"),
 
     frameCaptureIntervalMs: cfgNum(file, "frames.captureIntervalMs", "FOLIO_FRAME_INTERVAL_MS"),
     frameCaptionIntervalMs: cfgNum(file, "frames.captionIntervalMs", "FOLIO_FRAME_CAPTION_MS"),
@@ -339,10 +444,11 @@ function buildCfgFromFile(file = getFileData()) {
     frameJpegQuality: cfgNum(file, "frames.jpegQuality", "FOLIO_JPEG_QUALITY"),
     frameSize: cfgStr(file, "frames.size", "FOLIO_FRAME_SIZE"),
 
-    audioChunkMs: cfgNum(file, "audio.chunkMs", "FOLIO_AUDIO_CHUNK_MS"),
+    audioChunkMs:
+      cfgNum(file, "audio.vad.frameMs", "FOLIO_VAD_FRAME_MS") ||
+      cfgNum(file, "audio.chunkMs", "FOLIO_AUDIO_CHUNK_MS"),
     audioSampleRate: cfgNum(file, "audio.sampleRate", "FOLIO_AUDIO_SAMPLE_RATE"),
     speechEnergyThreshold: cfgNum(file, "audio.speechEnergyThreshold", "FOLIO_SPEECH_ENERGY"),
-    ambientEnergyThreshold: cfgNum(file, "audio.ambientEnergyThreshold", "FOLIO_AMBIENT_ENERGY"),
     whisperBin: resolveWhisperBin(
       cfgStr(file, "audio.whisperBin", "FOLIO_WHISPER_BIN"),
       process.env.FOLIO_WHISPER_BIN,
@@ -392,7 +498,7 @@ function buildCfgFromFile(file = getFileData()) {
     memoryMinScore: cfgNum(file, "memory.minScore", "FOLIO_MEMORY_MIN_SCORE"),
     memoryUseEmbeddings: cfgBool(file, "memory.useEmbeddings", "FOLIO_MEMORY_EMBEDDINGS"),
     memoryEmbeddingModel: cfgStr(file, "memory.embeddingModel", "FOLIO_MEMORY_EMBED_MODEL") || null,
-    memoryEmbeddingsUrl: cfgStr(file, "memory.embeddingsUrl", "FOLIO_MEMORY_EMBED_URL") || null,
+    memoryEmbeddingsUrl: null,
     memoryFallbackLexical: cfgBool(file, "memory.fallbackLexical", "FOLIO_MEMORY_FALLBACK_LEXICAL"),
     memoryGraphRetrieveLimit: cfgNum(file, "memory.graphRetrieveLimit", "FOLIO_MEMORY_GRAPH_LIMIT"),
     memoryGraphMinScore: cfgNum(file, "memory.graphMinScore", "FOLIO_MEMORY_GRAPH_MIN_SCORE"),
@@ -401,7 +507,7 @@ function buildCfgFromFile(file = getFileData()) {
 
     memoryRerankEnabled: cfgBool(file, "memory.rerank.enabled", "FOLIO_MEMORY_RERANK"),
     memoryRerankModel: cfgStr(file, "memory.rerank.model", "FOLIO_MEMORY_RERANK_MODEL") || null,
-    memoryRerankUrl: cfgStr(file, "memory.rerank.url", "FOLIO_MEMORY_RERANK_URL") || null,
+    memoryRerankUrl: null,
     memoryRerankCandidateLimit: cfgNum(file, "memory.rerank.candidateLimit", "FOLIO_MEMORY_RERANK_CANDIDATES"),
     memoryRerankTopK: cfgNum(file, "memory.rerank.topK", "FOLIO_MEMORY_RERANK_TOPK"),
 

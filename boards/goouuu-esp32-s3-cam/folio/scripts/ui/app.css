@@ -417,6 +417,103 @@ button, input, select, textarea { font: inherit; color: inherit; }
   gap: 10px;
 }
 
+.day-summary {
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  line-height: 1.65;
+  max-width: 38rem;
+  margin: 12px 0 20px;
+  color: #e8eaef;
+}
+
+.moment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.moment-chip {
+  font-size: 0.82rem;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 999px;
+  color: #c5cad4;
+}
+
+.insights-more {
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.insights-more summary {
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.witness-group {
+  padding: 14px 0 18px;
+  border-bottom: 1px solid #1e222c;
+}
+
+.witness-group header {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.witness-group.scene p,
+.witness-group .speech-line {
+  font-family: var(--serif);
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
+.witness-group img {
+  width: 100%;
+  max-width: 300px;
+  display: block;
+  margin: 8px 0;
+  cursor: zoom-in;
+  background: #000;
+}
+
+.witness-group img.dim { opacity: 0.45; }
+
+.speech-line {
+  margin: 6px 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--accent);
+}
+
+.speech-line audio {
+  display: block;
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.hour-mark {
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 16px 0 6px;
+}
+
+.repeat-note { color: var(--muted); font-size: 0.75rem; }
+
+.empty-feed {
+  padding: 24px 16px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.cfg-section { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.cfg-section:last-child { border-bottom: none; }
+.cfg-hint { margin: -4px 0 10px; font-size: 0.78rem; }
+
 .field label {
   display: block;
   font-size: 0.72rem;

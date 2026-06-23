@@ -22,19 +22,37 @@ function usage() {
 
 async function cmdProcess() {
   const db = openDb();
-  const before = pendingCounts(db);
-  console.log(`[process] pending audio=${before.audio} frames=${before.frames}`);
+  const start = pendingCounts(db);
+  console.log(`[process] pending audio=${start.audio} frames=${start.frames}`);
 
-  const { audio, frames } = await runPendingQueueOnce();
+  let totalUtt = 0;
+  let totalCap = 0;
+  let sttFail = 0;
+  let rounds = 0;
+  const maxRounds = Math.max(50, start.frames + start.audio + 5);
 
-  const after = pendingCounts(db);
-  const utt = audio.filter((r) => r.text).length;
-  const cap = frames.filter((r) => r.caption).length;
-  const sttFail = audio.filter((r) => r.skipped === "stt_failed" || r.error).length;
+  while (rounds++ < maxRounds) {
+    const before = pendingCounts(db);
+    if (before.audio === 0 && before.frames === 0) {
+      break;
+    }
+
+    const { audio, frames } = await runPendingQueueOnce({ bypassFrameGap: true });
+    totalUtt += audio.filter((r) => r.text).length;
+    totalCap += frames.filter((r) => r.caption).length;
+    sttFail += audio.filter((r) => r.skipped === "stt_failed" || r.error).length;
+
+    const after = pendingCounts(db);
+    if (after.frames === before.frames && after.audio === before.audio) {
+      break;
+    }
+  }
+
+  const end = pendingCounts(db);
 
   console.log(
-    `[process] done utterances=${utt} captions=${cap} ` +
-      `remaining audio=${after.audio} frames=${after.frames}` +
+    `[process] done utterances=${totalUtt} captions=${totalCap} ` +
+      `remaining audio=${end.audio} frames=${end.frames}` +
       (sttFail ? ` stt_issues=${sttFail}` : ""),
   );
 }

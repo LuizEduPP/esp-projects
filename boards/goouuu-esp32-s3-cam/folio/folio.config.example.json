@@ -2,9 +2,8 @@
   "locale": "pt-BR",
   "port": 8770,
   "dataDir": null,
-  "openai": {
-    "baseUrl": "http://127.0.0.1:1234/v1",
-    "apiKey": null,
+  "lm": {
+    "url": "http://127.0.0.1:1234/v1",
     "model": "mistralai/ministral-3-3b",
     "modelDeep": null
   },
@@ -18,18 +17,22 @@
     "size": "QVGA"
   },
   "audio": {
-    "chunkMs": 1000,
     "sampleRate": 16000,
     "speechEnergyThreshold": 0.008,
-    "ambientEnergyThreshold": 0.002,
+    "retentionDays": 7,
+    "retentionSweepMs": 21600000,
     "whisperBin": "whisper",
     "whisperModel": "base",
     "whisperDevice": "cuda",
     "whisperTimeoutMs": 120000,
     "whisperLanguage": null,
     "pipelineBatch": 4,
-    "retentionDays": 7,
-    "retentionSweepMs": 21600000
+    "vad": {
+      "frameMs": 100,
+      "debounceMs": 300,
+      "silenceMs": 1200,
+      "prerollMs": 400
+    }
   },
   "pipeline": {
     "enabled": true,
@@ -53,11 +56,7 @@
     "minScore": 0.08,
     "useEmbeddings": false,
     "embeddingModel": null,
-    "graphRetrieveLimit": 8,
-    "graphMinScore": 0.15,
-    "profileLimit": 32,
-    "minFactTextLength": 5,
-    "fallbackLexical": false,
+    "fallbackLexical": true,
     "rerank": {
       "enabled": false,
       "model": null,

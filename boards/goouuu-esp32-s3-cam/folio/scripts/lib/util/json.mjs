@@ -240,13 +240,17 @@ export function parseVisionFallback(text) {
     return null;
   }
 
+  const note = str("note");
+  const activity = str("activity", "unknown");
+  const summary = str("summary") || (scene ? `${scene}. ${activity}. ${note}`.replace(/\.\s*\./g, ".").trim() : note);
   return {
     person_present: bool("person_present"),
     people: num("people"),
     scene: scene || "unknown",
-    activity: str("activity", "unknown"),
+    activity,
     objects: [],
     mood: str("mood", "empty"),
-    note: str("note"),
+    note,
+    summary,
   };
 }

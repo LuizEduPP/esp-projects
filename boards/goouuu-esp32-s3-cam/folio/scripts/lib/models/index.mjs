@@ -56,6 +56,6 @@ export function modelSummary() {
     embed: CFG.memoryEmbeddingModel || CFG.modelFast,
     rerank: CFG.memoryRerankModel,
     whisperDevice: CFG.whisperDevice,
-    openaiBaseUrl: CFG.openaiBaseUrl,
+    lmBaseUrl: CFG.lmBaseUrl,
   };
 }

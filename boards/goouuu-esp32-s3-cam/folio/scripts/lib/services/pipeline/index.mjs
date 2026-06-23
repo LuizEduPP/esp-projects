@@ -12,17 +12,32 @@ import {
   pendingCounts,
   pendingFrames,
   pruneExpiredPcm,
+  lastProcessedFrame,
   updateAudioClassification,
 } from "../../db/index.mjs";
-import { captionFrame } from "../../llm/index.mjs";
+import { captionFrame, formatSceneCaption } from "../../llm/index.mjs";
 import { identifySpeaker } from "../../speaker/identify.mjs";
-import { classifySoundChunk } from "../../sound/classify.mjs";
 import { isSpeechChunk, transcribeWav } from "../../stt/index.mjs";
 import { writeWav } from "../../util/audio.mjs";
 
 const MAX_STT_ATTEMPTS = 3;
 let lastFrameLmAt = 0;
 let loggedWhisperMissing = false;
+
+/** Shorter gap when frames pile up — catch up without hammering LM at steady state. */
+function frameCaptionGapMs(pendingFrameCount) {
+  const base = CFG.frameCaptionIntervalMs;
+  if (pendingFrameCount > 20) {
+    return Math.min(base, 3000);
+  }
+  if (pendingFrameCount > 10) {
+    return Math.min(base, 8000);
+  }
+  if (pendingFrameCount > 5) {
+    return Math.min(base, 15000);
+  }
+  return base;
+}
 
 function deleteChunkFile(path) {
   if (!path || !existsSync(path)) {
@@ -67,7 +82,7 @@ export function pruneStaleAudio(db = openDb()) {
          OR (processed = 1 AND path IS NOT NULL AND path != '')
        )`,
     )
-    .all(CFG.ambientEnergyThreshold);
+    .all(CFG.speechEnergyThreshold);
 
   const orphan = db
     .prepare(
@@ -134,16 +149,8 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
     }
 
     if (!isSpeechChunk(chunk.energy ?? 0)) {
-      const pcm = readFileSync(chunk.path);
-      const sound = classifySoundChunk(pcm, chunk.energy ?? 0, chunk.duration_ms ?? CFG.audioChunkMs);
-      updateAudioClassification(db, chunk.id, {
-        sound_kind: sound.kind,
-        sound_label: sound.label,
-        speaker_id: null,
-        speaker_confidence: null,
-      });
-      markAudioProcessed(db, chunk.id);
-      results.push({ id: chunk.id, skipped: "ambient", sound: sound.kind });
+      discardAudioChunk(db, chunk);
+      results.push({ id: chunk.id, skipped: "quiet" });
       continue;
     }
 
@@ -201,37 +208,80 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
   return results;
 }
 
-export async function processPendingFrames(limit = CFG.pipelineFrameBatch) {
-  const minGap = CFG.frameCaptionIntervalMs;
+export async function processPendingFrames(limit = CFG.pipelineFrameBatch, { bypassGap = false } = {}) {
+  const db = openDb();
+  const pending = pendingCounts(db);
+  if (pending.frames > CFG.workerBacklogHigh) {
+    limit = Math.min(CFG.workerBatchMaxHigh, limit * 2);
+  } else if (pending.frames > CFG.workerBacklogMedium) {
+    limit = Math.min(CFG.workerBatchMaxMedium, limit * 2);
+  }
+
+  const minGap = bypassGap ? 0 : frameCaptionGapMs(pending.frames);
   if (minGap > 0 && Date.now() - lastFrameLmAt < minGap) {
     return [];
   }
 
-  const db = openDb();
   const frames = pendingFrames(db, limit);
   const results = [];
 
   for (const frame of frames) {
+    if (minGap > 0 && Date.now() - lastFrameLmAt < minGap) {
+      break;
+    }
+
     try {
       const buf = readFileSync(frame.path);
       const b64 = buf.toString("base64");
+      const prev = lastProcessedFrame(db);
+      let previousScene = null;
+      if (prev?.scene_json) {
+        try {
+          previousScene = JSON.parse(prev.scene_json);
+        } catch {
+          /* ignore */
+        }
+      }
+
+      const scene = await captionFrame(b64, frame.reason, {
+        previousCaption: prev?.caption,
+        previousScene,
+      });
+
+      const caption = scene.unchanged && prev?.caption
+        ? prev.caption
+        : formatSceneCaption(scene);
+      const sceneJson = scene.unchanged && prev?.scene_json
+        ? prev.scene_json
+        : JSON.stringify(scene);
+
+      markFrameProcessed(db, frame.id, caption, sceneJson);
       lastFrameLmAt = Date.now();
-      const scene = await captionFrame(b64, frame.reason);
-      const caption = `${scene.scene}: ${scene.activity}. ${scene.note || ""}`.trim();
-      markFrameProcessed(db, frame.id, caption, JSON.stringify(scene));
-      if (scene.person_present === true || Number(scene.people) > 0) {
+
+      const people = scene.unchanged
+        ? Number(previousScene?.people ?? 0)
+        : Number(scene.people) || 0;
+      const personPresent = scene.unchanged
+        ? previousScene?.person_present === true
+        : scene.person_present === true;
+
+      if (personPresent || people > 0) {
         insertEvent(db, {
           device_id: frame.device_id,
           at: frame.captured_at,
           kind: "presence",
           payload_json: JSON.stringify({
             source: "camera",
-            people: Number(scene.people) || 0,
+            people,
             frame_id: frame.id,
           }),
         });
       }
-      results.push({ id: frame.id, caption: caption.slice(0, 80) });
+      results.push({
+        id: frame.id,
+        caption: caption.slice(0, 80),
+        unchanged: !!scene.unchanged,
+      });
     } catch (err) {
       results.push({ id: frame.id, error: err.message });
       console.warn(`[worker] frame ${frame.id} LM fail: ${err.message}`);
@@ -241,9 +291,9 @@ export async function processPendingFrames(limit = CFG.pipelineFrameBatch) {
   return results;
 }
 
-export async function runPendingQueueOnce() {
+export async function runPendingQueueOnce({ bypassFrameGap = false } = {}) {
   const audio = await processPendingAudio();
-  const frames = await processPendingFrames();
+  const frames = await processPendingFrames(CFG.pipelineFrameBatch, { bypassGap: bypassFrameGap });
   return { audio, frames };
 }
 
@@ -269,6 +319,9 @@ export function startProcessingLoop(intervalMs = CFG.pipelineIntervalMs) {
 
       if (pending.audio > 0) {
         console.log(`[whisper] queue ${pending.audio} audio chunk(s)`);
+      }
+      if (pending.frames > 5) {
+        console.log(`[worker] frame backlog ${pending.frames} — faster caption gap`);
       }
 
       const audio = await processPendingAudio();

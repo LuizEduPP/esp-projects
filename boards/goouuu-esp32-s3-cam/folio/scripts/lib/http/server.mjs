@@ -24,6 +24,7 @@ import {
   touchDevice,
 } from "../db/index.mjs";
 import { ingestAudioChunk, ingestFrame, ingestEvent } from "../services/index.mjs";
+import { timelineWithGroups } from "../timeline/present.mjs";
 
 const UI_MIME = {
   "/ui/app.css": "text/css; charset=utf-8",
@@ -212,7 +213,9 @@ export function createFolioServer(ui) {
 
       if (path === "/api/timeline") {
         const day = qs.get("day") ?? today();
-        sendJson(res, 200, { day, items: timelineForDay(openDb(), day) });
+        const items = timelineForDay(openDb(), day);
+        const grouped = timelineWithGroups(items);
+        sendJson(res, 200, { day, items, ...grouped });
         return;
       }
 
