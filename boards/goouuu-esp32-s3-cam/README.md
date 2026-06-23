@@ -7,7 +7,8 @@ Firmware for the **GOOUUU ESP32-S3-CAM** board (ESP32-S3 + OV2640 camera on modu
 | Project | Description | Docs |
 |---------|-------------|------|
 | [**mini-games/**](mini-games/) | 12 native arcade games — 128×64 OLED + 5 buttons (no camera, SD, Wi-Fi, or audio) | [README](mini-games/README.md) |
-| [**rc-car/**](rc-car/) | 4WD seguidor IA — camera + LM Studio (Ministral 3) | [README](rc-car/README.md) |
+| [**rc-car/**](rc-car/) | 4WD AI follower — camera + LM Studio (Ministral 3) | [README](rc-car/README.md) |
+| [**folio/**](folio/) | Passive day witness — mic + camera → digest | [README](folio/README.md) |
 
 ## Requirements
 

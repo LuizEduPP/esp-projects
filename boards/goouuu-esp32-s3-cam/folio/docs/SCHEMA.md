@@ -23,7 +23,7 @@ Data directory: `~/.folio/` (override with `FOLIO_DATA_DIR`).
 | `audio_chunks` | Raw PCM paths, seq, energy, `processed` |
 | `utterances` | STT output linked to chunk |
 | `frames` | JPEG paths + vision caption + `scene_json` |
-| `events` | boot, motion, pause, resume |
+| `events` | boot, motion |
 
 ### Structure
 
@@ -92,9 +92,9 @@ Passes must cite these IDs. Pass C drops claims without backing.
 
 ### Pass D — `prose`
 
-Plain text (pt-BR). No `##` headings. Final line:
+Plain text (`FOLIO_LOCALE`, default `pt-BR`). No `##` headings. Final line:
 
-`*Evidência: utt:12, frm:3, ep:…*`
+`*Evidence: utt:12, frm:3, ep:…*`
 
 ## Episode `summary_json` (per episode, pre-digest)
 

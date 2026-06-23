@@ -27,7 +27,6 @@ static WebServer gServer(80);
 static portMUX_TYPE gCamMux = portMUX_INITIALIZER_UNLOCKED;
 static bool gCamOk = false;
 static bool gAudioOk = false;
-static bool gPaused = false;
 static uint32_t gAudioSeq = 0;
 static uint32_t gAudioPushOk = 0;
 static uint32_t gAudioPushFail = 0;
@@ -106,7 +105,7 @@ static bool brainPost(const char *path, const uint8_t *body, size_t len,
 }
 
 static void pushAudioChunk() {
-  if (!gAudioOk || gPaused) {
+  if (!gAudioOk) {
     return;
   }
   if (!audioReadChunk(gPcmBuf, FOLIO_CHUNK_SAMPLES)) {
@@ -135,7 +134,7 @@ static void pushAudioChunk() {
 }
 
 static void pushFrame(const char *reason) {
-  if (!gCamOk || gPaused) {
+  if (!gCamOk) {
     return;
   }
   camera_fb_t *fb = captureFrame();
@@ -212,8 +211,6 @@ static void handleHealth() {
   j += gCamOk ? "true" : "false";
   j += ",\"audio\":";
   j += gAudioOk ? "true" : "false";
-  j += ",\"paused\":";
-  j += gPaused ? "true" : "false";
   j += ",\"audio_seq\":";
   j += gAudioSeq;
   j += ",\"audio_push_ok\":";
@@ -226,30 +223,6 @@ static void handleHealth() {
   j += ESP.getFreeHeap();
   j += "}";
   gServer.send(200, "application/json", j);
-}
-
-static void handlePause() {
-  logReq("/pause");
-  if (gServer.method() != HTTP_POST) {
-    gServer.send(405, "text/plain", "POST");
-    return;
-  }
-  gPaused = true;
-  pushEvent("pause", "{\"active\":true}");
-  cors();
-  gServer.send(200, "application/json", "{\"ok\":true,\"paused\":true}");
-}
-
-static void handleResume() {
-  logReq("/resume");
-  if (gServer.method() != HTTP_POST) {
-    gServer.send(405, "text/plain", "POST");
-    return;
-  }
-  gPaused = false;
-  pushEvent("resume", "{\"active\":true}");
-  cors();
-  gServer.send(200, "application/json", "{\"ok\":true,\"paused\":false}");
 }
 
 void setup() {
@@ -290,8 +263,6 @@ void setup() {
 
   gServer.on("/capture", HTTP_GET, handleCapture);
   gServer.on("/health", HTTP_GET, handleHealth);
-  gServer.on("/pause", HTTP_POST, handlePause);
-  gServer.on("/resume", HTTP_POST, handleResume);
   gServer.begin();
 
   gLastFrameMs = millis();

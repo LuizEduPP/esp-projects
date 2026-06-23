@@ -1,46 +1,46 @@
 # CYD-ARCADE
 
-Jogos casuais (**Snake**, **Flappy**, **Arkanoid**, **Tetris**) para o [**ESP32-2432S028R**](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display) (CYD). Launcher **TFT_eSPI** no estilo do [cyd-gb](../cyd-gb/). **Sem cartão SD** — tudo embutido no firmware.
+Casual games (**Snake**, **Flappy**, **Arkanoid**, **Tetris**) for the [**ESP32-2432S028R**](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display) (CYD). **TFT_eSPI** launcher in the style of [cyd-gb](../cyd-gb/). **No SD card** — everything is embedded in firmware.
 
-## O que precisa
+## Requirements
 
-| Item | Obrigatório? |
-|------|----------------|
-| Placa CYD 2.8″ | Sim |
-| Cabo USB | Sim |
-| microSD | **Não** |
+| Item | Required? |
+|------|-----------|
+| CYD 2.8″ board | Yes |
+| USB cable | Yes |
+| microSD | **No** |
 
-## Jogos inclusos
+## Included games
 
-| Jogo | Controle |
-|------|----------|
-| **Snake** | Toque na direção na área de jogo |
-| **Flappy** | Toque na tela = bater asas |
-| **Arkanoid** | Arraste o dedo na horizontal |
-| **Tetris** | Arraste ↔ mover, ↑ girar, ↓ cair |
+| Game | Control |
+|------|---------|
+| **Snake** | Touch direction in the play area |
+| **Flappy** | Touch screen = flap |
+| **Arkanoid** | Drag horizontally |
+| **Tetris** | Drag ↔ move, ↑ rotate, ↓ drop |
 
-**Pausa:** canto superior direito. Na **primeira execução** abre calibração de touch. Depois, **⚙️** no header recalibra.
+**Pause:** top-right corner. On **first boot** opens touch calibration. Later, **⚙️** in the header recalibrates.
 
-## Build e flash
+## Build and flash
 
 ```bash
 yarn cyd-arcade:flash
 yarn cyd-arcade:monitor
 ```
 
-## Adicionar jogos
+## Adding games
 
-Edite `firmware/src/game_catalog.cpp` e recompile.
+Edit `firmware/src/game_catalog.cpp` and rebuild.
 
-Motores suportados: `snake`, `flappy`, `breakout`, `arkanoid`, `tetris`.
+Supported engines: `snake`, `flappy`, `breakout`, `arkanoid`, `tetris`.
 
-## Arquitetura
+## Architecture
 
-- **Display:** TFT_eSPI direto (como cyd-gb) — sem LVGL, sem framebuffer de 142 KB
-- **Touch:** XPT2046 no VSPI
-- **Jogos:** `tft.fillRect` / `fillCircle` incremental na área de jogo
+- **Display:** TFT_eSPI direct (like cyd-gb) — no LVGL, no 142 KB framebuffer
+- **Touch:** XPT2046 on VSPI
+- **Games:** incremental `tft.fillRect` / `fillCircle` in the play area
 
-## Créditos
+## Credits
 
 - [CYD hardware](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display) — witnessmenow
-- Layout inspirado no **cyd-gb**
+- Layout inspired by **cyd-gb**
