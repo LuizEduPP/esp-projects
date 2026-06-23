@@ -112,25 +112,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .digest-alert.error { border-color: #6b2020; background: #1a0c0c; color: #f87171; }
 
 .chronicle-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   margin-bottom: 8px;
 }
-
-.btn-chronicle {
-  border: 1px solid var(--accent);
-  background: transparent;
-  color: var(--accent);
-  padding: 7px 14px;
-  cursor: pointer;
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.btn-chronicle:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .chronicle-meta {
   font-size: 0.72rem;

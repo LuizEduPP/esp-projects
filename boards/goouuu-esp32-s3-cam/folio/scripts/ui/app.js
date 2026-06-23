@@ -213,7 +213,6 @@ function renderChronicle(d, st, items) {
     showDigestAlert(null);
   }
 
-  $("btn-force-digest").disabled = busy;
   $("chronicle-title").textContent = "";
   $("chronicle-body").className = "chronicle-body";
 
@@ -254,10 +253,8 @@ function renderChronicle(d, st, items) {
 
   if (busy) {
     $("chronicle-body").textContent = `Interpretando o dia (${PHASE_LABEL[rt.phase] || "digest"})…`;
-  } else if (st.reason === "up_to_date" && !st.has_prose && !st.has_draft) {
-    $("chronicle-body").textContent = "Witness ok — clique em Gerar crônica ou aguarde o ciclo automático.";
   } else {
-    $("chronicle-body").textContent = "Pronto para gerar crônica.";
+    $("chronicle-body").textContent = `Witness ok — crônica automática a cada ~${mins} min.`;
   }
   $("chronicle-meta").textContent = busy ? "Digest em execução" : `Automático · ~${mins} min`;
 }
@@ -526,20 +523,6 @@ $("cfg-reload").onclick = loadConfigForm;
 $("cfg-openai-refresh").onclick = refreshOpenAiModels;
 $("lb-close").onclick = () => $("lightbox").classList.remove("open");
 $("lightbox").onclick = (e) => { if (e.target.id === "lightbox") $("lightbox").classList.remove("open"); };
-
-$("btn-force-digest").onclick = async () => {
-  $("btn-force-digest").disabled = true;
-  showDigestAlert("Gerando crônica…");
-  try {
-    const r = await fetch(`/api/digest/run?day=${day}`, { method: "POST" }).then((x) => x.json());
-    if (r.skipped) toast(`Ignorado: ${r.reason}`);
-    else toast(r.prose ? "Crônica atualizada" : "Digest concluído");
-    await loadDay();
-  } catch (e) {
-    showDigestAlert(e.message, "error");
-  }
-  $("btn-force-digest").disabled = false;
-};
 
 loadDay();
 setInterval(loadDay, 5000);
