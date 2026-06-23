@@ -81,6 +81,8 @@ const SECTIONS = [
     { path: "perception.storeSounds", label: "Guardar sons", type: "bool" },
     { path: "perception.soundMinEnergy", label: "Energia som mín.", type: "number", step: "0.001" },
     { path: "perception.soundMinConfidence", label: "Confiança som mín.", type: "number", step: "0.05" },
+    { path: "perception.soundEngine", label: "Motor de som", type: "select", options: ["yamnet", "heuristic"] },
+    { path: "perception.yamnetMinScore", label: "YAMNet score mín.", type: "number", step: "0.05" },
   ]},
   { title: "Pipeline", fields: [
     { path: "pipeline.enabled", label: "Worker", type: "bool" },
@@ -93,6 +95,8 @@ const SECTIONS = [
     { path: "memory.enabled", label: "RAG ativo", type: "bool" },
     { path: "memory.useEmbeddings", label: "Embeddings (LM local)", type: "bool" },
     { path: "memory.embeddingModel", label: "Modelo embed", type: "lmSelect", pool: "embed", emptyOption: "(lexical)" },
+    { path: "memory.contextQueryTemplate", label: "Query contexto ({day})", type: "text" },
+    { path: "memory.lexical.minTokenLength", label: "Token mín. (lexical)", type: "number" },
     { path: "memory.retrieveLimit", label: "Hits por busca", type: "number" },
   ]},
   { title: "ESP32", fields: [

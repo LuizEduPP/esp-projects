@@ -1,19 +1,27 @@
-const LEXICAL_MIN_TOKEN_LENGTH = 3;
+import { CFG } from "../config/index.mjs";
 
-const STOP_PT = new Set([
-  "a", "o", "e", "de", "da", "do", "das", "dos", "em", "no", "na", "nos", "nas",
-  "um", "uma", "para", "por", "com", "sem", "que", "se", "as", "os",
-]);
+let stopSetCache = null;
+let stopSetKey = null;
 
-const STOP_EN = new Set(["the", "and", "or", "of", "to", "in", "on", "at", "is", "it"]);
+function stopWordsSet() {
+  const words = CFG.memoryLexicalStopWords;
+  const key = words.join("\0");
+  if (stopSetKey !== key) {
+    stopSetCache = new Set(words.map((w) => String(w).toLowerCase()));
+    stopSetKey = key;
+  }
+  return stopSetCache;
+}
 
 export function tokenize(text) {
+  const minLen = CFG.memoryLexicalMinTokenLength;
+  const stops = stopWordsSet();
   return String(text ?? "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
     .split(/[^a-z0-9]+/)
-    .filter((t) => t.length >= LEXICAL_MIN_TOKEN_LENGTH && !STOP_PT.has(t) && !STOP_EN.has(t));
+    .filter((t) => t.length >= minLen && !stops.has(t));
 }
 
 export function termVector(text) {
@@ -69,6 +77,9 @@ export function vectorFromJson(json) {
   try {
     const parsed = JSON.parse(json);
     if (Array.isArray(parsed)) {
+      if (parsed.length && Array.isArray(parsed[0])) {
+        return new Map(parsed);
+      }
       return parsed;
     }
     if (Array.isArray(parsed?.vector)) {

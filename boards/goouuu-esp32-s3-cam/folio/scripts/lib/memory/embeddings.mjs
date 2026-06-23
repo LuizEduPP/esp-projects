@@ -7,36 +7,30 @@ export async function embedText(text) {
   if (!CFG.memoryUseEmbeddings) {
     return { kind: "lexical", vector: [...termVector(text).entries()] };
   }
-  try {
-    const json = await createEmbeddings({
-      model: modelId(ModelSlot.EMBED),
-      input: text.slice(0, 8192),
-      encoding_format: "float",
-    });
-    const vec = json?.data?.[0]?.embedding;
-    if (!Array.isArray(vec)) {
-      throw new Error("no embedding vector");
-    }
-    return { kind: "float", vector: vec };
-  } catch (err) {
-    if (!CFG.memoryFallbackLexical) {
-      throw err;
-    }
-    return { kind: "lexical", vector: [...termVector(text).entries()] };
+  const json = await createEmbeddings({
+    model: modelId(ModelSlot.EMBED),
+    input: text.slice(0, 8192),
+    encoding_format: "float",
+  });
+  const vec = json?.data?.[0]?.embedding;
+  if (!Array.isArray(vec)) {
+    throw new Error("no embedding vector");
   }
+  return { kind: "float", vector: vec };
 }
 
-export function scorePair(queryEmbed, docEmbedJson, docText) {
+export function scorePair(queryEmbed, docEmbedJson) {
   const stored = vectorFromJson(docEmbedJson);
 
-  if (queryEmbed.kind === "float" && Array.isArray(stored)) {
-    return cosineDense(queryEmbed.vector, stored);
+  if (queryEmbed.kind === "float") {
+    return Array.isArray(stored) ? cosineDense(queryEmbed.vector, stored) : 0;
   }
 
-  const queryMap =
-    queryEmbed.kind === "lexical" ? new Map(queryEmbed.vector) : termVector(docText);
-  const docMap = stored instanceof Map ? stored : termVector(docText);
-  return cosineSimilarity(queryMap, docMap);
+  if (stored instanceof Map) {
+    return cosineSimilarity(new Map(queryEmbed.vector), stored);
+  }
+
+  return 0;
 }
 
 export function serializeEmbedding(embed) {

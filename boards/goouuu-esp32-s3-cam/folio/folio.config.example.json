@@ -56,7 +56,14 @@
     "minScore": 0.08,
     "useEmbeddings": false,
     "embeddingModel": null,
-    "fallbackLexical": true,
+    "contextQueryTemplate": "padrões entidades sons fala {day}",
+    "lexical": {
+      "minTokenLength": 3,
+      "stopWords": [
+        "a", "o", "e", "de", "da", "do", "das", "dos", "em", "no", "na", "nos", "nas",
+        "um", "uma", "para", "por", "com", "sem", "que", "se", "as", "os"
+      ]
+    },
     "rerank": {
       "enabled": false,
       "model": null,
@@ -70,7 +77,11 @@
     "autoEnhance": true,
     "storeSounds": true,
     "soundMinEnergy": 0.003,
-    "soundMinConfidence": 0.55
+    "soundMinConfidence": 0.55,
+    "soundEngine": "yamnet",
+    "yamnetMinScore": 0.2,
+    "yamnetModelPath": null,
+    "yamnetLabelsPath": null
   },
   "node": {
     "wifiRetryMs": 5000,

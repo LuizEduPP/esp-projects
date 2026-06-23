@@ -62,6 +62,22 @@ function cfgBool(file, dotPath, envKey) {
   return envBool(getPath(file, dotPath), envKey, getPath(DEFAULT_CONFIG, dotPath));
 }
 
+function cfgStrArray(file, dotPath, envKey) {
+  const env = process.env[envKey];
+  if (env !== undefined && env !== "") {
+    return env
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  const val = getPath(file, dotPath);
+  if (Array.isArray(val)) {
+    return val.map(String);
+  }
+  const fallback = getPath(DEFAULT_CONFIG, dotPath);
+  return Array.isArray(fallback) ? fallback.map(String) : [];
+}
+
 function configPaths() {
   const paths = [];
   if (process.env.FOLIO_CONFIG) {
@@ -257,6 +273,36 @@ function migrateConfigSchema(file) {
   if (file.memory?.rerank?.url != null) {
     delete file.memory.rerank.url;
     changed = true;
+  }
+  if (file.memory?.fallbackLexical != null) {
+    delete file.memory.fallbackLexical;
+    changed = true;
+  }
+
+  if (!file.memory || typeof file.memory !== "object") {
+    file.memory = { ...DEFAULT_CONFIG.memory };
+    changed = true;
+  } else {
+    for (const [k, v] of Object.entries(DEFAULT_CONFIG.memory)) {
+      if (k === "lexical" || k === "rerank") {
+        continue;
+      }
+      if (file.memory[k] == null && v != null) {
+        file.memory[k] = v;
+        changed = true;
+      }
+    }
+    if (!file.memory.lexical || typeof file.memory.lexical !== "object") {
+      file.memory.lexical = { ...DEFAULT_CONFIG.memory.lexical };
+      changed = true;
+    } else {
+      for (const [k, v] of Object.entries(DEFAULT_CONFIG.memory.lexical)) {
+        if (file.memory.lexical[k] == null && v != null) {
+          file.memory.lexical[k] = v;
+          changed = true;
+        }
+      }
+    }
   }
 
   return changed;
@@ -522,7 +568,21 @@ function buildCfgFromFile(file = getFileData()) {
     memoryUseEmbeddings: cfgBool(file, "memory.useEmbeddings", "FOLIO_MEMORY_EMBEDDINGS"),
     memoryEmbeddingModel: cfgStr(file, "memory.embeddingModel", "FOLIO_MEMORY_EMBED_MODEL") || null,
     memoryEmbeddingsUrl: null,
-    memoryFallbackLexical: cfgBool(file, "memory.fallbackLexical", "FOLIO_MEMORY_FALLBACK_LEXICAL"),
+    memoryContextQueryTemplate: cfgStr(
+      file,
+      "memory.contextQueryTemplate",
+      "FOLIO_MEMORY_CONTEXT_QUERY",
+    ),
+    memoryLexicalMinTokenLength: cfgNum(
+      file,
+      "memory.lexical.minTokenLength",
+      "FOLIO_MEMORY_MIN_TOKEN_LEN",
+    ),
+    memoryLexicalStopWords: cfgStrArray(
+      file,
+      "memory.lexical.stopWords",
+      "FOLIO_MEMORY_STOP_WORDS",
+    ),
     memoryGraphRetrieveLimit: cfgNum(file, "memory.graphRetrieveLimit", "FOLIO_MEMORY_GRAPH_LIMIT"),
     memoryGraphMinScore: cfgNum(file, "memory.graphMinScore", "FOLIO_MEMORY_GRAPH_MIN_SCORE"),
     memoryProfileLimit: cfgNum(file, "memory.profileLimit", "FOLIO_MEMORY_PROFILE_LIMIT"),

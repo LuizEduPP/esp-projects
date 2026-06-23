@@ -16,7 +16,7 @@ export async function retrieveMemories(db, query, { day, limit = CFG.memoryRetri
   const scored = candidates
     .map((c) => ({
       ...c,
-      score: scorePair(queryEmbed, c.embedding_json, c.text),
+      score: scorePair(queryEmbed, c.embedding_json),
     }))
     .filter((c) => c.score >= CFG.memoryMinScore)
     .sort((a, b) => b.score - a.score)
@@ -28,6 +28,6 @@ export async function retrieveMemories(db, query, { day, limit = CFG.memoryRetri
 export async function retrieveContextForDay(db, day, { query = "", limit = CFG.memoryRetrieveLimit } = {}) {
   const q =
     query ||
-    `padrões entidades sons fala ${day}`;
+    String(CFG.memoryContextQueryTemplate ?? "").replaceAll("{day}", day).trim();
   return retrieveMemories(db, q, { day, limit });
 }
