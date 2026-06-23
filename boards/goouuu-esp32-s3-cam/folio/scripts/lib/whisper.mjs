@@ -95,6 +95,36 @@ export function pcmEnergy(pcmBuffer) {
   return Math.sqrt(sum / samples.length);
 }
 
+/** True when buffer is missing, zero-length, or all-zero samples. */
+export function pcmIsEmpty(pcmBuffer) {
+  if (!pcmBuffer?.length) {
+    return true;
+  }
+  const samples = new Int16Array(
+    pcmBuffer.buffer,
+    pcmBuffer.byteOffset,
+    pcmBuffer.length / 2,
+  );
+  for (let i = 0; i < samples.length; i++) {
+    if (samples[i] !== 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function isSpeechChunk(energy, threshold = CFG.speechEnergyThreshold) {
   return energy >= threshold;
+}
+
+/** Ingest gate: only persist chunks with real audio energy. */
+export function shouldStoreAudioChunk(pcmBuffer) {
+  if (pcmIsEmpty(pcmBuffer)) {
+    return { store: false, energy: 0, reason: "empty" };
+  }
+  const energy = pcmEnergy(pcmBuffer);
+  if (!isSpeechChunk(energy)) {
+    return { store: false, energy, reason: "quiet" };
+  }
+  return { store: true, energy, reason: null };
 }

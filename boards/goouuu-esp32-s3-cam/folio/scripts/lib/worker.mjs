@@ -11,7 +11,7 @@ import {
   pendingFrames,
 } from "./db.mjs";
 import { captionFrame } from "./lm.mjs";
-import { deleteChunkFile } from "./retention.mjs";
+import { discardAudioChunk } from "./retention.mjs";
 import { isSpeechChunk, transcribeWav } from "./whisper.mjs";
 import { writeWav } from "./util.mjs";
 
@@ -31,8 +31,7 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
 
   for (const chunk of chunks) {
     if (!isSpeechChunk(chunk.energy ?? 0)) {
-      deleteChunkFile(chunk.path);
-      markAudioProcessed(db, chunk.id);
+      discardAudioChunk(db, chunk);
       results.push({ id: chunk.id, skipped: "silence" });
       continue;
     }
@@ -53,10 +52,11 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
           confidence: stt.confidence,
         });
         results.push({ id: chunk.id, text: stt.text.slice(0, 80) });
+        markAudioProcessed(db, chunk.id);
       } else {
+        discardAudioChunk(db, chunk);
         results.push({ id: chunk.id, skipped: "empty_stt" });
       }
-      markAudioProcessed(db, chunk.id);
     } catch (err) {
       results.push({ id: chunk.id, error: err.message });
       console.warn(`[worker] audio ${chunk.id} whisper: ${err.message}`);

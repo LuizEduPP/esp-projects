@@ -28,8 +28,7 @@ function main() {
     );
     console.log(
       `audio: chunk=${CFG.audioChunkMs}ms rate=${CFG.audioSampleRate} ` +
-        `speech≥${CFG.speechEnergyThreshold} storeQuiet=${CFG.audioStoreQuiet} ` +
-        `retention=${CFG.audioRetentionDays}d`,
+        `speech≥${CFG.speechEnergyThreshold} retention=${CFG.audioRetentionDays}d`,
     );
     console.log(`models: fast=${CFG.modelFast} deep=${CFG.modelDeep}`);
     console.log(

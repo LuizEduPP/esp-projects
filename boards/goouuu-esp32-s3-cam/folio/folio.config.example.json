@@ -26,7 +26,6 @@
     "whisperTimeoutMs": 120000,
     "whisperLanguage": null,
     "pipelineBatch": 4,
-    "storeQuiet": false,
     "retentionDays": 7
   },
   "pipeline": {
@@ -39,6 +38,13 @@
   },
   "episodes": {
     "gapMin": 12
+  },
+  "memory": {
+    "enabled": true,
+    "lookbackDays": 90,
+    "retrieveLimit": 14,
+    "minScore": 0.08,
+    "useEmbeddings": false
   },
   "node": {
     "wifiRetryMs": 5000,

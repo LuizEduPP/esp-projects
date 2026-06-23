@@ -133,6 +133,44 @@ audio{width:100%;height:40px;border-radius:8px}
   border:none;border-radius:50%;background:rgba(255,255,255,.12);
   color:#fff;font-size:1.4rem;cursor:pointer;
 }
+.settings-btn{
+  border:1px solid var(--line);background:var(--bg2);color:var(--muted);
+  padding:7px 12px;border-radius:8px;cursor:pointer;font-size:.78rem;
+}
+.settings-btn:hover{border-color:var(--accent-dim);color:var(--text)}
+.settings-overlay{
+  position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.72);
+  display:none;align-items:flex-start;justify-content:center;padding:24px;overflow:auto;
+}
+.settings-overlay.open{display:flex}
+.settings-panel{
+  width:min(720px,100%);background:var(--bg2);border:1px solid var(--line);
+  border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px 24px;
+}
+.settings-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.settings-head h2{font-size:1rem}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:.72rem;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.field input,.field select{
+  border:1px solid var(--line);border-radius:8px;background:var(--bg3);
+  color:var(--text);padding:8px 10px;font-size:.85rem;
+}
+.field.full{grid-column:1/-1}
+.settings-section{margin:18px 0 8px;font-size:.75rem;color:var(--accent);text-transform:uppercase;letter-spacing:.08em}
+.settings-actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+.settings-actions button{
+  border:1px solid var(--line);background:var(--bg3);color:var(--text);
+  padding:10px 16px;border-radius:8px;cursor:pointer;
+}
+.settings-actions button.primary{border-color:var(--accent-dim);background:#1a2332;color:var(--accent)}
+.sync-box{
+  margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:8px;
+  font-size:.8rem;color:var(--muted);
+}
+.sync-ok{color:var(--audio)}
+.sync-warn{color:var(--warn)}
+@media(max-width:640px){.settings-grid{grid-template-columns:1fr}}
 @media(max-width:960px){
   .layout{grid-template-columns:1fr}
   .chronicle{position:relative;top:0;height:auto;border-right:none;border-bottom:1px solid var(--line)}
@@ -151,7 +189,50 @@ audio{width:100%;height:40px;border-radius:8px}
     <button type="button" id="day-next" title="Next day">›</button>
   </div>
   <div class="status" id="status"></div>
+  <button type="button" class="settings-btn" id="open-settings">Settings</button>
 </header>
+
+<div class="settings-overlay" id="settings-overlay">
+  <div class="settings-panel">
+    <div class="settings-head">
+      <h2>Configuration</h2>
+      <button type="button" class="settings-btn" id="close-settings">Close</button>
+    </div>
+    <p class="chronicle-meta" id="cfg-meta">Synced with ESP via /api/node/config</p>
+    <form id="settings-form">
+      <div class="settings-section">Locale &amp; pipeline</div>
+      <div class="settings-grid">
+        <div class="field"><label>Locale</label><input name="locale" id="cfg-locale"/></div>
+        <div class="field"><label>Speech threshold</label><input name="speechEnergyThreshold" id="cfg-speech" type="number" step="0.001"/></div>
+        <div class="field"><label>Pipeline interval (ms)</label><input name="pipelineIntervalMs" id="cfg-pipe-int" type="number"/></div>
+        <div class="field"><label>Frame caption gap (ms)</label><input name="captionIntervalMs" id="cfg-cap-int" type="number"/></div>
+      </div>
+      <div class="settings-section">ESP node (synced)</div>
+      <div class="settings-grid">
+        <div class="field"><label>Frame interval (ms)</label><input name="captureIntervalMs" id="cfg-frame-int" type="number"/></div>
+        <div class="field"><label>JPEG quality</label><input name="jpegQuality" id="cfg-jpeg" type="number"/></div>
+        <div class="field"><label>Frame size</label>
+          <select name="frameSize" id="cfg-frame-size">
+            <option value="QVGA">QVGA</option><option value="VGA">VGA</option><option value="SVGA">SVGA</option>
+          </select>
+        </div>
+        <div class="field"><label>WiFi retry (ms)</label><input name="wifiRetryMs" id="cfg-wifi" type="number"/></div>
+        <div class="field"><label>Push backoff max (ms)</label><input name="pushBackoffMaxMs" id="cfg-backoff" type="number"/></div>
+        <div class="field"><label>Status interval (ms)</label><input name="statusIntervalMs" id="cfg-status" type="number"/></div>
+      </div>
+      <div class="settings-section">Memory (RAG)</div>
+      <div class="settings-grid">
+        <div class="field"><label>Lookback days</label><input name="lookbackDays" id="cfg-mem-days" type="number"/></div>
+        <div class="field"><label>Retrieve limit</label><input name="retrieveLimit" id="cfg-mem-limit" type="number"/></div>
+      </div>
+      <div class="settings-actions">
+        <button type="submit" class="primary">Save &amp; sync</button>
+        <button type="button" id="reload-settings">Reload</button>
+      </div>
+    </form>
+    <div class="sync-box" id="sync-status">Loading devices…</div>
+  </div>
+</div>
 
 <div class="layout">
   <aside class="chronicle">
@@ -342,6 +423,69 @@ async function load(){
 
 load();
 setInterval(load,10000);
+
+const settingsOverlay=$('settings-overlay');
+$('open-settings').onclick=()=>{settingsOverlay.classList.add('open');loadSettings();};
+$('close-settings').onclick=()=>settingsOverlay.classList.remove('open');
+settingsOverlay.onclick=e=>{if(e.target===settingsOverlay)settingsOverlay.classList.remove('open');};
+$('reload-settings').onclick=loadSettings;
+
+async function loadSettings(){
+  const [cfg,dev]=await Promise.all([
+    fetch('/api/config').then(r=>r.json()),
+    fetch('/api/devices').then(r=>r.json()),
+  ]);
+  $('cfg-locale').value=cfg.locale||'pt-BR';
+  $('cfg-speech').value=cfg.audio?.speechEnergyThreshold??0.008;
+  $('cfg-pipe-int').value=cfg.pipeline?.intervalMs??30000;
+  $('cfg-cap-int').value=cfg.frames?.captionIntervalMs??60000;
+  $('cfg-frame-int').value=cfg.frames?.captureIntervalMs??60000;
+  $('cfg-jpeg').value=cfg.frames?.jpegQuality??12;
+  $('cfg-frame-size').value=cfg.frames?.size||'QVGA';
+  $('cfg-wifi').value=cfg.node?.wifiRetryMs??5000;
+  $('cfg-backoff').value=cfg.node?.pushBackoffMaxMs??30000;
+  $('cfg-status').value=cfg.node?.statusIntervalMs??15000;
+  $('cfg-mem-days').value=cfg.memory?.lookbackDays??90;
+  $('cfg-mem-limit').value=cfg.memory?.retrieveLimit??14;
+  $('cfg-meta').textContent=`Brain config v${cfg.version||'?'} · ${cfg.configPath||'defaults'}`;
+  const lines=(dev.devices||[]).map(d=>{
+    const ok=d.node_config_applied===dev.brain_config_version;
+    return `<div class="${ok?'sync-ok':'sync-warn'}">${escapeHtml(d.id)}: applied <code>${escapeHtml(d.node_config_applied||'—')}</code> · brain <code>${escapeHtml(dev.brain_config_version)}</code></div>`;
+  });
+  $('sync-status').innerHTML=lines.length?lines.join(''):'No ESP seen yet — push audio/frame to register device.';
+}
+
+$('settings-form').onsubmit=async e=>{
+  e.preventDefault();
+  const body={
+    locale:$('cfg-locale').value,
+    audio:{speechEnergyThreshold:Number($('cfg-speech').value)},
+    pipeline:{intervalMs:Number($('cfg-pipe-int').value)},
+    frames:{
+      captureIntervalMs:Number($('cfg-frame-int').value),
+      captionIntervalMs:Number($('cfg-cap-int').value),
+      jpegQuality:Number($('cfg-jpeg').value),
+      size:$('cfg-frame-size').value,
+    },
+    node:{
+      wifiRetryMs:Number($('cfg-wifi').value),
+      pushBackoffMaxMs:Number($('cfg-backoff').value),
+      statusIntervalMs:Number($('cfg-status').value),
+    },
+    memory:{
+      lookbackDays:Number($('cfg-mem-days').value),
+      retrieveLimit:Number($('cfg-mem-limit').value),
+    },
+  };
+  const res=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const json=await res.json();
+  if(json.restartRecommended){
+    $('cfg-meta').textContent='Saved — restart brain for LM/Whisper/port changes. ESP syncs on next poll.';
+  }else{
+    $('cfg-meta').textContent=`Saved v${json.version} — ESP picks up on next status interval.`;
+  }
+  loadSettings();
+};
 </script>
 </body>
 </html>

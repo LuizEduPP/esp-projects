@@ -6,6 +6,7 @@
 
 #include "audio_capture.h"
 #include "folio_config.h"
+#include "node_config.h"
 #include "pins.h"
 #include "spool_store.h"
 
@@ -21,11 +22,6 @@
 #ifndef FOLIO_DEVICE_ID
 #define FOLIO_DEVICE_ID "folio-s3-01"
 #endif
-
-static const uint32_t FRAME_INTERVAL_MS = FOLIO_FRAME_INTERVAL_MS;
-static const uint32_t WIFI_RETRY_MS = FOLIO_WIFI_RETRY_MS;
-static const uint32_t PUSH_BACKOFF_MAX_MS = FOLIO_PUSH_BACKOFF_MAX_MS;
-static const uint32_t STATUS_INTERVAL_MS = FOLIO_STATUS_INTERVAL_MS;
 
 static WebServer gServer(80);
 static portMUX_TYPE gCamMux = portMUX_INITIALIZER_UNLOCKED;
@@ -43,6 +39,7 @@ static unsigned long gLastFrameMs = 0;
 static unsigned long gLastWifiTryMs = 0;
 static unsigned long gPushBackoffUntilMs = 0;
 static uint32_t gPushBackoffMs = 0;
+static uint32_t gPushBackoffMaxMs = FOLIO_PUSH_BACKOFF_MAX_MS;
 
 static int16_t gPcmBuf[FOLIO_CHUNK_SAMPLES];
 
@@ -96,7 +93,7 @@ static camera_fb_t *captureFrame() {
 static bool canPushNow() { return millis() >= gPushBackoffUntilMs; }
 
 static void onPushFail() {
-  gPushBackoffMs = min<uint32_t>(gPushBackoffMs + 2000UL, PUSH_BACKOFF_MAX_MS);
+  gPushBackoffMs = min<uint32_t>(gPushBackoffMs + 2000UL, gPushBackoffMaxMs);
   gPushBackoffUntilMs = millis() + gPushBackoffMs;
 }
 
@@ -119,6 +116,7 @@ static bool brainPost(const char *path, const uint8_t *body, size_t len,
   http.setTimeout(15000);
   http.addHeader("Content-Type", contentType);
   http.addHeader("X-Folio-Device-Id", FOLIO_DEVICE_ID);
+  http.addHeader("X-Folio-Config-Version", nodeConfigVersionHeader());
   if (extraHeaders) {
     http.addHeader("X-Folio-Meta", extraHeaders);
   }
@@ -274,6 +272,7 @@ static void pushEvent(const char *kind, const char *payload) {
 }
 
 static void ensureWifi() {
+  const uint32_t wifiRetryMs = nodeConfig().wifiRetryMs;
   if (WiFi.status() == WL_CONNECTED) {
     if (!gWifiOk) {
       gWifiOk = true;
@@ -284,7 +283,7 @@ static void ensureWifi() {
 
   gWifiOk = false;
   const unsigned long now = millis();
-  if (now - gLastWifiTryMs < WIFI_RETRY_MS) {
+  if (now - gLastWifiTryMs < wifiRetryMs) {
     return;
   }
   gLastWifiTryMs = now;
@@ -333,7 +332,9 @@ static void handleHealth() {
   j += gAudioPushFail;
   j += ",\"frame_push_ok\":";
   j += gFramePushOk;
-  j += ",\"heap\":";
+  j += ",\"config_version\":\"";
+  j += nodeConfigVersionHeader();
+  j += "\",\"heap\":";
   j += ESP.getFreeHeap();
   j += "}";
   gServer.send(200, "application/json", j);
@@ -377,6 +378,9 @@ void setup() {
     Serial.println("[boot] wifi offline — capturing to SD, will upload when back");
   }
 
+  nodeConfigBegin();
+  gPushBackoffMaxMs = nodeConfig().pushBackoffMaxMs;
+
   gServer.on("/capture", HTTP_GET, handleCapture);
   gServer.on("/health", HTTP_GET, handleHealth);
   gServer.begin();
@@ -391,24 +395,28 @@ void loop() {
   gServer.handleClient();
   ensureWifi();
   spoolTick();
+  nodeConfigPoll();
+
+  const NodeRuntimeConfig &cfg = nodeConfig();
+  gPushBackoffMaxMs = cfg.pushBackoffMaxMs;
 
   const unsigned long now = millis();
 
   static unsigned long lastHeartbeat = 0;
-  if (now - lastHeartbeat >= STATUS_INTERVAL_MS) {
+  if (now - lastHeartbeat >= cfg.statusIntervalMs) {
     lastHeartbeat = now;
     Serial.printf(
-        "[status] up=%lums wifi=%s spool a=%lu f=%lu push ok=%lu/%lu heap=%u backoff=%lums\n",
-        now - gBootMs, gWifiOk ? "up" : "down",
+        "[status] up=%lums wifi=%s cfg=%s frame=%lums spool a=%lu f=%lu push ok=%lu/%lu heap=%u\n",
+        now - gBootMs, gWifiOk ? "up" : "down", cfg.version, cfg.frameIntervalMs,
         spoolOk() ? spoolPendingAudio() : 0, spoolOk() ? spoolPendingFrames() : 0,
-        gAudioPushOk, gFramePushOk, ESP.getFreeHeap(), gPushBackoffMs);
+        gAudioPushOk, gFramePushOk, ESP.getFreeHeap());
   }
 
   if (gAudioOk) {
     captureAudioChunk();
   }
 
-  if (gCamOk && now - gLastFrameMs >= FRAME_INTERVAL_MS) {
+  if (gCamOk && now - gLastFrameMs >= cfg.frameIntervalMs) {
     captureFrameChunk("interval");
   }
 

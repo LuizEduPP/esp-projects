@@ -7,7 +7,10 @@ const SCHEMA = `
 CREATE TABLE IF NOT EXISTS devices (
   id TEXT PRIMARY KEY,
   label TEXT,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  last_seen_at TEXT,
+  node_config_version TEXT,
+  node_config_applied TEXT
 );
 
 CREATE TABLE IF NOT EXISTS audio_chunks (
@@ -144,6 +147,19 @@ CREATE TABLE IF NOT EXISTS day_rollups (
   compact_json TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS memory_chunks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  day TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  text TEXT NOT NULL,
+  evidence_json TEXT,
+  embedding_json TEXT,
+  weight REAL NOT NULL DEFAULT 1.0,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_chunks_day ON memory_chunks(day);
+CREATE INDEX IF NOT EXISTS idx_memory_chunks_kind ON memory_chunks(kind);
 `;
 
 let dbSingleton = null;
@@ -159,8 +175,22 @@ export function openDb() {
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA busy_timeout = 5000;");
   db.exec(SCHEMA);
+  migrateDb(db);
   dbSingleton = db;
   return db;
+}
+
+function migrateDb(db) {
+  const cols = new Set(db.prepare("PRAGMA table_info(devices)").all().map((c) => c.name));
+  if (!cols.has("last_seen_at")) {
+    db.exec("ALTER TABLE devices ADD COLUMN last_seen_at TEXT");
+  }
+  if (!cols.has("node_config_version")) {
+    db.exec("ALTER TABLE devices ADD COLUMN node_config_version TEXT");
+  }
+  if (!cols.has("node_config_applied")) {
+    db.exec("ALTER TABLE devices ADD COLUMN node_config_applied TEXT");
+  }
 }
 
 export function ensureDevice(db, deviceId, label = null) {
@@ -174,6 +204,40 @@ export function ensureDevice(db, deviceId, label = null) {
     isoNow(),
   );
 }
+
+export function touchDevice(db, deviceId, { configVersion = null } = {}) {
+  ensureDevice(db, deviceId);
+  const now = isoNow();
+  if (configVersion) {
+    db.prepare(
+      `UPDATE devices SET last_seen_at = ?, node_config_applied = ? WHERE id = ?`,
+    ).run(now, configVersion, deviceId);
+    return;
+  }
+  db.prepare(`UPDATE devices SET last_seen_at = ? WHERE id = ?`).run(now, deviceId);
+}
+
+export function listDevices(db) {
+  return db
+    .prepare(
+      `SELECT id, label, last_seen_at, node_config_version, node_config_applied, created_at
+       FROM devices ORDER BY last_seen_at DESC`,
+    )
+    .all();
+}
+
+export function setBrainConfigVersion(db, version) {
+  db.prepare(
+    `INSERT OR REPLACE INTO profile_facts (key, value, source_day, confidence, updated_at)
+     VALUES ('node:config_version', ?, NULL, 1.0, ?)`,
+  ).run(version, isoNow());
+}
+
+export function getBrainConfigVersion(db) {
+  const row = db.prepare("SELECT value FROM profile_facts WHERE key = 'node:config_version'").get();
+  return row?.value ?? null;
+}
+
 
 export function insertAudioChunk(db, row) {
   const info = db
@@ -238,6 +302,10 @@ export function pendingCounts(db) {
 
 export function markAudioProcessed(db, id) {
   db.prepare("UPDATE audio_chunks SET processed = 1 WHERE id = ?").run(id);
+}
+
+export function deleteAudioChunk(db, id) {
+  db.prepare("DELETE FROM audio_chunks WHERE id = ?").run(id);
 }
 
 export function markFrameProcessed(db, id, caption, sceneJson) {
@@ -427,6 +495,43 @@ export function priorDayRollup(db, day) {
   return rollup ? JSON.parse(rollup.compact_json) : null;
 }
 
+export function deleteMemoryForDay(db, day) {
+  db.prepare("DELETE FROM memory_chunks WHERE day = ?").run(day);
+}
+
+export function insertMemoryChunk(db, row) {
+  db.prepare(
+    `INSERT INTO memory_chunks (day, kind, text, evidence_json, embedding_json, weight, created_at)
+     VALUES (@day, @kind, @text, @evidence_json, @embedding_json, @weight, @created_at)`,
+  ).run(row);
+}
+
+/** Past days only — excludes `beforeDay` (today's digest indexes after retrieval). */
+export function memoryChunksInRange(db, minDay, beforeDay) {
+  return db
+    .prepare(
+      `SELECT * FROM memory_chunks WHERE day >= ? AND day < ? ORDER BY day DESC`,
+    )
+    .all(minDay, beforeDay);
+}
+
+export function memoryChunkCount(db) {
+  return db.prepare("SELECT COUNT(*) AS n FROM memory_chunks").get().n;
+}
+
+export function graphNodesForDay(db, day) {
+  return db.prepare("SELECT * FROM graph_nodes WHERE day = ?").all(day);
+}
+
+export function graphNodesBeforeDay(db, beforeDay, lookbackDays = 30) {
+  const d = new Date(`${beforeDay}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - lookbackDays);
+  const minDay = d.toISOString().slice(0, 10);
+  return db
+    .prepare(`SELECT * FROM graph_nodes WHERE day >= ? AND day < ?`)
+    .all(minDay, beforeDay);
+}
+
 export function upsertProfileFact(db, key, value, sourceDay, confidence) {
   const now = isoNow();
   const existing = db.prepare("SELECT id FROM profile_facts WHERE key = ?").get(key);
@@ -493,7 +598,9 @@ export function updateEpisodeSummary(db, episodeId, summaryJson, label) {
 }
 
 export function timelineForDay(db, day) {
-  const audio = audioChunksForDay(db, day).map((c) => ({
+  const audio = audioChunksForDay(db, day)
+    .filter((c) => !c.processed || c.utterance_text)
+    .map((c) => ({
     type: "audio",
     at: c.captured_at,
     id: `aud:${c.id}`,

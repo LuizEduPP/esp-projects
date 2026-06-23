@@ -86,6 +86,35 @@ yarn folio:monitor        # node logs
 
 `yarn folio:brain` restarts automatically when you edit files under `scripts/`. Use `yarn workspace goouuu-s3-cam-folio brain:once` for a single run without watch.
 
+Manual overrides: `yarn folio:digest`, `yarn workspace goouuu-s3-cam-folio brain:process`, `yarn folio:enroll`.
+
+### Scripts layout
+
+```
+scripts/
+├── folio-brain.mjs      # HTTP server + background loops
+├── folio.mjs            # CLI: digest | process | enroll
+├── ui/index.html
+└── lib/
+    ├── config.mjs       # ~/.folio/config.json + env
+    ├── db.mjs           # SQLite schema + queries
+    ├── http.mjs         # routes (/ingest, /api/*)
+    ├── ingest.mjs       # fast path: save PCM/JPEG
+    ├── worker.mjs       # Whisper + LM queue drain
+    ├── retention.mjs    # audio file cleanup
+    ├── digest/
+    │   ├── passes.mjs   # A→D pipeline
+    │   ├── compact.mjs
+    │   └── scheduler.mjs
+    ├── memory/          # RAG index + retrieve
+    ├── episodes.mjs
+    ├── graph.mjs
+    ├── lm.mjs
+    ├── whisper.mjs
+    ├── locale.mjs
+    └── serve.mjs
+```
+
 ## Offline spool (SD card)
 
 The ESP **always** writes captures to the microSD (`/folio/audio`, `/folio/frames`). If WiFi or the brain is down, files stay on the card. When the network returns, the node drains the oldest pending files first (with backoff on HTTP errors — e.g. brain hot reload).
@@ -101,7 +130,16 @@ mkdir -p ~/.folio
 cp boards/goouuu-esp32-s3-cam/folio/folio.config.example.json ~/.folio/config.json
 ```
 
-**Env vars override** `config.json`. Current values: `GET http://localhost:8770/api/config`
+**Env vars override** `config.json`. Edit in the UI (**Settings**) or via API:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/config` | Full config + version |
+| PUT | `/api/config` | Save (partial JSON merge) → reloads brain hot settings |
+| GET | `/api/node/config` | ESP pulls this (include `X-Folio-Device-Id`) |
+| GET | `/api/devices` | Sync status per node |
+
+ESP polls `/api/node/config` every `node.statusIntervalMs` and sends `X-Folio-Config-Version` on ingest. Frame interval + JPEG quality apply at runtime; audio buffer size / frame resolution need matching `platformio.ini` + reflash.
 
 ### Brain (`~/.folio/config.json`)
 
@@ -117,7 +155,8 @@ cp boards/goouuu-esp32-s3-cam/folio/folio.config.example.json ~/.folio/config.js
 | `audio.chunkMs` | `FOLIO_AUDIO_CHUNK_MS` | `1000` | PCM chunk length |
 | `audio.speechEnergyThreshold` | `FOLIO_SPEECH_ENERGY` | `0.008` | Gate for speech / presence |
 | `audio.whisperModel` | `FOLIO_WHISPER_MODEL` | `base` | Whisper model size |
-| `audio.pipelineBatch` | `FOLIO_PIPELINE_AUDIO_BATCH` | `2` | Chunks per pipeline tick |
+| `audio.pipelineBatch` | `FOLIO_PIPELINE_AUDIO_BATCH` | `4` | Chunks per worker tick |
+| `audio.retentionDays` | `FOLIO_AUDIO_RETENTION_DAYS` | `7` | Keep PCM with transcript |
 | `pipeline.intervalMs` | `FOLIO_PIPELINE_INTERVAL_MS` | `30000` | Queue worker interval |
 | `digest.intervalMs` | `FOLIO_DIGEST_INTERVAL_MS` | `1800000` | Auto digest check interval |
 | `episodes.gapMin` | `FOLIO_EPISODE_GAP_MIN` | `12` | Silence minutes → new episode |
@@ -160,7 +199,30 @@ Episodes: speech clusters by configurable gap + multimodal semantic extraction.
 
 - **Continuous** capture while the ESP is powered and the brain is running — no pause in firmware
 - To stop: power off the node or exit `yarn folio:brain`
-- Speech PCM kept under `~/.folio/audio/` for `audio.retentionDays` (default 7); quiet chunks are not stored (`audio.storeQuiet: false`)
+- Only speech PCM is stored (empty or below-threshold chunks are dropped at ingest). After Whisper, chunks with no transcript are deleted immediately. PCM with transcripts kept for `audio.retentionDays` (default 7).
+
+## Memory & RAG
+
+Persistent memory lives in `~/.folio/folio.db`:
+
+| Store | Role |
+|-------|------|
+| `memory_chunks` | Indexed episodes, decisions, themes, claims, digest snippets — **retrieved by similarity** into Pass B/D |
+| `graph_nodes` / `graph_edges` | Day graph — **matched by theme** across past days |
+| `profile_facts` | Long-term patterns, decisions, open loops, approved claims |
+| `day_rollups` | Yesterday's compact arc (fast continuity) |
+
+After each digest: index today's witness → `memory_chunks`. Before Pass B/D: **RAG** pulls top matches from the last `memory.lookbackDays` (default 90).
+
+```bash
+# Backfill index from existing digests
+yarn workspace goouuu-s3-cam-folio exec node scripts/folio.mjs memory reindex
+
+# Search memory
+curl 'http://localhost:8770/api/memory?q=esp32+lm+studio'
+```
+
+Optional semantic embeddings: `"memory.useEmbeddings": true` (LM Studio `/v1/embeddings`). Default is lexical cosine (no extra model).
 
 ## Speaker enrollment (optional)
 
@@ -170,6 +232,6 @@ yarn folio:enroll luiz "Luiz Eduardo"
 
 Metadata only; voice embeddings are a future extension.
 
-## Memory
+## Data layout
 
-All witness data and digests live in `~/.folio/` (`folio.db`, audio, frames, digests). Day continuity uses `day_rollups` and `profile_facts` inside that store.
+All witness data and digests live in `~/.folio/`. See [Memory & RAG](#memory--rag) above.

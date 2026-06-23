@@ -41,7 +41,8 @@ Data directory: `~/.folio/` (override with `FOLIO_DATA_DIR`).
 |-------|---------|
 | `digests` | One row per day: `pass_a_json` … `pass_d` as `prose` |
 | `day_rollups` | Compact JSON for next-day continuity |
-| `profile_facts` | Learned patterns (`pattern:*` keys) |
+| `profile_facts` | Long-term patterns, decisions, open loops, claims |
+| `memory_chunks` | RAG index — episode/decision/theme/digest snippets + embedding |
 | `speakers` | Enrollment metadata |
 
 ## Evidence ID convention
@@ -151,8 +152,17 @@ Manual drain: `yarn brain:process`
 
 The brain runs passes A→D **automatically** when new witness data arrives (checked every `FOLIO_DIGEST_INTERVAL_MS`, default 30 min). On day rollover it finalizes yesterday. Prose appears in the UI and `~/.folio/digests/YYYY-MM-DD.md`.
 
+Witness payloads are **compacted** before each LM call (sampled moments, truncated text) to fit typical 16k context. If LM Studio still errors, reload the model with a larger context length.
+
 Manual override: `yarn folio:digest` or `POST /api/digest/run?day=…`
 
 ## Continuity across days
 
-Before Pass B/D, brain loads `day_rollups` for **previous calendar day** (`compact_json`: arc, decisions, open_loops, patterns).
+1. **`day_rollups`** — previous calendar day compact JSON (arc, decisions, open loops)
+2. **RAG (`memory_chunks`)** — before Pass B/D, retrieve top similar chunks from past 90 days (lexical or LM embeddings)
+3. **`graph_nodes`** — theme/decision overlap from prior days
+4. **`profile_facts`** — stable facts updated each digest
+
+After Pass D, index the day into `memory_chunks` and sync `profile_facts`.
+
+Backfill: `node scripts/folio.mjs memory reindex`

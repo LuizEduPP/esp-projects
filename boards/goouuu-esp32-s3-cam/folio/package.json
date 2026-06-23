@@ -14,6 +14,7 @@
     "brain:process": "node scripts/folio.mjs process",
     "digest": "node scripts/folio.mjs digest",
     "digest:today": "node scripts/folio.mjs digest --today",
-    "enroll": "node scripts/folio.mjs enroll"
+    "enroll": "node scripts/folio.mjs enroll",
+    "memory:reindex": "node scripts/folio.mjs memory reindex"
   }
 }

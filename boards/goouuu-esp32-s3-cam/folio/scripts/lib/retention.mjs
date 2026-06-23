@@ -1,6 +1,6 @@
 import { existsSync, unlinkSync } from "node:fs";
 import { CFG } from "./config.mjs";
-import { openDb } from "./db.mjs";
+import { deleteAudioChunk, openDb } from "./db.mjs";
 
 export function deleteChunkFile(path) {
   if (!path || !existsSync(path)) {
@@ -11,6 +11,12 @@ export function deleteChunkFile(path) {
   } catch {
     /* ignore */
   }
+}
+
+/** Remove PCM file and DB row — used for silence / empty STT. */
+export function discardAudioChunk(db, chunk) {
+  deleteChunkFile(chunk.path);
+  deleteAudioChunk(db, chunk.id);
 }
 
 function deleteChunkRows(db, rows) {
@@ -31,7 +37,7 @@ function deleteChunkRows(db, rows) {
   return rows.length;
 }
 
-/** Drop unprocessed quiet chunks (legacy ingest before storeQuiet=false). */
+/** Drop unprocessed quiet/empty chunks (legacy). */
 export function purgeUnprocessedQuiet(db = openDb()) {
   const rows = db
     .prepare(
@@ -55,7 +61,20 @@ export function pruneQuietAudio(db = openDb()) {
   return { files, rowsDeleted: files };
 }
 
-/** Drop old processed audio without utterances (keep speech with transcripts). */
+/** Drop processed chunks with no transcript (empty STT, legacy silence rows). */
+export function pruneOrphanAudio(db = openDb()) {
+  const rows = db
+    .prepare(
+      `SELECT c.id, c.path FROM audio_chunks c
+       LEFT JOIN utterances u ON u.chunk_id = c.id
+       WHERE c.processed = 1 AND u.id IS NULL`,
+    )
+    .all();
+  const files = deleteChunkRows(db, rows);
+  return { files };
+}
+
+/** Drop old processed audio without utterances (legacy). */
 export function pruneOldAudio(db = openDb()) {
   const cutoff = new Date(Date.now() - CFG.audioRetentionDays * 86400000).toISOString();
   const rows = db
@@ -73,15 +92,16 @@ export function runRetentionPass() {
   const db = openDb();
   const legacy = purgeUnprocessedQuiet(db);
   const quiet = pruneQuietAudio(db);
+  const orphan = pruneOrphanAudio(db);
   const old = pruneOldAudio(db);
-  const total = legacy.files + quiet.files + old.files;
+  const total = legacy.files + quiet.files + orphan.files + old.files;
   if (total > 0) {
     console.log(
-      `[retention] removed ${legacy.files} pending-quiet + ${quiet.files} quiet + ${old.files} stale ` +
-        `(keep ${CFG.audioRetentionDays}d)`,
+      `[retention] removed ${legacy.files} pending-quiet + ${quiet.files} quiet + ` +
+        `${orphan.files} orphan + ${old.files} stale (keep transcripts ${CFG.audioRetentionDays}d)`,
     );
   }
-  return { legacy, quiet, old };
+  return { legacy, quiet, orphan, old };
 }
 
 const RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000;

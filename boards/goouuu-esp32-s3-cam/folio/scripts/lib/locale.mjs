@@ -22,8 +22,8 @@ const WHISPER_CODE_BY_LOCALE = {
   zh: "zh",
 };
 
-/** @deprecated use whisperLanguageCode — kept for logs */
-const WHISPER_BY_LOCALE = {
+/** Human-readable Whisper language names for FOLIO_WHISPER_LANGUAGE lookup. */
+const WHISPER_NAME_BY_LOCALE = {
   "pt-BR": "Portuguese",
   "pt-PT": "Portuguese",
   pt: "Portuguese",
@@ -66,6 +66,55 @@ const PROMPT_LANGUAGE = {
   zh: "Chinese",
 };
 
+/** Minimum token length for lexical RAG (tokens shorter than this are dropped). */
+export const LEXICAL_MIN_TOKEN_LENGTH = 3;
+
+const LEXICAL_STOP_WORDS_PT = [
+  "a",
+  "o",
+  "e",
+  "de",
+  "da",
+  "do",
+  "das",
+  "dos",
+  "em",
+  "no",
+  "na",
+  "nos",
+  "nas",
+  "um",
+  "uma",
+  "uns",
+  "umas",
+  "para",
+  "por",
+  "com",
+  "sem",
+  "que",
+  "se",
+  "as",
+  "os",
+];
+
+const LEXICAL_STOP_WORDS_EN = [
+  "the",
+  "and",
+  "or",
+  "of",
+  "to",
+  "in",
+  "on",
+  "at",
+  "is",
+  "it",
+];
+
+const LEXICAL_STOP_WORDS_BY_BASE = {
+  pt: LEXICAL_STOP_WORDS_PT,
+  en: LEXICAL_STOP_WORDS_EN,
+};
+
 function baseLocale(locale) {
   return locale.split("-")[0];
 }
@@ -74,13 +123,21 @@ export function activeLocale() {
   return CFG.defaultLocale || "pt-BR";
 }
 
+/** Stop words for lexical memory retrieval, keyed off active locale. */
+export function lexicalStopWordSet() {
+  const base = baseLocale(activeLocale());
+  const primary = LEXICAL_STOP_WORDS_BY_BASE[base] ?? LEXICAL_STOP_WORDS_BY_BASE.en;
+  const extra = base === "pt" ? LEXICAL_STOP_WORDS_EN : [];
+  return new Set([...primary, ...extra]);
+}
+
 export function whisperLanguageCode() {
   if (CFG.whisperLanguage) {
     const w = CFG.whisperLanguage.toLowerCase();
     if (w.length <= 3) {
       return w;
     }
-    const fromName = Object.entries(WHISPER_BY_LOCALE).find(([, name]) =>
+    const fromName = Object.entries(WHISPER_NAME_BY_LOCALE).find(([, name]) =>
       name.toLowerCase().startsWith(w),
     );
     if (fromName) {
@@ -90,14 +147,6 @@ export function whisperLanguageCode() {
   }
   const loc = activeLocale();
   return WHISPER_CODE_BY_LOCALE[loc] ?? WHISPER_CODE_BY_LOCALE[baseLocale(loc)] ?? "en";
-}
-
-export function whisperLanguage() {
-  if (CFG.whisperLanguage && CFG.whisperLanguage.length > 3) {
-    return CFG.whisperLanguage;
-  }
-  const loc = activeLocale();
-  return WHISPER_BY_LOCALE[loc] ?? WHISPER_BY_LOCALE[baseLocale(loc)] ?? "English";
 }
 
 export function promptLanguageName() {

@@ -4,8 +4,9 @@
  * Usage: folio.mjs <digest|process|enroll> [options]
  */
 import { CFG } from "./lib/config.mjs";
-import { getDigest, openDb, pendingCounts, upsertSpeaker } from "./lib/db.mjs";
+import { getDigest, openDb, memoryChunkCount, pendingCounts, upsertSpeaker } from "./lib/db.mjs";
 import { runDigestForDay } from "./lib/digest/scheduler.mjs";
+import { reindexMemoriesFromDigests } from "./lib/memory/reindex.mjs";
 import { runPendingQueueOnce } from "./lib/worker.mjs";
 import { errMsg, today } from "./lib/util.mjs";
 
@@ -13,6 +14,7 @@ function usage() {
   console.error(`Usage:
   folio.mjs digest [--today] [--day YYYY-MM-DD] [--force]
   folio.mjs process
+  folio.mjs memory reindex
   folio.mjs enroll <speaker_id> <display_name>`);
   process.exit(1);
 }
@@ -84,6 +86,21 @@ function cmdEnroll(argv) {
   console.log("Voice embedding: not implemented — diarization uses STT text only for now.");
 }
 
+async function cmdMemory(argv) {
+  const sub = argv[0];
+  if (sub === "reindex") {
+    const db = openDb();
+    const before = memoryChunkCount(db);
+    const result = await reindexMemoriesFromDigests(db);
+    const after = memoryChunkCount(db);
+    console.log(
+      `[memory] reindexed ${result.days} days · ${result.chunks} chunks (total ${before} → ${after})`,
+    );
+    return;
+  }
+  usage();
+}
+
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   switch (cmd) {
@@ -92,6 +109,9 @@ async function main() {
       break;
     case "process":
       await cmdProcess();
+      break;
+    case "memory":
+      await cmdMemory(rest);
       break;
     case "enroll":
       cmdEnroll(rest);

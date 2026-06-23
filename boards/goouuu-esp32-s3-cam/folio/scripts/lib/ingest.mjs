@@ -8,7 +8,7 @@ import {
   insertFrame,
   openDb,
 } from "./db.mjs";
-import { isSpeechChunk, pcmEnergy } from "./whisper.mjs";
+import { isSpeechChunk, shouldStoreAudioChunk } from "./whisper.mjs";
 import { dayFromIso, isoNow, parseMetaHeader } from "./util.mjs";
 
 export function ingestAudioChunk(deviceId, pcmBuffer, metaHeader) {
@@ -18,11 +18,10 @@ export function ingestAudioChunk(deviceId, pcmBuffer, metaHeader) {
   const capturedAt = isoNow();
   const day = dayFromIso(capturedAt);
   const seq = Number(meta.seq ?? 0);
-  const energy = pcmEnergy(pcmBuffer);
-  const speech = isSpeechChunk(energy);
+  const gate = shouldStoreAudioChunk(pcmBuffer);
 
-  if (!speech && !CFG.audioStoreQuiet) {
-    return { id: null, energy, speech, skipped: "quiet" };
+  if (!gate.store) {
+    return { id: null, energy: gate.energy, speech: false, skipped: gate.reason };
   }
 
   const dir = PATHS.audioDir(day);
@@ -36,19 +35,17 @@ export function ingestAudioChunk(deviceId, pcmBuffer, metaHeader) {
     seq,
     path,
     duration_ms: CFG.audioChunkMs,
-    energy,
+    energy: gate.energy,
   });
 
-  if (speech) {
-    insertEvent(db, {
-      device_id: deviceId,
-      at: capturedAt,
-      kind: "presence",
-      payload_json: JSON.stringify({ source: "audio", energy, seq, chunk_id: id }),
-    });
-  }
+  insertEvent(db, {
+    device_id: deviceId,
+    at: capturedAt,
+    kind: "presence",
+    payload_json: JSON.stringify({ source: "audio", energy: gate.energy, seq, chunk_id: id }),
+  });
 
-  return { id, energy, speech };
+  return { id, energy: gate.energy, speech: true };
 }
 
 export function ingestFrame(deviceId, jpegBuffer, metaHeader) {

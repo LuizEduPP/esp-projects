@@ -1,11 +1,42 @@
 import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
-import { CFG, publicConfig } from "./config.mjs";
+import { CFG, nodeConfigPayload, publicConfig, updateConfig } from "./config.mjs";
 import { runDigestForDay } from "./digest/scheduler.mjs";
-import { getDigest, openDb, pendingCounts, timelineForDay } from "./db.mjs";
+import {
+  getDigest,
+  listDevices,
+  openDb,
+  memoryChunkCount,
+  pendingCounts,
+  profileFacts,
+  setBrainConfigVersion,
+  timelineForDay,
+  touchDevice,
+} from "./db.mjs";
 import { ingestAudioChunk, ingestFrame, ingestEvent } from "./ingest.mjs";
 import { serveAudio, serveFrame } from "./serve.mjs";
+import { retrieveMemories } from "./memory/retrieve.mjs";
 import { errMsg, sendBytes, sendJson, today } from "./util.mjs";
+
+let quietSkipCount = 0;
+let lastQuietLogAt = 0;
+
+function logAudioIngest(deviceId, body, result) {
+  if (!result.skipped) {
+    console.log(
+      `[ingest] audio ${deviceId} id=${result.id} bytes=${body.length} energy=${result.energy?.toFixed(4)}`,
+    );
+    return;
+  }
+
+  quietSkipCount++;
+  const now = Date.now();
+  if (now - lastQuietLogAt >= 60_000) {
+    console.log(`[ingest] audio ${deviceId} skipped ${quietSkipCount} empty/quiet chunks (last 60s)`);
+    quietSkipCount = 0;
+    lastQuietLogAt = now;
+  }
+}
 
 async function readBody(req, maxBytes = 512 * 1024) {
   const chunks = [];
@@ -25,13 +56,23 @@ function mediaIdFromPath(path, prefix) {
   return m ? Number(m[1]) : null;
 }
 
-function requireDeviceId(req, res) {
-  const deviceId = req.headers["x-folio-device-id"];
+function deviceIdFromReq(req) {
+  return String(req.headers["x-folio-device-id"] ?? "").trim() || null;
+}
+
+function noteDevice(req, res) {
+  const deviceId = deviceIdFromReq(req);
   if (!deviceId) {
-    sendJson(res, 400, { error: "X-Folio-Device-Id required" });
     return null;
   }
-  return String(deviceId);
+  const db = openDb();
+  const applied = req.headers["x-folio-config-version"];
+  if (applied) {
+    touchDevice(db, deviceId, { configVersion: String(applied) });
+  } else {
+    touchDevice(db, deviceId);
+  }
+  return deviceId;
 }
 
 export function createFolioServer(viewHtml) {
@@ -49,23 +90,26 @@ export function createFolioServer(viewHtml) {
       }
 
       if (path === "/ingest/audio" && req.method === "POST") {
-        const deviceId = requireDeviceId(req, res);
+        const deviceId = deviceIdFromReq(req);
         if (!deviceId) {
+          sendJson(res, 400, { error: "X-Folio-Device-Id required" });
           return;
         }
+        noteDevice(req);
         const body = await readBody(req, 128 * 1024);
         const result = ingestAudioChunk(deviceId, body, req.headers["x-folio-meta"]);
-        const tag = result.skipped ? `skipped=${result.skipped}` : `id=${result.id}`;
-        console.log(`[ingest] audio ${deviceId} ${tag} bytes=${body.length} speech=${result.speech}`);
+        logAudioIngest(deviceId, body, result);
         sendJson(res, 200, { ok: true, ...result });
         return;
       }
 
       if (path === "/ingest/frame" && req.method === "POST") {
-        const deviceId = requireDeviceId(req, res);
+        const deviceId = deviceIdFromReq(req);
         if (!deviceId) {
+          sendJson(res, 400, { error: "X-Folio-Device-Id required" });
           return;
         }
+        noteDevice(req);
         const body = await readBody(req, 400 * 1024);
         const result = ingestFrame(deviceId, body, req.headers["x-folio-meta"]);
         console.log(`[ingest] frame ${deviceId} id=${result.id} bytes=${body.length} reason=${result.reason}`);
@@ -75,6 +119,7 @@ export function createFolioServer(viewHtml) {
 
       if (path === "/ingest/event" && req.method === "POST") {
         const deviceId = req.headers["x-folio-device-id"] ?? "unknown";
+        noteDevice(req);
         const body = JSON.parse((await readBody(req, 16 * 1024)).toString("utf8"));
         sendJson(res, 200, ingestEvent(String(deviceId), body));
         return;
@@ -130,8 +175,37 @@ export function createFolioServer(viewHtml) {
         return;
       }
 
-      if (path === "/api/config") {
+      if (path === "/api/config" && req.method === "GET") {
         sendJson(res, 200, publicConfig());
+        return;
+      }
+
+      if (path === "/api/config" && req.method === "PUT") {
+        const body = JSON.parse((await readBody(req, 64 * 1024)).toString("utf8"));
+        const result = updateConfig(body);
+        setBrainConfigVersion(openDb(), result.version);
+        sendJson(res, 200, result);
+        return;
+      }
+
+      if (path === "/api/node/config" && req.method === "GET") {
+        const deviceId = deviceIdFromReq(req);
+        if (deviceId) {
+          touchDevice(openDb(), deviceId);
+        }
+        const payload = nodeConfigPayload();
+        setBrainConfigVersion(openDb(), payload.version);
+        sendJson(res, 200, payload);
+        return;
+      }
+
+      if (path === "/api/devices") {
+        const db = openDb();
+        const brainVersion = nodeConfigPayload().version;
+        sendJson(res, 200, {
+          brain_config_version: brainVersion,
+          devices: listDevices(db),
+        });
         return;
       }
 
@@ -144,6 +218,21 @@ export function createFolioServer(viewHtml) {
         return;
       }
 
+      if (path === "/api/memory") {
+        const q = qs.get("q") ?? "";
+        const day = qs.get("day") ?? today();
+        const db = openDb();
+        const hits = q.trim() ? await retrieveMemories(db, q, { day }) : [];
+        sendJson(res, 200, {
+          query: q,
+          day,
+          chunks: memoryChunkCount(db),
+          profile: profileFacts(db),
+          hits,
+        });
+        return;
+      }
+
       if (path === "/api/health") {
         sendJson(res, 200, {
           ok: true,
@@ -151,6 +240,7 @@ export function createFolioServer(viewHtml) {
           port: CFG.port,
           pending: pendingCounts(openDb()),
           pipeline: CFG.pipelineEnabled,
+          memory_chunks: memoryChunkCount(openDb()),
         });
         return;
       }
