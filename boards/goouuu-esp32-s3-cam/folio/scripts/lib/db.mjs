@@ -1,7 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { CFG, PATHS } from "./config.mjs";
-import { dayBounds, dayOffset, isoNow, priorDay } from "./util.mjs";
+import { dayBounds, dayOffset, isoNow, priorDay, retentionCutoffIso } from "./util.mjs";
+import { existsSync, unlinkSync } from "node:fs";
 
 const DB_SCHEMA = `
 CREATE TABLE IF NOT EXISTS devices (
@@ -162,6 +163,16 @@ CREATE INDEX IF NOT EXISTS idx_memory_chunks_day ON memory_chunks(day);
 CREATE INDEX IF NOT EXISTS idx_memory_chunks_kind ON memory_chunks(kind);
 `;
 
+function migrateAudioChunkCols(db) {
+  const cols = new Set(db.prepare("PRAGMA table_info(audio_chunks)").all().map((c) => c.name));
+  if (!cols.has("device_ms")) {
+    db.exec("ALTER TABLE audio_chunks ADD COLUMN device_ms INTEGER");
+  }
+  if (!cols.has("stt_attempts")) {
+    db.exec("ALTER TABLE audio_chunks ADD COLUMN stt_attempts INTEGER NOT NULL DEFAULT 0");
+  }
+}
+
 export function migrateDb(db) {
   const cols = new Set(db.prepare("PRAGMA table_info(devices)").all().map((c) => c.name));
   if (!cols.has("last_seen_at")) {
@@ -173,6 +184,22 @@ export function migrateDb(db) {
   if (!cols.has("node_config_applied")) {
     db.exec("ALTER TABLE devices ADD COLUMN node_config_applied TEXT");
   }
+  migrateAudioChunkCols(db);
+}
+
+function deletePcmFile(path) {
+  if (!path || !existsSync(path)) {
+    return;
+  }
+  try {
+    unlinkSync(path);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearAudioChunkPath(db, id) {
+  db.prepare("UPDATE audio_chunks SET path = '' WHERE id = ?").run(id);
 }
 
 
@@ -225,10 +252,13 @@ export function upsertSpeaker(db, speakerId, displayName, profileJson = null) {
 export function insertAudioChunk(db, row) {
   const info = db
     .prepare(
-      `INSERT INTO audio_chunks (device_id, captured_at, seq, path, duration_ms, energy)
-       VALUES (@device_id, @captured_at, @seq, @path, @duration_ms, @energy)`,
+      `INSERT INTO audio_chunks (device_id, captured_at, seq, path, duration_ms, energy, device_ms)
+       VALUES (@device_id, @captured_at, @seq, @path, @duration_ms, @energy, @device_ms)`,
     )
-    .run(row);
+    .run({
+      device_ms: null,
+      ...row,
+    });
   return Number(info.lastInsertRowid);
 }
 
@@ -256,8 +286,36 @@ export function markAudioProcessed(db, id) {
   db.prepare("UPDATE audio_chunks SET processed = 1 WHERE id = ?").run(id);
 }
 
+export function bumpSttAttempts(db, id) {
+  db.prepare("UPDATE audio_chunks SET stt_attempts = stt_attempts + 1 WHERE id = ?").run(id);
+  return db.prepare("SELECT stt_attempts FROM audio_chunks WHERE id = ?").get(id)?.stt_attempts ?? 0;
+}
+
 export function deleteAudioChunk(db, id) {
+  const row = db.prepare("SELECT path FROM audio_chunks WHERE id = ?").get(id);
+  deletePcmFile(row?.path);
   db.prepare("DELETE FROM audio_chunks WHERE id = ?").run(id);
+}
+
+/** Remove PCM files older than retentionDays; keep DB row + transcript. */
+export function pruneExpiredPcm(db, retentionDays = CFG.audioRetentionDays) {
+  if (retentionDays <= 0) {
+    return { files: 0 };
+  }
+  const cutoff = retentionCutoffIso(retentionDays);
+  const rows = db
+    .prepare(
+      `SELECT id, path FROM audio_chunks
+       WHERE path != '' AND captured_at < ?`,
+    )
+    .all(cutoff);
+  let files = 0;
+  for (const row of rows) {
+    deletePcmFile(row.path);
+    clearAudioChunkPath(db, row.id);
+    files++;
+  }
+  return { files };
 }
 
 export function getAudioChunk(db, id) {
@@ -402,6 +460,8 @@ export function timelineForDay(db, day) {
       speech: (c.energy ?? 0) >= CFG.speechEnergyThreshold,
       text: c.utterance_text ?? null,
       processed: !!c.processed,
+      has_pcm: Boolean(c.path),
+      device_ms: c.device_ms ?? null,
     }));
   const frames = framesForDay(db, day).map((f) => ({
     type: "frame",

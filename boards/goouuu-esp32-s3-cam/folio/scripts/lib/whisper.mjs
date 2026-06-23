@@ -27,33 +27,33 @@ export async function transcribeWav(wavPath, { chunkId } = {}) {
   const outDir = join(tmpdir(), `folio-whisper-${Date.now()}-${process.pid}`);
   mkdirSync(outDir, { recursive: true });
   const t0 = Date.now();
+  const lang = CFG.whisperLanguage ? whisperLanguageCode() : null;
 
   console.log(
-    `[whisper] ${tag} start model=${CFG.whisperModel} lang=${whisperLanguageCode()} ` +
+    `[whisper] ${tag} start model=${CFG.whisperModel} lang=${lang ?? "auto"} ` +
       `device=${CFG.whisperDevice} bin=${CFG.whisperBin}`,
   );
 
+  const args = [
+    wavPath,
+    "--model",
+    CFG.whisperModel,
+    "--output_format",
+    "json",
+    "--output_dir",
+    outDir,
+    "--device",
+    CFG.whisperDevice,
+  ];
+  if (lang) {
+    args.push("--language", lang);
+  }
+
   try {
-    await execFileAsync(
-      CFG.whisperBin,
-      [
-        wavPath,
-        "--model",
-        CFG.whisperModel,
-        "--language",
-        whisperLanguageCode(),
-        "--output_format",
-        "json",
-        "--output_dir",
-        outDir,
-        "--device",
-        CFG.whisperDevice,
-      ],
-      {
-        timeout: CFG.whisperTimeoutMs,
-        env: process.env,
-      },
-    );
+    await execFileAsync(CFG.whisperBin, args, {
+      timeout: CFG.whisperTimeoutMs,
+      env: process.env,
+    });
 
     const outJson = findWhisperJson(outDir, wavPath);
     if (!outJson) {
@@ -66,15 +66,23 @@ export async function transcribeWav(wavPath, { chunkId } = {}) {
       start: s.start,
       end: s.end,
       text: String(s.text ?? "").trim(),
+      noSpeechProb: s.no_speech_prob,
     }));
     const ms = Date.now() - t0;
+    const probs = segments.map((s) => s.noSpeechProb).filter((p) => typeof p === "number");
+    const confidence =
+      probs.length > 0
+        ? Math.max(0, Math.min(1, 1 - probs.reduce((a, b) => a + b, 0) / probs.length))
+        : text
+          ? 0.85
+          : 0;
     if (text) {
       const preview = text.length > 160 ? `${text.slice(0, 160)}…` : text;
       console.log(`[whisper] ${tag} ok ${ms}ms (${segments.length} seg) "${preview}"`);
     } else {
       console.log(`[whisper] ${tag} empty ${ms}ms — no speech in audio`);
     }
-    return { text, segments, confidence: segments.length ? 0.85 : 0 };
+    return { text, segments, confidence };
   } catch (err) {
     const ms = Date.now() - t0;
     if (err.code === "ENOENT") {
@@ -130,12 +138,12 @@ export function isSpeechChunk(energy, threshold = CFG.speechEnergyThreshold) {
   return energy >= threshold;
 }
 
-/** Ingest gate: only persist chunks with real audio energy. */
-export function shouldStoreAudioChunk(pcmBuffer) {
+/** Ingest gate: only persist chunks with real audio energy (RMS). */
+export function shouldStoreAudioChunk(pcmBuffer, energyOverride = null) {
   if (pcmIsEmpty(pcmBuffer)) {
     return { store: false, energy: 0, reason: "empty" };
   }
-  const energy = pcmEnergy(pcmBuffer);
+  const energy = energyOverride ?? pcmEnergy(pcmBuffer);
   if (!isSpeechChunk(energy)) {
     return { store: false, energy, reason: "quiet" };
   }

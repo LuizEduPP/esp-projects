@@ -46,13 +46,26 @@ export function dayFromIso(iso) {
   return iso.slice(0, 10);
 }
 
+/** Local calendar day (YYYY-MM-DD). */
 export function today() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
-/** UTC day window for SQLite range queries. */
+/** Local calendar day window for SQLite range queries. */
 export function dayBounds(day) {
-  return { start: `${day}T00:00:00.000Z`, end: `${day}T23:59:59.999Z` };
+  const start = new Date(`${day}T00:00:00`);
+  const end = new Date(`${day}T23:59:59.999`);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+export function retentionCutoffIso(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString();
 }
 
 export function priorDay(day) {

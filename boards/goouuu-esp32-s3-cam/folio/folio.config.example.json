@@ -4,7 +4,8 @@
   "dataDir": null,
   "lm": {
     "url": "http://127.0.0.1:1234/v1/chat/completions",
-    "model": "mistralai/ministral-3-3b"
+    "model": "mistralai/ministral-3-3b",
+    "modelDeep": null
   },
   "frames": {
     "captureIntervalMs": 60000,
@@ -59,6 +60,8 @@
     "retrieveLimit": 14,
     "minScore": 0.08,
     "useEmbeddings": false,
+    "embeddingModel": null,
+    "embeddingsUrl": null,
     "graphRetrieveLimit": 8,
     "graphMinScore": 0.15,
     "profileLimit": 32,

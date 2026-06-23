@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -205,7 +205,8 @@ audio{width:100%;height:40px;border-radius:8px}
         <div class="field"><label>Locale</label><input name="locale" id="cfg-locale"/></div>
         <div class="field"><label>Speech threshold</label><input name="speechEnergyThreshold" id="cfg-speech" type="number" step="0.001"/></div>
         <div class="field"><label>LM URL</label><input name="lmUrl" id="cfg-lm-url" type="url"/></div>
-        <div class="field"><label>LM model</label><input name="lmModel" id="cfg-lm-model"/></div>
+        <div class="field"><label>LM model (fast)</label><input name="lmModel" id="cfg-lm-model"/></div>
+        <div class="field"><label>LM model (deep digest)</label><input name="lmModelDeep" id="cfg-lm-model-deep" placeholder="same as fast if empty"/></div>
         <div class="field"><label>Whisper model</label><input name="whisperModel" id="cfg-whisper-model"/></div>
         <div class="field"><label>Whisper device</label>
           <select name="whisperDevice" id="cfg-whisper-device">
@@ -215,6 +216,14 @@ audio{width:100%;height:40px;border-radius:8px}
             <option value="mps">mps (Apple)</option>
           </select>
         </div>
+        <p class="chronicle-meta" id="cfg-whisper-runtime"></p>
+        <div class="field"><label>Pipeline enabled</label>
+          <select id="cfg-pipeline-enabled"><option value="true">yes</option><option value="false">no</option></select>
+        </div>
+        <div class="field"><label>Digest auto</label>
+          <select id="cfg-digest-auto"><option value="true">yes</option><option value="false">no</option></select>
+        </div>
+        <div class="field"><label>Audio retention (days)</label><input name="retentionDays" id="cfg-retention" type="number" min="0"/></div>
         <div class="field"><label>Episode gap (min)</label><input name="gapMin" id="cfg-ep-gap" type="number"/></div>
       </div>
       <div class="settings-section">ESP node (synced)</div>
@@ -223,9 +232,12 @@ audio{width:100%;height:40px;border-radius:8px}
         <div class="field"><label>JPEG quality</label><input name="jpegQuality" id="cfg-jpeg" type="number"/></div>
         <div class="field"><label>Frame size</label>
           <select name="frameSize" id="cfg-frame-size">
+            <option value="CIF">CIF (reflash)</option>
             <option value="QVGA">QVGA</option><option value="VGA">VGA</option><option value="SVGA">SVGA</option>
+            <option value="XGA">XGA (reflash)</option>
           </select>
         </div>
+        <p class="chronicle-meta">Frame size change needs <code>yarn folio:flash</code> — runtime sync is interval/jpeg only.</p>
         <div class="field"><label>WiFi retry (ms)</label><input name="wifiRetryMs" id="cfg-wifi" type="number"/></div>
         <div class="field"><label>Push backoff max (ms)</label><input name="pushBackoffMaxMs" id="cfg-backoff" type="number"/></div>
         <div class="field"><label>Status interval (ms)</label><input name="statusIntervalMs" id="cfg-status" type="number"/></div>
@@ -362,6 +374,9 @@ function renderItem(i){
     }else{
       txt=`<p class="transcript pending">No words detected in this second</p>`;
     }
+    const player=i.has_pcm
+      ?`<audio controls preload="none" src="/api/audio/${i.chunk_id}"></audio>`
+      :`<p class="transcript pending">PCM expirado — só transcrição disponível</p>`;
     return `<article class="entry">
       <div class="entry-time">${t}</div>
       <div class="entry-card">
@@ -369,7 +384,7 @@ function renderItem(i){
           <span class="badge audio">${i.speech?'Speech':'Quiet'}</span>
         </div>
         <div class="entry-body">
-          <audio controls preload="none" src="/api/audio/${i.chunk_id}"></audio>
+          ${player}
           ${txt}
         </div>
       </div>
@@ -444,8 +459,15 @@ async function loadSettings(){
   $('cfg-speech').value=cfg.audio.speechEnergyThreshold;
   $('cfg-lm-url').value=cfg.lm.url;
   $('cfg-lm-model').value=cfg.lm.model||cfg.lm.modelFast||'';
+  $('cfg-lm-model-deep').value=cfg.lm.modelDeep||'';
   $('cfg-whisper-model').value=cfg.audio.whisperModel;
   $('cfg-whisper-device').value=cfg.audio.whisperDevice||'cuda';
+  const rt=cfg.runtime||{};
+  $('cfg-whisper-runtime').textContent=
+    `Whisper ativo: ${rt.whisperDeviceEffective||'?'} · CUDA: ${rt.cudaAvailable?'sim':'não'}`;
+  $('cfg-pipeline-enabled').value=String(cfg.pipeline?.enabled!==false);
+  $('cfg-digest-auto').value=String(cfg.digest?.auto!==false);
+  $('cfg-retention').value=cfg.audio.retentionDays??7;
   $('cfg-ep-gap').value=cfg.episodes.gapMin;
   $('cfg-frame-int').value=cfg.frames.captureIntervalMs;
   $('cfg-jpeg').value=cfg.frames.jpegQuality;
@@ -465,8 +487,15 @@ $('settings-form').onsubmit=async e=>{
   e.preventDefault();
   const body={
     locale:$('cfg-locale').value,
-    lm:{url:$('cfg-lm-url').value,model:$('cfg-lm-model').value},
-    audio:{speechEnergyThreshold:Number($('cfg-speech').value),whisperModel:$('cfg-whisper-model').value,whisperDevice:$('cfg-whisper-device').value},
+    lm:{url:$('cfg-lm-url').value,model:$('cfg-lm-model').value,modelDeep:$('cfg-lm-model-deep').value||null},
+    audio:{
+      speechEnergyThreshold:Number($('cfg-speech').value),
+      whisperModel:$('cfg-whisper-model').value,
+      whisperDevice:$('cfg-whisper-device').value,
+      retentionDays:Number($('cfg-retention').value),
+    },
+    pipeline:{enabled:$('cfg-pipeline-enabled').value==='true'},
+    digest:{auto:$('cfg-digest-auto').value==='true'},
     episodes:{gapMin:Number($('cfg-ep-gap').value)},
     frames:{
       captureIntervalMs:Number($('cfg-frame-int').value),
@@ -482,9 +511,9 @@ $('settings-form').onsubmit=async e=>{
   const res=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const json=await res.json();
   if(json.restartRecommended){
-    $('cfg-meta').textContent='Saved — restart brain for LM/Whisper/port changes. ESP syncs on next poll.';
+    $('cfg-meta').textContent='Salvo — reinicie o brain (porta/dataDir). LM/Whisper/locale já aplicam em memória.';
   }else{
-    $('cfg-meta').textContent=`Saved v${json.version} — ESP picks up on next status interval.`;
+    $('cfg-meta').textContent=`Salvo v${json.version} — ESP sincroniza no próximo poll.`;
   }
   loadSettings();
 };

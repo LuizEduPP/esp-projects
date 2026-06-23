@@ -2,6 +2,7 @@
 #include <HTTPClient.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#include <cmath>
 #include <esp_camera.h>
 
 #include "audio_capture.h"
@@ -187,6 +188,31 @@ static uint16_t pcmPeak(const int16_t *pcm, size_t count) {
   return peak;
 }
 
+/** RMS energy 0..1 — same formula as brain whisper.mjs pcmEnergy. */
+static float pcmEnergy(const int16_t *pcm, size_t count) {
+  if (count == 0) {
+    return 0.f;
+  }
+  double sum = 0.0;
+  for (size_t i = 0; i < count; ++i) {
+    const double n = pcm[i] / 32768.0;
+    sum += n * n;
+  }
+  return static_cast<float>(sqrt(sum / count));
+}
+
+static bool speechOk(const int16_t *pcm, size_t count, uint16_t *outPeak, float *outEnergy) {
+  const uint16_t peak = pcmPeak(pcm, count);
+  const float energy = pcmEnergy(pcm, count);
+  if (outPeak) {
+    *outPeak = peak;
+  }
+  if (outEnergy) {
+    *outEnergy = energy;
+  }
+  return energy >= FOLIO_SPEECH_ENERGY && peak > 0 && peak < 30000;
+}
+
 static void captureAudioChunk() {
   if (!gAudioOk) {
     return;
@@ -197,9 +223,11 @@ static void captureAudioChunk() {
   }
 
   const uint32_t seq = gAudioSeq++;
-  const uint16_t peak = pcmPeak(gPcmBuf, FOLIO_CHUNK_SAMPLES);
+  uint16_t peak = 0;
+  float energy = 0.f;
+  const bool hasSpeech = speechOk(gPcmBuf, FOLIO_CHUNK_SAMPLES, &peak, &energy);
   if (seq < 3 || seq % 30 == 0) {
-    Serial.printf("[capture] audio seq=%lu peak=%u\n", seq, peak);
+    Serial.printf("[capture] audio seq=%lu peak=%u energy=%.4f\n", seq, peak, energy);
     if (peak == 0) {
       Serial.println("[capture] silence — tie L/R to mic GND");
     } else if (peak >= 32000) {
@@ -207,27 +235,28 @@ static void captureAudioChunk() {
     }
   }
 
-  char meta[96];
-  snprintf(meta, sizeof(meta), "seq=%lu;ts_ms=%lu;rate=%d", seq, millis(), FOLIO_SAMPLE_RATE);
-
-  const bool signalOk = peak >= 100 && peak < 30000;
-  if (!signalOk && (seq < 5 || seq % 30 == 0)) {
-    if (peak < 100) {
-      Serial.println("[capture] silence — speak near mic or check wiring");
-    } else {
-      Serial.println("[capture] chunk skipped — invalid signal (not pushed)");
-    }
-  }
+  char meta[128];
+  snprintf(meta, sizeof(meta), "seq=%lu;ts_ms=%lu;rate=%d;energy=%.4f", seq, millis(),
+           FOLIO_SAMPLE_RATE, energy);
 
   static uint8_t lowPeakStreak = 0;
-  if (!audioDoutStuck() && peak < 50) {
-    if (++lowPeakStreak >= 30) {
-      lowPeakStreak = 0;
-      gAudioOk = audioRecover();
+
+  if (!hasSpeech) {
+    if (seq < 5 || seq % 30 == 0) {
+      Serial.println("[capture] quiet — below speech threshold (not spooled/pushed)");
     }
-  } else {
-    lowPeakStreak = 0;
+    if (!audioDoutStuck() && peak < 50) {
+      if (++lowPeakStreak >= 30) {
+        lowPeakStreak = 0;
+        gAudioOk = audioRecover();
+      }
+    } else {
+      lowPeakStreak = 0;
+    }
+    return;
   }
+
+  lowPeakStreak = 0;
 
   if (!spoolSaveAudio(seq, gPcmBuf, meta)) {
     Serial.printf("[microsd] FAIL audio seq=%lu — card required before push\n", seq);
@@ -237,7 +266,7 @@ static void captureAudioChunk() {
     Serial.printf("[microsd] audio seq=%lu saved pending=%lu\n", seq, spoolPendingAudio());
   }
 
-  if (signalOk && gWifiOk) {
+  if (gWifiOk) {
     trySendAudio(seq, gPcmBuf, meta);
   }
 }

@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CFG } from "./lib/config.mjs";
+import { CFG, isCudaAvailable } from "./lib/config.mjs";
 import { startDigestLoop } from "./lib/digest.mjs";
 import { createFolioServer, logServerStartup } from "./lib/http.mjs";
 import { activeLocale, promptLanguageName, whisperLanguageCode } from "./lib/locale.mjs";
@@ -30,9 +30,13 @@ function main() {
         `speech≥${CFG.speechEnergyThreshold} retention=${CFG.audioRetentionDays}d`,
     );
     console.log(`models: ${CFG.modelFast} · locale: ${activeLocale()} (${promptLanguageName()})`);
+    const whisperLang = CFG.whisperLanguage ? whisperLanguageCode() : "auto";
     console.log(
       `whisper: ${CFG.whisperBin} model=${CFG.whisperModel} device=${CFG.whisperDevice} ` +
-        `lang=${whisperLanguageCode()}`,
+        `lang=${whisperLang} cuda=${isCudaAvailable() ? "yes" : "no"}`,
+    );
+    console.log(
+      "[config] hot reload: LM/Whisper/locale apply on save — restart only for port/dataDir",
     );
   });
 

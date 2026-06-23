@@ -116,6 +116,10 @@ function cudaAvailable() {
   }
 }
 
+export function isCudaAvailable() {
+  return cudaAvailable();
+}
+
 /** openai-whisper --device: cpu | cuda | mps. "auto" picks cuda when NVIDIA is present. */
 function resolveWhisperDevice(fileVal, envVal) {
   let device = envVal || fileVal || "auto";
@@ -175,6 +179,11 @@ export function editableConfig() {
   return {
     configPath,
     version: nodeConfigVersion(),
+    runtime: {
+      whisperDeviceEffective: CFG.whisperDevice,
+      cudaAvailable: cudaAvailable(),
+      speechEnergyThreshold: CFG.speechEnergyThreshold,
+    },
     ...clone(fileData),
   };
 }
@@ -202,14 +211,7 @@ export function nodeConfigPayload() {
   };
 }
 
-const RESTART_KEYS = new Set([
-  "lm",
-  "audio.whisperBin",
-  "audio.whisperModel",
-  "audio.whisperDevice",
-  "port",
-  "dataDir",
-]);
+const RESTART_KEYS = new Set(["port", "dataDir"]);
 
 function patchNeedsRestart(patch, prefix = "") {
   for (const [k, v] of Object.entries(patch ?? {})) {
@@ -349,5 +351,6 @@ export const PATHS = {
 export function updateConfig(patch) {
   const result = saveConfigPatch(patch);
   reloadConfig();
-  return { ...result, config: editableConfig() };
+  const config = editableConfig();
+  return { ...result, config };
 }

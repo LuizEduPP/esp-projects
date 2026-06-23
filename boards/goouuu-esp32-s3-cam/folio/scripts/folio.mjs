@@ -63,13 +63,18 @@ async function cmdProcess() {
   const { audio, frames } = await runPendingQueueOnce();
 
   const after = pendingCounts(db);
+  const utt = audio.filter((r) => r.text).length;
+  const cap = frames.filter((r) => r.caption).length;
+  const sttFail = audio.filter((r) => r.skipped === "stt_failed" || r.error).length;
+  const lmWait = before.frames > 0 && frames.length === 0;
+
   console.log(
-    `[process] done utterances=${audio.filter((r) => r.text).length} ` +
-      `captions=${frames.filter((r) => r.caption).length} ` +
-      `remaining audio=${after.audio} frames=${after.frames}`,
+    `[process] done utterances=${utt} captions=${cap} ` +
+      `remaining audio=${after.audio} frames=${after.frames}` +
+      (sttFail ? ` stt_issues=${sttFail}` : ""),
   );
 
-  if (CFG.frameCaptionIntervalMs > 0 && before.frames > 0 && frames.length === 0) {
+  if (lmWait) {
     console.log(`[process] LM rate limit (${CFG.frameCaptionIntervalMs}ms) — try again later`);
   }
 }

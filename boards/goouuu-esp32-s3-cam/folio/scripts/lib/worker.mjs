@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { CFG } from "./config.mjs";
 import {
+  bumpSttAttempts,
   deleteAudioChunk,
   insertEvent,
   insertUtterance,
@@ -10,12 +11,15 @@ import {
   pendingAudioChunks,
   pendingCounts,
   pendingFrames,
+  pruneExpiredPcm,
 } from "./db.mjs";
 import { captionFrame } from "./lm.mjs";
 import { isSpeechChunk, transcribeWav } from "./whisper.mjs";
 import { writeWav } from "./util.mjs";
 
+const MAX_STT_ATTEMPTS = 3;
 let lastFrameLmAt = 0;
+let loggedWhisperMissing = false;
 
 function deleteChunkFile(path) {
   if (!path || !existsSync(path)) {
@@ -66,7 +70,7 @@ export function pruneStaleAudio(db = openDb()) {
     .prepare(
       `SELECT c.id, c.path FROM audio_chunks c
        LEFT JOIN utterances u ON u.chunk_id = c.id
-       WHERE c.processed = 1 AND u.id IS NULL`,
+       WHERE c.processed = 1 AND u.id IS NULL AND c.path != ''`,
     )
     .all();
 
@@ -84,18 +88,26 @@ export function pruneStaleAudio(db = openDb()) {
 
 export function runRetentionPass() {
   const db = openDb();
-  const { files } = pruneStaleAudio(db);
-  if (files > 0) {
+  const stale = pruneStaleAudio(db);
+  const expired = pruneExpiredPcm(db, CFG.audioRetentionDays);
+  const total = stale.files + expired.files;
+  if (total > 0) {
     console.log(
-      `[retention] removed ${files} stale audio chunks (keep transcripts ${CFG.audioRetentionDays}d)`,
+      `[retention] removed ${total} PCM file(s) ` +
+        `(stale=${stale.files} expired>${CFG.audioRetentionDays}d=${expired.files}; transcripts kept)`,
     );
   }
-  return { files };
+  return { files: total, stale: stale.files, expired: expired.files };
 }
 
 export function startRetentionLoop() {
   runRetentionPass();
   setInterval(runRetentionPass, CFG.audioRetentionSweepMs);
+}
+
+function isWhisperError(err) {
+  const msg = String(err?.message ?? err ?? "");
+  return err?.code === "ENOENT" || /whisper/i.test(msg);
 }
 
 export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
@@ -111,6 +123,12 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
   const results = [];
 
   for (const chunk of chunks) {
+    if (!chunk.path || !existsSync(chunk.path)) {
+      discardAudioChunk(db, chunk);
+      results.push({ id: chunk.id, skipped: "missing_file" });
+      continue;
+    }
+
     if (!isSpeechChunk(chunk.energy ?? 0)) {
       console.log(
         `[whisper] chunk=${chunk.id} skip silence energy=${(chunk.energy ?? 0).toFixed(4)}`,
@@ -143,7 +161,14 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
         results.push({ id: chunk.id, skipped: "empty_stt" });
       }
     } catch (err) {
-      results.push({ id: chunk.id, error: err.message });
+      const attempts = bumpSttAttempts(db, chunk.id);
+      if (attempts >= MAX_STT_ATTEMPTS) {
+        console.error(`[whisper] chunk=${chunk.id} discard after ${attempts} failures`);
+        discardAudioChunk(db, chunk);
+        results.push({ id: chunk.id, skipped: "stt_failed", error: err.message });
+      } else {
+        results.push({ id: chunk.id, error: err.message, retry: attempts });
+      }
     } finally {
       try {
         unlinkSync(wavPath);
@@ -204,7 +229,6 @@ export async function runPendingQueueOnce() {
 
 export function startProcessingLoop(intervalMs = CFG.pipelineIntervalMs) {
   let busy = false;
-  let loggedWhisperMissing = false;
 
   console.log(
     `[worker] every ${intervalMs}ms · audio batch=${CFG.pipelineAudioBatch} · ` +
@@ -230,7 +254,7 @@ export function startProcessingLoop(intervalMs = CFG.pipelineIntervalMs) {
       const audio = await processPendingAudio();
       const frames = await processPendingFrames();
 
-      const whisperErrors = audio.filter((r) => r.error?.includes("Whisper"));
+      const whisperErrors = audio.filter((r) => r.error && isWhisperError({ message: r.error }));
       if (whisperErrors.length && !loggedWhisperMissing) {
         loggedWhisperMissing = true;
         console.error(
@@ -238,12 +262,10 @@ export function startProcessingLoop(intervalMs = CFG.pipelineIntervalMs) {
         );
       }
 
-      const done = [...audio, ...frames].filter((r) => r.text || r.caption);
-      if (done.length && pending.frames > 0) {
-        console.log(
-          `[worker] done utt=${audio.filter((r) => r.text).length} ` +
-            `caption=${frames.filter((r) => r.caption).length}`,
-        );
+      const utt = audio.filter((r) => r.text).length;
+      const cap = frames.filter((r) => r.caption).length;
+      if (utt > 0 || cap > 0) {
+        console.log(`[worker] done utt=${utt} caption=${cap}`);
       }
     } catch (err) {
       console.error(`[worker] ${err.message}`);

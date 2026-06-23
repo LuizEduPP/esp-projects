@@ -104,6 +104,9 @@ function serveAudio(db, chunkId) {
   if (!chunk) {
     return null;
   }
+  if (!chunk.path) {
+    return { gone: true };
+  }
   const pcm = readFileSync(assertUnderDataDir(chunk.path));
   return { body: pcmToWav(pcm, CFG.audioSampleRate), contentType: "audio/wav" };
 }
@@ -151,10 +154,14 @@ export function createFolioServer(viewHtml) {
       }
 
       if (path === "/ingest/event" && req.method === "POST") {
-        const deviceId = req.headers["x-folio-device-id"] ?? "unknown";
+        const deviceId = deviceIdFromReq(req);
+        if (!deviceId) {
+          sendJson(res, 400, { error: "X-Folio-Device-Id required" });
+          return;
+        }
         noteDevice(req);
         const body = JSON.parse((await readBody(req, 16 * 1024)).toString("utf8"));
-        sendJson(res, 200, ingestEvent(String(deviceId), body));
+        sendJson(res, 200, ingestEvent(deviceId, body));
         return;
       }
 
@@ -176,6 +183,10 @@ export function createFolioServer(viewHtml) {
         if (!file) {
           res.writeHead(404);
           res.end("not found");
+          return;
+        }
+        if (file.gone) {
+          sendJson(res, 410, { error: "PCM expired — transcript may still be in timeline" });
           return;
         }
         sendBytes(res, 200, file.body, file.contentType);

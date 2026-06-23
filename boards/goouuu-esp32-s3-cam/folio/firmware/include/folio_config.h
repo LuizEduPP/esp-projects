@@ -38,3 +38,8 @@
 #ifndef FOLIO_STATUS_INTERVAL_MS
 #define FOLIO_STATUS_INTERVAL_MS 15000
 #endif
+
+/** RMS energy gate — must match brain audio.speechEnergyThreshold (default 0.008). */
+#ifndef FOLIO_SPEECH_ENERGY
+#define FOLIO_SPEECH_ENERGY 0.008f
+#endif

@@ -8,7 +8,7 @@ import {
   insertFrame,
   openDb,
 } from "./db.mjs";
-import { shouldStoreAudioChunk } from "./whisper.mjs";
+import { isSpeechChunk, pcmEnergy, shouldStoreAudioChunk } from "./whisper.mjs";
 import { dayFromIso, isoNow, parseMetaHeader } from "./util.mjs";
 
 export function ingestAudioChunk(deviceId, pcmBuffer, metaHeader) {
@@ -18,7 +18,11 @@ export function ingestAudioChunk(deviceId, pcmBuffer, metaHeader) {
   const capturedAt = isoNow();
   const day = dayFromIso(capturedAt);
   const seq = Number(meta.seq ?? 0);
-  const gate = shouldStoreAudioChunk(pcmBuffer);
+  const deviceMs = meta.ts_ms != null ? Number(meta.ts_ms) : null;
+
+  const metaEnergy = meta.energy != null ? Number(meta.energy) : null;
+  const energy = Number.isFinite(metaEnergy) ? metaEnergy : pcmEnergy(pcmBuffer);
+  const gate = shouldStoreAudioChunk(pcmBuffer, energy);
 
   if (!gate.store) {
     return { id: null, energy: gate.energy, speech: false, skipped: gate.reason };
@@ -35,17 +39,26 @@ export function ingestAudioChunk(deviceId, pcmBuffer, metaHeader) {
     seq,
     path,
     duration_ms: CFG.audioChunkMs,
-    energy: gate.energy,
+    energy,
+    device_ms: deviceMs,
   });
 
-  insertEvent(db, {
-    device_id: deviceId,
-    at: capturedAt,
-    kind: "presence",
-    payload_json: JSON.stringify({ source: "audio", energy: gate.energy, seq, chunk_id: id }),
-  });
+  if (isSpeechChunk(energy)) {
+    insertEvent(db, {
+      device_id: deviceId,
+      at: capturedAt,
+      kind: "presence",
+      payload_json: JSON.stringify({
+        source: "audio",
+        energy,
+        seq,
+        chunk_id: id,
+        device_ms: deviceMs,
+      }),
+    });
+  }
 
-  return { id, energy: gate.energy, speech: true };
+  return { id, energy, speech: true, device_ms: deviceMs };
 }
 
 export function ingestFrame(deviceId, jpegBuffer, metaHeader) {
@@ -74,6 +87,7 @@ export function ingestFrame(deviceId, jpegBuffer, metaHeader) {
       frame_id: id,
       reason: meta.reason ?? "unknown",
       bytes: jpegBuffer.length,
+      device_ms: meta.ts_ms != null ? Number(meta.ts_ms) : null,
       pending: true,
     }),
   });
