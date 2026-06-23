@@ -1,5 +1,5 @@
 import { CFG } from "../config/index.mjs";
-import { dayBounds } from "../util/time.mjs";
+import { dayBounds } from "../util.mjs";
 import { audioChunksForDay, utterancesForDay } from "./utterances.mjs";
 import { framesForDay } from "./frames.mjs";
 

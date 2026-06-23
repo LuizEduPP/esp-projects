@@ -1,5 +1,5 @@
 import { CFG } from "../config/index.mjs";
-import { pcmFingerprint } from "../speaker/fingerprint.mjs";
+import { pcmFingerprint } from "../speaker.mjs";
 import { SoundKind } from "./types.mjs";
 
 const LABELS = {

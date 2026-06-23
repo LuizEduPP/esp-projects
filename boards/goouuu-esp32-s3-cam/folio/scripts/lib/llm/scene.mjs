@@ -1,7 +1,7 @@
 import { CFG } from "../config/index.mjs";
 import { promptLanguageRule } from "../locale/index.mjs";
 import { ModelSlot } from "../models/index.mjs";
-import { parseVisionFallback } from "../util/json.mjs";
+import { parseVisionFallback } from "../util.mjs";
 import { chatJsonLenientWithSlot } from "./client.mjs";
 
 export function formatSceneCaption(scene) {

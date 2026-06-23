@@ -1,4 +1,4 @@
-import { isoNow } from "../util/time.mjs";
+import { isoNow } from "../util.mjs";
 
 export function ensureDevice(db, deviceId, label = null) {
   const row = db.prepare("SELECT id FROM devices WHERE id = ?").get(deviceId);

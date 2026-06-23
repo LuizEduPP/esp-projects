@@ -8,9 +8,9 @@ import {
   markAudioProcessed,
   updateAudioClassification,
 } from "../db/index.mjs";
-import { identifySpeaker } from "../speaker/identify.mjs";
-import { isSpeechChunk, transcribeWav } from "../stt/index.mjs";
-import { writeWav } from "../util/audio.mjs";
+import { identifySpeaker } from "../speaker.mjs";
+import { isSpeechChunk, transcribeWav } from "../stt.mjs";
+import { writeWav } from "../util.mjs";
 import { classifySound, isInterestingSound } from "./sound.mjs";
 import { SoundKind } from "./types.mjs";
 

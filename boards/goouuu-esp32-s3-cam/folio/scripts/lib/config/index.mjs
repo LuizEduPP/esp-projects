@@ -78,6 +78,17 @@ function cfgStrArray(file, dotPath, envKey) {
   return Array.isArray(fallback) ? fallback.map(String) : [];
 }
 
+function cfgObject(file, dotPath) {
+  const val = getPath(file, dotPath);
+  if (val && typeof val === "object" && !Array.isArray(val)) {
+    return val;
+  }
+  const fallback = getPath(DEFAULT_CONFIG, dotPath);
+  return fallback && typeof fallback === "object" && !Array.isArray(fallback)
+    ? clone(fallback)
+    : {};
+}
+
 function configPaths() {
   const paths = [];
   if (process.env.FOLIO_CONFIG) {
@@ -301,6 +312,43 @@ function migrateConfigSchema(file) {
           file.memory.lexical[k] = v;
           changed = true;
         }
+      }
+    }
+  }
+
+  if (!file.speaker || typeof file.speaker !== "object") {
+    file.speaker = { ...DEFAULT_CONFIG.speaker };
+    changed = true;
+  } else {
+    for (const [k, v] of Object.entries(DEFAULT_CONFIG.speaker)) {
+      if (file.speaker[k] == null && v != null) {
+        file.speaker[k] = v;
+        changed = true;
+      }
+    }
+  }
+
+  if (file.perception && typeof file.perception === "object") {
+    for (const key of ["soundLabels", "yamnetKindMap", "heuristic"]) {
+      if (!file.perception[key] || typeof file.perception[key] !== "object") {
+        file.perception[key] = { ...DEFAULT_CONFIG.perception[key] };
+        changed = true;
+      } else {
+        for (const [k, v] of Object.entries(DEFAULT_CONFIG.perception[key] ?? {})) {
+          if (file.perception[key][k] == null && v != null) {
+            file.perception[key][k] = v;
+            changed = true;
+          }
+        }
+      }
+    }
+    for (const [k, v] of Object.entries(DEFAULT_CONFIG.perception)) {
+      if (typeof v === "object") {
+        continue;
+      }
+      if (file.perception[k] == null && v != null) {
+        file.perception[k] = v;
+        changed = true;
       }
     }
   }
@@ -546,6 +594,18 @@ function buildCfgFromFile(file = getFileData()) {
       "perception.soundMinConfidence",
       "FOLIO_SOUND_MIN_CONF",
     ),
+    perceptionSoundEngine: cfgStr(file, "perception.soundEngine", "FOLIO_SOUND_ENGINE"),
+    perceptionYamnetMinScore: cfgNum(file, "perception.yamnetMinScore", "FOLIO_YAMNET_MIN_SCORE"),
+    perceptionYamnetModelPath: cfgStr(file, "perception.yamnetModelPath", "FOLIO_YAMNET_MODEL") || null,
+    perceptionYamnetLabelsPath: cfgStr(file, "perception.yamnetLabelsPath", "FOLIO_YAMNET_LABELS") || null,
+    perceptionYamnetModelUrl: cfgStr(file, "perception.yamnetModelUrl", "FOLIO_YAMNET_MODEL_URL"),
+    perceptionYamnetLabelsUrl: cfgStr(file, "perception.yamnetLabelsUrl", "FOLIO_YAMNET_LABELS_URL"),
+    perceptionSoundLabels: cfgObject(file, "perception.soundLabels"),
+    perceptionYamnetKindMap: cfgObject(file, "perception.yamnetKindMap"),
+    perceptionHeuristic: cfgObject(file, "perception.heuristic"),
+
+    speakerMinMatchScore: cfgNum(file, "speaker.minMatchScore", "FOLIO_SPEAKER_MIN_MATCH"),
+    speakerMaxEnrollmentSamples: cfgNum(file, "speaker.maxEnrollmentSamples", "FOLIO_SPEAKER_MAX_SAMPLES"),
 
     episodeGapMin: cfgNum(file, "episodes.gapMin", "FOLIO_EPISODE_GAP_MIN"),
     episodeFrameAlignMs: cfgNum(file, "episodes.frameAlignMs", "FOLIO_EPISODE_FRAME_ALIGN_MS"),

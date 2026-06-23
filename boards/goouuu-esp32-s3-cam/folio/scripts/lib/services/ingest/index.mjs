@@ -8,8 +8,8 @@ import {
   insertFrame,
   openDb,
 } from "../../db/index.mjs";
-import { isSpeechChunk, pcmEnergy, shouldStoreAudioChunk } from "../../stt/index.mjs";
-import { dayFromIso, isoNow, parseMetaHeader } from "../../util/time.mjs";
+import { isSpeechChunk, pcmEnergy, shouldStoreAudioChunk } from "../../stt.mjs";
+import { dayFromIso, isoNow, parseMetaHeader } from "../../util.mjs";
 
 export function ingestAudioChunk(deviceId, pcmBuffer, metaHeader) {
   const db = openDb();

@@ -1,4 +1,4 @@
-import { dayBounds } from "../util/time.mjs";
+import { dayBounds } from "../util.mjs";
 
 export function insertFrame(db, row) {
   const info = db

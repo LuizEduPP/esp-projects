@@ -1,5 +1,5 @@
 import { CFG } from "../config/index.mjs";
-import { isoNow } from "../util/time.mjs";
+import { isoNow } from "../util.mjs";
 
 export function listSpeakers(db) {
   return db.prepare("SELECT * FROM speakers ORDER BY display_name").all();

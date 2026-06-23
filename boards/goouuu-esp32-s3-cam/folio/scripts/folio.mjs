@@ -4,11 +4,11 @@
  * Usage: folio.mjs <process|enroll> [options]
  */
 import { openDb, pendingCounts, upsertEntity, upsertSpeaker } from "./lib/db/index.mjs";
-import { enrollFingerprint } from "./lib/speaker/identify.mjs";
+import { enrollFingerprint } from "./lib/speaker.mjs";
 import { runDayInsights } from "./lib/services/insights/index.mjs";
 import { runPendingQueueOnce } from "./lib/services/index.mjs";
 import { reindexAllMemories } from "./lib/memory/index.mjs";
-import { errMsg } from "./lib/util/index.mjs";
+import { errMsg } from "./lib/util.mjs";
 import { readFileSync } from "node:fs";
 
 function usage() {

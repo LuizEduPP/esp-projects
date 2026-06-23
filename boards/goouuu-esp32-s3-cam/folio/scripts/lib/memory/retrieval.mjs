@@ -1,5 +1,5 @@
 import { CFG } from "../config/index.mjs";
-import { dayOffset } from "../util/time.mjs";
+import { dayOffset } from "../util.mjs";
 import { memoryChunksInRange, openDb } from "../db/index.mjs";
 import { embedText, scorePair } from "./embeddings.mjs";
 

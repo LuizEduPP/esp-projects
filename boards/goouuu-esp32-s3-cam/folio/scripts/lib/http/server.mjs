@@ -11,7 +11,7 @@ import {
 } from "../services/insights/index.mjs";
 import { fetchOpenAiModels } from "../llm/models-catalog.mjs";
 import { retrieveMemories, reindexAllMemories } from "../memory/index.mjs";
-import { errMsg, pcmToWav, sendBytes, sendJson, today } from "../util/index.mjs";
+import { errMsg, pcmToWav, sendBytes, sendJson, today } from "../util.mjs";
 import {
   getAudioChunk,
   getFrame,

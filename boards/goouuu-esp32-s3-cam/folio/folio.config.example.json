@@ -71,6 +71,10 @@
       "topK": 14
     }
   },
+  "speaker": {
+    "minMatchScore": 0.82,
+    "maxEnrollmentSamples": 8
+  },
   "perception": {
     "motionMin": 0.035,
     "motionForceMs": 300000,
@@ -79,9 +83,34 @@
     "soundMinEnergy": 0.003,
     "soundMinConfidence": 0.55,
     "soundEngine": "yamnet",
+    "soundLabels": {
+      "speech": "fala",
+      "bark": "latido",
+      "door": "porta",
+      "knock": "batida",
+      "appliance": "eletrodoméstico",
+      "unknown": "som"
+    },
     "yamnetMinScore": 0.2,
     "yamnetModelPath": null,
-    "yamnetLabelsPath": null
+    "yamnetLabelsPath": null,
+    "yamnetModelUrl": "https://huggingface.co/onnx-community/yamnet/resolve/main/onnx/model.onnx",
+    "yamnetLabelsUrl": "https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv",
+    "yamnetKindMap": {
+      "speech": ["Speech", "Conversation", "Narration, monologue", "Child speech, kid speaking"],
+      "bark": ["Bark", "Dog", "Canidae, dogs, wolves"],
+      "door": ["Door", "Sliding door", "Cupboard open or close", "Drawer open or close"],
+      "knock": ["Knock", "Tap"],
+      "appliance": ["Vacuum cleaner", "Dishes, pots, and pans", "Microwave oven", "Refrigerator", "Water tap, faucet"]
+    },
+    "heuristic": {
+      "speech": { "confidence": 0.92 },
+      "bark": { "confidence": 0.74, "maxEnergy": 0.045, "minZcr": 0.07, "maxDurationMs": 2500 },
+      "door": { "confidence": 0.7, "minEnergy": 0.01, "maxDurationMs": 900, "minRms": 0.018, "maxZcr": 0.05 },
+      "knock": { "confidence": 0.62, "minEnergy": 0.008, "maxDurationMs": 600, "minZcr": 0.12 },
+      "appliance": { "confidence": 0.55, "maxZcr": 0.04, "minDurationMs": 800 },
+      "unknown": { "confidence": 0.4, "lowConfidence": 0.15 }
+    }
   },
   "node": {
     "wifiRetryMs": 5000,

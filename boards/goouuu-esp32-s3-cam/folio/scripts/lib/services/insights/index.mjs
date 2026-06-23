@@ -13,7 +13,7 @@ import {
   witnessStats,
 } from "../../db/index.mjs";
 import { indexDayMemories, retrieveContextForDay } from "../../memory/index.mjs";
-import { isoNow, today } from "../../util/time.mjs";
+import { isoNow, today } from "../../util.mjs";
 
 const insightsRuntime = { busy: false, phase: null, error: null, day: null };
 

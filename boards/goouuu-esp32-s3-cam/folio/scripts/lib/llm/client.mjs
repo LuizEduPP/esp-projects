@@ -1,5 +1,5 @@
 import { modelId, ModelSlot } from "../models/index.mjs";
-import { parseJsonLoose } from "../util/json.mjs";
+import { parseJsonLoose } from "../util.mjs";
 import { chatCompletions, messageContent } from "./openai.mjs";
 
 export async function chatCompletion({

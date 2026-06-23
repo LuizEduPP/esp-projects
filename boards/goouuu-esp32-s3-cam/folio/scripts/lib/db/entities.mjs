@@ -1,4 +1,4 @@
-import { isoNow } from "../util/time.mjs";
+import { isoNow } from "../util.mjs";
 import { sqlNullable, sqlText } from "./sql.mjs";
 
 export function listEntities(db) {

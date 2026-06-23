@@ -1,5 +1,5 @@
 import { CFG } from "../config/index.mjs";
-import { dayOffset, isoNow } from "../util/time.mjs";
+import { dayOffset, isoNow } from "../util.mjs";
 
 export function deleteMemoryForDay(db, day) {
   db.prepare("DELETE FROM memory_chunks WHERE day = ?").run(day);
