@@ -1,15 +1,33 @@
 {
   "name": "esp-projects",
   "private": true,
+  "workspaces": [
+    "boards/goouuu-esp32-s3-cam/*",
+    "boards/esp32-cyd/*"
+  ],
   "scripts": {
-    "mini-games:setup": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:setup",
-    "mini-games:build": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:build",
-    "mini-games:flash": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:flash",
-    "mini-games:monitor": "yarn --cwd goouuu-esp32-s3-cam/mini-games fw:monitor",
-    "cyd-gb:build": "yarn --cwd esp32-cyd/cyd-gb fw:build",
-    "cyd-gb:flash": "yarn --cwd esp32-cyd/cyd-gb fw:flash",
-    "cyd-gb:install": "yarn --cwd esp32-cyd/cyd-gb fw:install",
-    "cyd-gb:monitor": "yarn --cwd esp32-cyd/cyd-gb fw:monitor",
-    "cyd-gb:icons": "yarn --cwd esp32-cyd/cyd-gb icons"
+    "setup": "bash scripts/fw-setup-linux.sh",
+    "mini-games:setup": "yarn workspace goouuu-s3-cam-mini-games fw:setup",
+    "mini-games:build": "yarn workspace goouuu-s3-cam-mini-games fw:build",
+    "mini-games:flash": "yarn workspace goouuu-s3-cam-mini-games fw:flash",
+    "mini-games:monitor": "yarn workspace goouuu-s3-cam-mini-games fw:monitor",
+    "rc-car:setup": "yarn workspace goouuu-s3-cam-rc-car fw:setup",
+    "rc-car:build": "yarn workspace goouuu-s3-cam-rc-car fw:build",
+    "rc-car:flash": "yarn workspace goouuu-s3-cam-rc-car fw:flash",
+    "rc-car:monitor": "yarn workspace goouuu-s3-cam-rc-car fw:monitor",
+    "rc-car:ai": "yarn workspace goouuu-s3-cam-rc-car ai:follow",
+    "rc-car:diag": "yarn workspace goouuu-s3-cam-rc-car motor:diag",
+    "rc-car:test-drive": "TEST_DRIVE=1 yarn workspace goouuu-s3-cam-rc-car ai:follow",
+    "rc-car:forever": "yarn workspace goouuu-s3-cam-rc-car motor:forever",
+    "cyd-gb:build": "yarn workspace esp32-cyd-gb fw:build",
+    "cyd-gb:flash": "yarn workspace esp32-cyd-gb fw:flash",
+    "cyd-gb:install": "yarn workspace esp32-cyd-gb fw:install",
+    "cyd-gb:monitor": "yarn workspace esp32-cyd-gb fw:monitor",
+    "cyd-gb:icons": "yarn workspace esp32-cyd-gb icons",
+    "cyd-arcade:build": "yarn workspace esp32-cyd-arcade fw:build",
+    "cyd-arcade:flash": "yarn workspace esp32-cyd-arcade fw:flash",
+    "cyd-arcade:install": "yarn workspace esp32-cyd-arcade fw:install",
+    "cyd-arcade:monitor": "yarn workspace esp32-cyd-arcade fw:monitor",
+    "cyd-arcade:preview": "yarn workspace esp32-cyd-arcade preview:circus"
   }
 }

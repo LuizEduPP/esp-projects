@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Circus Charlie — Preview CYD</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px;
+      background: #0d1117; color: #e6edf3;
+      font-family: system-ui, sans-serif; padding: 16px;
+    }
+    h1 { font-size: 1.1rem; font-weight: 600; margin: 0; }
+    p { margin: 0; font-size: 0.85rem; color: #8b949e; max-width: 560px; text-align: center; line-height: 1.45; }
+    .frame { border: 2px solid #30363d; border-radius: 8px; overflow: hidden; touch-action: none; }
+    .status {
+      width: 480px; height: 64px; background: #161b22; border-bottom: 1px solid #30363d;
+      display: flex; align-items: center; padding: 0 16px; font-size: 14px; gap: 12px;
+    }
+    .status span { color: #58a6ff; }
+    canvas {
+      display: block; width: 480px; height: 576px;
+      image-rendering: pixelated; image-rendering: crisp-edges; touch-action: none;
+    }
+    kbd { background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 2px 6px; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <h1>Circus Charlie — Preview (fiel ao WinAPI original)</h1>
+  <p>Baseado em <a href="https://github.com/HyunjungLee-dev/Circus-Charlie" style="color:#58a6ff">HyunjungLee-dev/Circus-Charlie</a>.
+    Toque para pular: Charlie avança em arco no ar e volta à posição inicial ao pousar.</p>
+  <div class="frame">
+    <div class="status">
+      <span id="hud-score">Pts 0</span>
+      <span id="hud-fase">Fase 1</span>
+      <span id="hud-vidas">♥♥♥</span>
+    </div>
+    <canvas id="screen" width="240" height="288"></canvas>
+  </div>
+  <p>Toque na tela para <strong>pular</strong> · <kbd>Espaço</kbd> no teclado</p>
+
+  <script>
+    const ASSET = '../firmware/assets/circus/';
+    const S = 288 / 448;
+    const SCROLL_LEN = 0.5 * S;
+    const JAR_GAP = 550 * S;
+    const JAR_N = 10;
+    const RING_SPAWN_MS = 3500;
+    const JUMP_AMP = 120 * S;
+    const JUMP_FWD = 38 * S;
+    const JUMP_MS = 900;
+    const JUMP_CLEAR = 8 * S;
+    const RING_GAP = Math.round(12 * S);
+    const PHYS_MS = 16;
+    const RING_MIN_GAP = Math.round((JUMP_MS / PHYS_MS) * 2 * SCROLL_LEN + 52);
+
+    const SCALE_PLAYER = S;
+    const SCALE_AUD = 1.3 * S;
+    const SCALE_FIELD = 1.25 * S;
+    const SCALE_RING_Y = 1.1 * S;
+    const SCALE_JAR = S;
+    const SCALE_CASH = S;
+    const SCALE_MITER = S;
+
+    const PLAY_W = 240, PLAY_H = 288;
+    let PLAYER_W = 42, PLAYER_H = 40, JAR_W = 32, JAR_H = 32;
+    let RING_L_W = 17, RING_R_W = 15, RING_H = 93;
+    const PLAYER_X0 = 100 * PLAY_W / 512;
+    const AUDIENCE_Y = 0, FIELD_Y = 53;
+    const RING_BOTTOM = Math.round(325 * S) + Math.round(40 * S);
+    const JAR_Y = Math.round(360 * S);
+    const PLAYER_Y0 = Math.round(345 * S);
+    const RING_SLOTS = 4;
+    const METER_Y = PLAY_H - 22;
+    const DECO_EVERY = 7, DECO_AT = 2, METER_EVERY = 88;
+    const COL_SKY = '#000', COL_FIELD = '#00a800';
+
+    function ringTopY() { return RING_BOTTOM - RING_H; }
+
+    const canvas = document.getElementById('screen');
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    const imgs = {};
+    const files = {
+      player: ['player0.bmp', 'player1.bmp', 'player2.bmp'],
+      jar: ['front.bmp', 'front2.bmp'],
+      ringL: ['enemy_b.bmp', 'enemy_1b.bmp'],
+      ringR: ['enemy_f.bmp', 'enemy_1f.bmp'],
+      cash: 'cash.bmp',
+      bg: 'back_normal.bmp', deco: 'back_deco.bmp',
+      field: 'back.bmp', miter: 'miter.bmp',
+    };
+
+    const CHROMA_MAGENTA = { r: 255, g: 0, b: 255, tol: 48 };
+    const CHROMA_BLACK = { r: 0, g: 0, b: 0, tol: 24 };
+    const processed = new Map();
+
+    function loadImg(name) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Falha: ' + name));
+        img.src = ASSET + name;
+      });
+    }
+
+    async function loadAll() {
+      for (const f of files.player) imgs[f] = await loadImg(f);
+      for (const f of files.jar) imgs[f] = await loadImg(f);
+      for (const f of files.ringL) imgs[f] = await loadImg(f);
+      for (const f of files.ringR) imgs[f] = await loadImg(f);
+      imgs.cash = await loadImg(files.cash);
+      imgs.bg = await loadImg(files.bg);
+      imgs.deco = await loadImg(files.deco);
+      imgs.field = await loadImg(files.field);
+      imgs.miter = await loadImg(files.miter);
+    }
+
+    function isChroma(r, g, b, key) {
+      return Math.abs(r - key.r) <= key.tol && Math.abs(g - key.g) <= key.tol && Math.abs(b - key.b) <= key.tol;
+    }
+
+    function processChroma(img, key) {
+      const cacheKey = img.src + JSON.stringify(key);
+      if (processed.has(cacheKey)) return processed.get(cacheKey);
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const cctx = c.getContext('2d');
+      cctx.drawImage(img, 0, 0);
+      const data = cctx.getImageData(0, 0, c.width, c.height);
+      for (let i = 0; i < data.data.length; i += 4) {
+        if (isChroma(data.data[i], data.data[i+1], data.data[i+2], key)) data.data[i+3] = 0;
+      }
+      cctx.putImageData(data, 0, 0);
+      processed.set(cacheKey, c);
+      return c;
+    }
+
+    function drawSprite(img, x, y, sx, sy, chroma) {
+      const src = chroma ? processChroma(img, chroma) : img;
+      ctx.drawImage(src, x, y, src.width * sx, src.height * sy);
+    }
+
+    function drawAudience(scrollX) {
+      const tw = imgs.bg.width * SCALE_AUD;
+      const off = scrollX % tw;
+      let idx = Math.floor(scrollX / tw);
+      for (let x = -off; x < PLAY_W; x += tw, idx++) {
+        const useDeco = ((idx % DECO_EVERY) + DECO_EVERY) % DECO_EVERY === DECO_AT;
+        drawSprite(useDeco ? imgs.deco : imgs.bg, x, AUDIENCE_Y, SCALE_AUD, SCALE_AUD, CHROMA_BLACK);
+      }
+    }
+
+    function drawField(scrollX) {
+      const field = imgs.field;
+      const tw = field.width * SCALE_FIELD;
+      const fh = 92;
+      const off = scrollX % tw;
+      for (let x = -off; x < PLAY_W; x += tw) {
+        const src = processChroma(field, CHROMA_BLACK);
+        ctx.drawImage(src, 0, 0, src.width, src.height, x, FIELD_Y, tw, fh);
+      }
+      const fb = FIELD_Y + fh;
+      if (fb < METER_Y) {
+        ctx.fillStyle = COL_FIELD;
+        ctx.fillRect(0, fb, PLAY_W, METER_Y - fb);
+        ctx.fillStyle = COL_SKY;
+        for (let i = 0; i < 4; i++) {
+          const ly = fb + 18 + i * 36;
+          if (ly < METER_Y - 2) ctx.fillRect(0, ly, PLAY_W, 1);
+        }
+      }
+    }
+
+    function drawMiters(scrollX) {
+      const m = imgs.miter;
+      const mw = m.width * SCALE_MITER;
+      const start = Math.floor(scrollX / METER_EVERY) * METER_EVERY - scrollX;
+      let dist = 100 - Math.floor(scrollX / METER_EVERY) * 10;
+      for (let wx = start; wx < PLAY_W + mw; wx += METER_EVERY, dist -= 10) {
+        if (wx + mw < 0) continue;
+        drawSprite(m, wx, METER_Y, SCALE_MITER, SCALE_MITER, CHROMA_BLACK);
+        if (dist >= 0) {
+          ctx.fillStyle = '#fff';
+          ctx.font = '8px monospace';
+          ctx.fillText((dist === 0 ? '00' : dist) + 'M', wx + 10, METER_Y + 11);
+        }
+      }
+    }
+
+    function drawBg(scrollX) {
+      ctx.fillStyle = COL_SKY;
+      ctx.fillRect(0, 0, PLAY_W, PLAY_H);
+      drawAudience(scrollX);
+      drawField(scrollX);
+      drawMiters(scrollX);
+    }
+
+    const state = {
+      scrollX: 0,
+      playerBaseX: PLAYER_X0,
+      playerX: PLAYER_X0,
+      jumpOriginX: PLAYER_X0,
+      jumpY: 0,
+      jumping: false,
+      jumpT: 0,
+      anim: 0,
+      lastAnim: 0,
+      lastRingSpawn: 0,
+      jarsWx: [],
+      rings: Array.from({ length: RING_SLOTS }, () => ({ live: false, wx: 0, item: false })),
+    };
+
+    function ringPairW() { return RING_L_W + RING_GAP + RING_R_W; }
+    function laneLeft(obsW) { return state.playerBaseX + (PLAYER_W - obsW) / 2; }
+    function playerBaseCx() { return state.playerBaseX + PLAYER_W / 2; }
+    function playerCx() { return state.playerX + PLAYER_W / 2; }
+    function ringSpawnWx() { return state.scrollX + laneLeft(ringPairW()) + PLAY_W + 40; }
+
+    function layoutJars() {
+      const lane = laneLeft(JAR_W);
+      const lead = PLAY_W + 40 + JAR_GAP * 1.95;
+      state.jarsWx = [];
+      for (let i = 0; i < JAR_N; i++) state.jarsWx.push(lane + lead + i * JAR_GAP);
+    }
+
+    function ringSpawnClear() {
+      const spawnWx = ringSpawnWx();
+      for (const r of state.rings) {
+        if (!r.live) continue;
+        if (spawnWx - r.wx < RING_MIN_GAP) return false;
+      }
+      return true;
+    }
+
+    function trySpawnRing(t) {
+      if (t - state.lastRingSpawn < RING_SPAWN_MS) return;
+      if (!ringSpawnClear()) return;
+      const live = state.rings.filter(r => r.live).length;
+      if (live >= 3) return;
+      const slot = state.rings.findIndex(r => !r.live);
+      if (slot < 0) return;
+      state.lastRingSpawn = t;
+      state.rings[slot] = {
+        live: true,
+        wx: ringSpawnWx(),
+        item: Math.random() > 0.7,
+      };
+    }
+
+    function fireFrame(t) { return Math.floor(t / 180) % 2; }
+    function playerY() { return PLAYER_Y0 - state.jumpY; }
+
+    function commitJumpLand() {
+      state.playerBaseX = PLAYER_X0;
+      state.playerX = PLAYER_X0;
+      state.jumpY = 0;
+      state.jumping = false;
+    }
+
+    function tryJump() {
+      if (!state.jumping) {
+        state.jumpOriginX = state.playerBaseX;
+        state.jumping = true;
+        state.jumpT = performance.now();
+      }
+    }
+
+    function stepWorld() {
+      state.scrollX += SCROLL_LEN;
+
+      for (const r of state.rings) {
+        if (!r.live) continue;
+        r.wx -= SCROLL_LEN;
+        if (r.wx < state.scrollX - 60) r.live = false;
+      }
+    }
+
+    function update(dt, t) {
+      stepWorld();
+      trySpawnRing(t);
+
+      if (state.jumping) {
+        const e = t - state.jumpT;
+        if (e >= JUMP_MS) {
+          commitJumpLand();
+        } else {
+          const s = Math.sin((e / JUMP_MS) * Math.PI);
+          const fwd = (1 - Math.cos((e / JUMP_MS) * Math.PI)) * 0.5;
+          state.jumpY = s * JUMP_AMP;
+          state.playerX = state.jumpOriginX + fwd * JUMP_FWD;
+        }
+      } else {
+        state.playerX = state.playerBaseX;
+      }
+
+      if (t - state.lastAnim > 80) {
+        state.lastAnim = t;
+        if (state.jumping && state.jumpY > 8) state.anim = 2;
+        else state.anim = (state.anim + 1) % 3;
+      }
+    }
+
+    function drawObs(t) {
+      const ff = fireFrame(t);
+      for (const wx of state.jarsWx) {
+        const sx = wx - state.scrollX;
+        drawSprite(imgs[files.jar[ff]], sx, JAR_Y, SCALE_JAR, SCALE_JAR, CHROMA_MAGENTA);
+      }
+      const top = ringTopY();
+      for (const r of state.rings) {
+        if (!r.live) continue;
+        const sx = r.wx - state.scrollX;
+        drawSprite(imgs[files.ringL[ff]], sx, top, SCALE_PLAYER, SCALE_RING_Y, CHROMA_MAGENTA);
+        drawSprite(imgs[files.ringR[ff]], sx + RING_L_W + RING_GAP, top, SCALE_PLAYER, SCALE_RING_Y, CHROMA_MAGENTA);
+        if (r.item) {
+          const cx = sx + ringPairW() / 2 - imgs.cash.width * SCALE_CASH / 2;
+          drawSprite(imgs.cash, cx, top + RING_H / 2 - 8, SCALE_CASH, SCALE_CASH, CHROMA_MAGENTA);
+        }
+      }
+    }
+
+    function draw(t) {
+      drawBg(state.scrollX);
+      drawObs(t);
+      drawSprite(imgs[files.player[state.anim]], state.playerX, playerY(), SCALE_PLAYER, SCALE_PLAYER, CHROMA_MAGENTA);
+    }
+
+    function loop(t) {
+      const dt = state.last ? t - state.last : 16;
+      state.last = t;
+      update(dt, t);
+      draw(t);
+      requestAnimationFrame(loop);
+    }
+
+    function playCoords(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left) * (PLAY_W / r.width), y: (e.clientY - r.top) * (PLAY_H / r.height) };
+    }
+
+    canvas.addEventListener('pointerdown', e => {
+      canvas.setPointerCapture(e.pointerId);
+      tryJump();
+    });
+
+    canvas.addEventListener('pointerup', e => {
+      canvas.releasePointerCapture(e.pointerId);
+    });
+
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Space') { e.preventDefault(); tryJump(); }
+    });
+
+    loadAll().then(() => {
+      PLAYER_W = Math.round(imgs[files.player[0]].width * SCALE_PLAYER);
+      PLAYER_H = Math.round(imgs[files.player[0]].height * SCALE_PLAYER);
+      JAR_W = Math.round(imgs[files.jar[0]].width * SCALE_JAR);
+      JAR_H = Math.round(imgs[files.jar[0]].height * SCALE_JAR);
+      RING_L_W = Math.round(imgs[files.ringL[0]].width * SCALE_PLAYER);
+      RING_R_W = Math.round(imgs[files.ringR[0]].width * SCALE_PLAYER);
+      RING_H = Math.round(imgs[files.ringL[0]].height * SCALE_RING_Y);
+      layoutJars();
+      state.lastRingSpawn = performance.now();
+      state.last = 0;
+      requestAnimationFrame(loop);
+    }).catch(err => {
+      document.body.innerHTML = '<p style="color:#f85149;padding:24px">' + err.message + '</p>';
+    });
+  </script>
+</body>
+</html>
