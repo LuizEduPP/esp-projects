@@ -181,6 +181,7 @@ function runtimeModels() {
     deep: CFG.modelDeep,
     whisper: CFG.whisperModel,
     embed: CFG.memoryEmbeddingModel || CFG.modelFast,
+    rerank: CFG.memoryRerankModel,
     whisperDevice: CFG.whisperDevice,
   };
 }
@@ -332,6 +333,12 @@ function buildCfgFromFile(file = getFileData()) {
     memoryGraphMinScore: cfgNum(file, "memory.graphMinScore", "FOLIO_MEMORY_GRAPH_MIN_SCORE"),
     memoryProfileLimit: cfgNum(file, "memory.profileLimit", "FOLIO_MEMORY_PROFILE_LIMIT"),
     memoryMinFactTextLength: cfgNum(file, "memory.minFactTextLength", "FOLIO_MEMORY_MIN_FACT_LEN"),
+
+    memoryRerankEnabled: cfgBool(file, "memory.rerank.enabled", "FOLIO_MEMORY_RERANK"),
+    memoryRerankModel: cfgStr(file, "memory.rerank.model", "FOLIO_MEMORY_RERANK_MODEL") || null,
+    memoryRerankUrl: cfgStr(file, "memory.rerank.url", "FOLIO_MEMORY_RERANK_URL") || null,
+    memoryRerankCandidateLimit: cfgNum(file, "memory.rerank.candidateLimit", "FOLIO_MEMORY_RERANK_CANDIDATES"),
+    memoryRerankTopK: cfgNum(file, "memory.rerank.topK", "FOLIO_MEMORY_RERANK_TOPK"),
 
     defaultLocale: cfgStr(file, "locale", "FOLIO_LOCALE"),
   };

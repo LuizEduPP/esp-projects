@@ -8,6 +8,7 @@ export const ModelSlot = Object.freeze({
   DEEP: "deep",
   WHISPER: "whisper",
   EMBED: "embed",
+  RERANK: "rerank",
 });
 
 export function modelId(slot) {
@@ -20,6 +21,8 @@ export function modelId(slot) {
       return CFG.whisperModel;
     case ModelSlot.EMBED:
       return CFG.memoryEmbeddingModel || CFG.modelFast;
+    case ModelSlot.RERANK:
+      return CFG.memoryRerankModel || CFG.modelFast;
     default:
       throw new Error(`Unknown model slot: ${slot}`);
   }
@@ -51,6 +54,7 @@ export function modelSummary() {
     deep: CFG.modelDeep,
     whisper: CFG.whisperModel,
     embed: CFG.memoryEmbeddingModel || CFG.modelFast,
+    rerank: CFG.memoryRerankModel,
     whisperDevice: CFG.whisperDevice,
   };
 }

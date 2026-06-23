@@ -102,3 +102,10 @@ export function evidenceFooterRule() {
     "End with one short italic line: Evidence: comma-separated evidence IDs used."
   );
 }
+
+export {
+  chroniclerPassBSystem,
+  chroniclerPassCSystem,
+  chroniclerPassDSystem,
+  sanitizeChronicleProse,
+} from "./chronicler.mjs";

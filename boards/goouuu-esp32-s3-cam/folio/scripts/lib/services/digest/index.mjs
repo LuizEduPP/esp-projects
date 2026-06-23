@@ -3,7 +3,15 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CFG, PATHS } from "../../config/index.mjs";
 import { chatCompletion, chatJson } from "../../llm/index.mjs";
-import { dateLabelForDay, evidenceFooterRule, promptLanguageRule } from "../../locale/index.mjs";
+import {
+  chroniclerPassBSystem,
+  chroniclerPassCSystem,
+  chroniclerPassDSystem,
+  dateLabelForDay,
+  evidenceFooterRule,
+  promptLanguageRule,
+  sanitizeChronicleProse,
+} from "../../locale/index.mjs";
 import { modelId, ModelSlot } from "../../models/index.mjs";
 import { errMsg, isoNow, today } from "../../util/index.mjs";
 import {
@@ -373,6 +381,49 @@ function compactMomentsForPass(moments, maxChars = 18_000) {
   return compact;
 }
 
+function buildCrossModalSample(moments, windowMs = CFG.episodeFrameAlignMs, maxPairs = 28) {
+  const utterances = moments.filter((m) => m.text);
+  const frames = moments.filter((m) => m.visual);
+  const pairs = [];
+
+  for (const u of utterances) {
+    const t = Date.parse(u.at);
+    let best = null;
+    let bestDelta = Infinity;
+    for (const f of frames) {
+      const delta = Math.abs(Date.parse(f.at) - t);
+      if (delta <= windowMs && delta < bestDelta) {
+        best = f;
+        bestDelta = delta;
+      }
+    }
+    if (best) {
+      pairs.push({
+        at: u.at,
+        speech: truncateText(u.text, 200),
+        visual: truncateText(best.visual, 140),
+        speech_id: u.id,
+        visual_id: best.id,
+        delta_ms: bestDelta,
+      });
+    }
+  }
+
+  return sampleEvenly(pairs, maxPairs);
+}
+
+function episodeTimeline(episodes) {
+  return episodes.map((ep) => ({
+    id: ep.id,
+    label: truncateText(ep.label, 80),
+    started_at: ep.started_at,
+    ended_at: ep.ended_at,
+    energy: ep.summary?.energy,
+    themes: (ep.summary?.themes ?? []).slice(0, 4),
+    rejected: (ep.summary?.rejected ?? []).slice(0, 4),
+  }));
+}
+
 export async function passA(db, day) {
   const episodes = episodeSummariesForDay(db, day);
   const moments = alignedMomentsForDay(db, day);
@@ -403,23 +454,18 @@ export async function passA(db, day) {
   });
 }
 
-export async function passB(db, day, passAJson, prior, rag) {
+export async function passB(db, day, passAJson, prior, rag, moments) {
   const episodes = episodeSummariesForDay(db, day).map(compactEpisode);
   const profile = rag?.profile?.length ? rag.profile : profileFacts(db).slice(0, CFG.memoryProfileLimit);
+  const aligned = compactMomentsForPass(moments);
+  const crossModal = buildCrossModalSample(moments);
 
   return chatJson({
     model: modelId(ModelSlot.DEEP),
     messages: [
       {
         role: "system",
-        content:
-          "You are Pass B (interpretation). Given Pass A facts and episode semantics, infer meaning: emotional arc, " +
-          "decisions vs brainstorming, what was abandoned, what remains open, cross-modal alignments (speech + visual timing). " +
-          "Use long_term_memory and graph_context when they relate to today — cite memory day + kind, do not invent past events. " +
-          'Reply with valid JSON only — no markdown fences, no // comments, no line breaks inside strings, no **bold**: ' +
-          '{"narrative_arc":"","shifts":[{"at":"","description":"","evidence":[]}],' +
-          '"decisions_real":[{"text":"","evidence":[]}],"open_loops":[],"patterns":[],"tomorrow_pull":[]}. ' +
-          promptLanguageRule(),
+        content: chroniclerPassBSystem(),
       },
       {
         role: "user",
@@ -428,6 +474,9 @@ export async function passB(db, day, passAJson, prior, rag) {
             day,
             pass_a: compactPassJson(passAJson),
             episodes,
+            episode_timeline: episodeTimeline(episodes),
+            aligned_moments: aligned,
+            cross_modal_candidates: crossModal,
             profile,
             prior_day: prior ? compactPassJson(prior, 1) : null,
             long_term_memory: rag?.memories ?? [],
@@ -438,7 +487,7 @@ export async function passB(db, day, passAJson, prior, rag) {
         ),
       },
     ],
-    maxTokens: 3500,
+    maxTokens: 4000,
   });
 }
 
@@ -448,12 +497,7 @@ export async function passC(passAJson, passBJson, moments) {
     messages: [
       {
         role: "system",
-        content:
-          "You are Pass C (critic). Compare Pass B claims to Pass A facts and raw moments. " +
-          "Remove or downgrade any claim lacking evidence. Reply raw JSON: " +
-          '{"approved_claims":[{"text":"","evidence":[],"confidence":0-1}],' +
-          '"rejected_claims":[{"text":"","reason":""}],"evidence_gaps":[]}. ' +
-          promptLanguageRule(),
+        content: chroniclerPassCSystem(),
       },
       {
         role: "user",
@@ -472,30 +516,29 @@ export async function passC(passAJson, passBJson, moments) {
   });
 }
 
-export async function passD(day, passAJson, passBJson, passCJson, prior, rag) {
+export async function passD(day, passAJson, passBJson, passCJson, prior, rag, { existingProse = null } = {}) {
   const dateLabel = dateLabelForDay(day);
+  const incremental = Boolean(existingProse?.trim());
 
-  return chatCompletion({
+  const raw = await chatCompletion({
     model: modelId(ModelSlot.DEEP),
     temperature: CFG.digestPassDTemperature,
-    maxTokens: 2800,
+    maxTokens: 3200,
     messages: [
       {
         role: "system",
         content:
-          "You are Pass D (folio chronicler). Write a single intelligent letter about the person's day. " +
-          promptLanguageRule() +
-          " NO markdown headings, NO bullet lists, NO template sections. Write flowing prose paragraphs like a perceptive analyst who watched the whole day. " +
-          "Include: arc of the day, what mattered vs noise, cross-modal observations (when speech aligned with what was seen), " +
-          "implicit decisions, open threads for tomorrow, continuity with long_term_memory when relevant (patterns, open loops from prior days). " +
+          chroniclerPassDSystem({ incremental }) +
+          " " +
           evidenceFooterRule() +
-          " Only include claims approved in Pass C.",
+          " Only include claims approved in Pass C; cross-modal scenes only from approved_cross_modal.",
       },
       {
         role: "user",
         content: JSON.stringify(
           {
             title: `Folio · ${dateLabel}`,
+            existing_chronicle: incremental ? existingProse : null,
             pass_a: compactPassJson(passAJson, 1),
             pass_b: compactPassJson(passBJson, 1),
             pass_c: compactPassJson(passCJson, 1),
@@ -509,15 +552,18 @@ export async function passD(day, passAJson, passBJson, passCJson, prior, rag) {
       },
     ],
   });
+
+  return sanitizeChronicleProse(raw);
 }
 
-export async function runDigestPipeline(db, day) {
+export async function runDigestPipeline(db, day, { existingProse = null } = {}) {
   console.log(`[digest] rebuilding episodes for ${day}`);
   const episodes = await rebuildEpisodesForDay(db, day);
   buildGraphFromEpisodes(db, day, episodes);
 
   const prior = priorDayRollup(db, day);
   const episodeSummaries = () => episodeSummariesForDay(db, day);
+  const moments = alignedMomentsForDay(db, day);
 
   console.log("[digest] pass A — facts");
   const a = await passA(db, day);
@@ -528,12 +574,11 @@ export async function runDigestPipeline(db, day) {
   });
 
   console.log("[digest] pass B — interpretation");
-  const b = await passB(db, day, a, prior, rag);
-  const moments = alignedMomentsForDay(db, day);
+  const b = await passB(db, day, a, prior, rag, moments);
   console.log("[digest] pass C — critique");
   const c = await passC(a, b, moments);
-  console.log("[digest] pass D — prose");
-  const prose = await passD(day, a, b, c, prior, rag);
+  console.log(`[digest] pass D — prose${existingProse ? " (incremental)" : ""}`);
+  const prose = await passD(day, a, b, c, prior, rag, { existingProse });
 
   const evidence = {
     approved: c.approved_claims ?? [],
@@ -615,7 +660,10 @@ export async function runDigestForDay(db, day, { force = false } = {}) {
     return { skipped: true, day, reason: check.reason };
   }
 
-  const result = await runDigestPipeline(db, day);
+  const existing = getDigest(db, day);
+  const result = await runDigestPipeline(db, day, {
+    existingProse: !force && existing?.prose ? existing.prose : null,
+  });
   const mdPath = saveDigestMarkdown(day, result.prose);
   console.log(`[digest] ${day} saved ${mdPath} (${check.reason ?? "forced"})`);
   return { skipped: false, day, prose: result.prose, path: mdPath };
@@ -624,8 +672,11 @@ export async function runDigestForDay(db, day, { force = false } = {}) {
 export function startDigestLoop(intervalMs = CFG.digestIntervalMs) {
   let busy = false;
   let lastDay = today();
+  const checkMs = Math.min(intervalMs, 300_000);
 
-  console.log(`[digest] auto every ${intervalMs}ms — refreshes when new witness data arrives`);
+  console.log(
+    `[digest] auto every ${checkMs}ms — refreshes when new witness data arrives`,
+  );
 
   const tick = async () => {
     if (busy) {
@@ -651,6 +702,6 @@ export function startDigestLoop(intervalMs = CFG.digestIntervalMs) {
     }
   };
 
-  setInterval(tick, intervalMs);
-  setTimeout(tick, 20000);
+  setInterval(tick, checkMs);
+  setTimeout(tick, 15_000);
 }

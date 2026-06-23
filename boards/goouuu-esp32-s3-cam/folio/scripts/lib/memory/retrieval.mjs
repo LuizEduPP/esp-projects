@@ -6,6 +6,7 @@ import {
 } from "../db/index.mjs";
 import { dayOffset } from "../util/time.mjs";
 import { embedText, scorePair } from "./embeddings.mjs";
+import { applyRerank } from "./rerank.mjs";
 import { tokenize } from "./lexical.mjs";
 
 export function buildMemoryQuery(day, episodes, passAJson = null) {
@@ -34,8 +35,12 @@ export async function retrieveMemories(db, queryText, { day, limit = CFG.memoryR
     return [];
   }
 
+  const candidateLimit = CFG.memoryRerankEnabled
+    ? Math.max(CFG.memoryRerankCandidateLimit, limit)
+    : limit;
+
   const queryEmbed = await embedText(queryText);
-  return rows
+  let candidates = rows
     .map((row) => ({
       id: row.id,
       day: row.day,
@@ -46,7 +51,13 @@ export async function retrieveMemories(db, queryText, { day, limit = CFG.memoryR
     }))
     .filter((r) => r.score >= CFG.memoryMinScore)
     .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+    .slice(0, candidateLimit);
+
+  if (CFG.memoryRerankEnabled && candidates.length > 1) {
+    candidates = await applyRerank(queryText, candidates);
+  }
+
+  return candidates.slice(0, limit);
 }
 
 export function retrieveGraphContext(db, day, queryText, limit = CFG.memoryGraphRetrieveLimit) {
@@ -100,6 +111,7 @@ export async function buildRagContext(db, day, { episodes, passAJson }) {
       text: m.text,
       evidence: m.evidence,
       score: Number(m.score.toFixed(3)),
+      rerank_score: m.rerank_score != null ? Number(m.rerank_score.toFixed(3)) : null,
     })),
     graph,
     profile,

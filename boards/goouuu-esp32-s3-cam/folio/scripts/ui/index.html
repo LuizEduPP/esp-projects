@@ -47,6 +47,7 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 .row button.primary{border-color:var(--accent);color:var(--accent)}
 .row button:disabled{opacity:.5;cursor:not-allowed}
 .prose{font-family:var(--serif);line-height:1.7;white-space:pre-wrap}
+.prose.muted-prose{color:var(--muted);font-style:italic}
 .empty{color:var(--muted);font-style:italic;padding:24px;text-align:center;border:1px dashed var(--line);border-radius:var(--r)}
 .feed{display:flex;flex-direction:column;gap:12px}
 .item{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
@@ -100,9 +101,6 @@ audio{width:100%;margin-top:8px}
     <h2>Crônica</h2>
     <p class="muted" id="digest-meta"></p>
     <div class="prose" id="digest"></div>
-    <div class="row" style="margin-top:12px">
-      <button type="button" class="primary" id="btn-digest">Gerar digest agora</button>
-    </div>
   </section>
   <section class="panel">
     <div class="row" style="justify-content:space-between;align-items:center">
@@ -150,6 +148,10 @@ audio{width:100%;margin-top:8px}
   <section class="panel">
     <p class="muted" id="cfg-info"></p>
     <p class="muted" id="cfg-runtime"></p>
+    <div class="row" style="margin-bottom:12px">
+      <button type="button" id="cfg-lm-refresh">Atualizar modelos do LM Studio</button>
+      <span class="muted" id="cfg-lm-status"></span>
+    </div>
     <form id="cfg-form"></form>
     <div class="row" style="margin-top:16px">
       <button type="submit" form="cfg-form" class="primary">Salvar</button>
@@ -167,18 +169,26 @@ const $=id=>document.getElementById(id);
 let day=new URLSearchParams(location.search).get("day")||new Date().toISOString().slice(0,10);
 let filter="all";
 let cfgCache=null;
+let lmModels={chat:[],embed:[],rerank:[],ok:false};
+
+const LOCALE_OPTS=["pt-BR","pt-PT","en-US","en-GB","es-ES","fr-FR","de-DE"];
+const WHISPER_MODELS=["tiny","base","small","medium","large-v3","large-v3-turbo"];
+const WHISPER_LANG_OPTS=[
+  {v:"",l:"auto (locale)"},{v:"pt",l:"português"},{v:"en",l:"english"},{v:"es",l:"español"},
+  {v:"fr",l:"français"},{v:"de",l:"deutsch"},{v:"it",l:"italiano"},{v:"ja",l:"japanese"},{v:"zh",l:"chinese"},
+];
 
 /** Alinhado com folio.config.example.json */
 const SECTIONS=[
   {title:"Geral",fields:[
-    {path:"locale",label:"Idioma",type:"text"},
+    {path:"locale",label:"Idioma",type:"select",options:LOCALE_OPTS},
     {path:"port",label:"Porta HTTP",type:"number",hint:"Reinicia brain"},
     {path:"dataDir",label:"Pasta de dados",type:"text",hint:"Reinicia brain · vazio = ~/.folio"},
   ]},
   {title:"LM Studio",fields:[
-    {path:"lm.url",label:"URL chat/completions",type:"text"},
-    {path:"lm.model",label:"Modelo rápido",type:"text"},
-    {path:"lm.modelDeep",label:"Modelo deep (digest)",type:"text",hint:"Vazio = igual ao rápido"},
+    {path:"lm.url",label:"URL chat/completions",type:"text",hint:"Salve e clique Atualizar modelos"},
+    {path:"lm.model",label:"Modelo rápido",type:"lmSelect",pool:"chat"},
+    {path:"lm.modelDeep",label:"Modelo deep (digest)",type:"lmSelect",pool:"chat",emptyOption:"(igual ao rápido)"},
   ]},
   {title:"Áudio (ESP + brain)",fields:[
     {path:"audio.chunkMs",label:"Chunk (ms)",type:"number",hint:"Reflash ESP se mudar"},
@@ -190,10 +200,10 @@ const SECTIONS=[
   ]},
   {title:"Whisper",fields:[
     {path:"audio.whisperBin",label:"Binário",type:"text"},
-    {path:"audio.whisperModel",label:"Modelo",type:"text"},
+    {path:"audio.whisperModel",label:"Modelo",type:"select",options:WHISPER_MODELS},
     {path:"audio.whisperDevice",label:"Device",type:"select",options:["cuda","auto","cpu","mps"]},
     {path:"audio.whisperTimeoutMs",label:"Timeout (ms)",type:"number"},
-    {path:"audio.whisperLanguage",label:"Idioma",type:"text",hint:"Vazio = auto do locale"},
+    {path:"audio.whisperLanguage",label:"Idioma STT",type:"select",options:WHISPER_LANG_OPTS.map(o=>o.v),labels:WHISPER_LANG_OPTS},
   ]},
   {title:"Câmera / visão",fields:[
     {path:"frames.captureIntervalMs",label:"Intervalo captura (ms)",type:"number"},
@@ -233,13 +243,20 @@ const SECTIONS=[
     {path:"memory.retrieveLimit",label:"Limite retrieve",type:"number"},
     {path:"memory.minScore",label:"Score mínimo",type:"number",step:"0.01"},
     {path:"memory.useEmbeddings",label:"Embeddings LM",type:"bool"},
-    {path:"memory.embeddingModel",label:"Modelo embed",type:"text"},
-    {path:"memory.embeddingsUrl",label:"URL embeddings",type:"text"},
+    {path:"memory.embeddingModel",label:"Modelo embed",type:"lmSelect",pool:"embed",emptyOption:"(padrão / rápido)"},
+    {path:"memory.embeddingsUrl",label:"URL embeddings",type:"text",hint:"Vazio = derivado da URL LM"},
     {path:"memory.fallbackLexical",label:"Fallback lexical",type:"bool"},
     {path:"memory.graphRetrieveLimit",label:"Grafo limit",type:"number"},
     {path:"memory.graphMinScore",label:"Grafo min score",type:"number",step:"0.01"},
     {path:"memory.profileLimit",label:"Profile limit",type:"number"},
     {path:"memory.minFactTextLength",label:"Min fact length",type:"number"},
+  ]},
+  {title:"Rerank (memória)",fields:[
+    {path:"memory.rerank.enabled",label:"Ativo",type:"bool"},
+    {path:"memory.rerank.model",label:"Modelo rerank",type:"lmSelect",pool:"rerank",emptyOption:"(escolher…)"},
+    {path:"memory.rerank.url",label:"URL rerank",type:"text",hint:"Vazio = {LM}/v1/rerank · LM Studio pode não ter endpoint nativo"},
+    {path:"memory.rerank.candidateLimit",label:"Candidatos antes rerank",type:"number"},
+    {path:"memory.rerank.topK",label:"Top-K após rerank",type:"number"},
   ]},
   {title:"ESP (node)",fields:[
     {path:"node.wifiRetryMs",label:"WiFi retry (ms)",type:"number"},
@@ -332,30 +349,62 @@ async function loadPills(){
     `<span class="pill">:${location.port||"__PORT__"}</span>`;
 }
 
+function todayStr(){
+  return new Date().toISOString().slice(0,10);
+}
+
+function renderChronicle(d, st, items){
+  const isToday=day===todayStr();
+  const mins=Math.max(1,Math.round((st.interval_ms||300000)/60000));
+  const hasWitness=(st.stats&&(st.stats.frames+st.stats.utterances+st.stats.speech>0))||
+    items.some(i=>i.type==="frame"||(i.type==="audio"&&i.speech));
+
+  if(d.prose){
+    $("digest").textContent=d.prose;
+    $("digest").classList.remove("muted-prose");
+    $("digest-meta").textContent=isToday
+      ?`Automático · atualizado ${time(d.updated_at)} · renova a cada ~${mins} min se houver dado novo`
+      :`Atualizado ${time(d.updated_at)}`;
+    return;
+  }
+
+  $("digest").classList.add("muted-prose");
+  if(!hasWitness){
+    $("digest").textContent=isToday
+      ?"Aguardando witness do ESP (fala ou frames)…"
+      :"Nenhuma crônica para este dia.";
+    $("digest-meta").textContent=isToday?"Crônica automática ao longo do dia":"";
+    return;
+  }
+
+  if(st.run){
+    $("digest").textContent="Coletando o dia — crônica será gerada em instantes…";
+    $("digest-meta").textContent=`Automático · varredura a cada ~${mins} min · dados novos detectados`;
+    return;
+  }
+
+  if(st.reason==="up_to_date"&&st.has_prose===false){
+    $("digest").textContent="Witness registrado — aguardando próxima varredura do digest…";
+  }else{
+    $("digest").textContent="Processando o dia — crônica em preparação…";
+  }
+  $("digest-meta").textContent=`Automático · varredura a cada ~${mins} min`;
+}
+
 async function loadDay(){
-  const [tl,d]=await Promise.all([
+  const [tl,d,st]=await Promise.all([
     fetch("/api/timeline?day="+day).then(r=>r.json()),
     fetch("/api/digest?day="+day).then(r=>r.json()).catch(()=>({})),
+    fetch("/api/digest/status?day="+day).then(r=>r.json()).catch(()=>({})),
   ]);
   const items=tl.items||[];
   const fr=items.filter(i=>i.type==="frame").length;
   const sp=items.filter(i=>i.type==="audio"&&i.speech).length;
   $("feed-stats").textContent=`${fr} frames · ${sp} chunks de fala`;
-  $("digest").textContent=d.prose||"Sem crônica ainda — dados chegam do ESP e o digest roda automaticamente.";
-  $("digest-meta").textContent=d.updated_at?`Atualizado ${time(d.updated_at)}`:"";
+  renderChronicle(d,st,items);
   renderFeed(items);
   loadPills();
 }
-
-$("btn-digest").onclick=async()=>{
-  $("btn-digest").disabled=true;
-  try{
-    const r=await fetch("/api/digest/run?day="+day,{method:"POST"}).then(x=>x.json());
-    toast(r.skipped?"Digest já atualizado":"Digest gerado");
-    loadDay();
-  }catch(e){toast("Erro: "+e.message);}
-  $("btn-digest").disabled=false;
-};
 
 async function loadSystem(){
   const [h,dev,mem]=await Promise.all([
@@ -378,7 +427,7 @@ async function loadSystem(){
   $("mem-stats").textContent=`${mem.chunks??0} chunks indexados`;
   $("mem-profile").textContent=JSON.stringify(mem.profile||[],null,2);
   if(mem.hits?.length){
-    $("mem-hits").innerHTML=mem.hits.map(h=>`<div class="mem-hit"><strong>${esc(h.day)}</strong> ${esc(h.kind)} score ${h.score?.toFixed?.(2)}<br>${esc(h.text)}</div>`).join("");
+    $("mem-hits").innerHTML=mem.hits.map(h=>`<div class="mem-hit"><strong>${esc(h.day)}</strong> ${esc(h.kind)} score ${(h.rerank_score??h.score)?.toFixed?.(2)}<br>${esc(h.text)}</div>`).join("");
   }
 }
 
@@ -409,7 +458,7 @@ $("mem-search").onclick=async()=>{
   const q=$("mem-q").value;
   const r=await fetch("/api/memory?day="+day+"&q="+encodeURIComponent(q)).then(x=>x.json());
   $("mem-hits").innerHTML=(r.hits||[]).length
-    ?r.hits.map(h=>`<div class="mem-hit"><strong>${esc(h.day)}</strong> ${esc(h.kind)} score ${h.score?.toFixed?.(2)}<br>${esc(h.text)}</div>`).join("")
+    ?r.hits.map(h=>`<div class="mem-hit"><strong>${esc(h.day)}</strong> ${esc(h.kind)} score ${(h.rerank_score??h.score)?.toFixed?.(2)}<br>${esc(h.text)}</div>`).join("")
     :"<p class=\"muted\">Nenhum hit.</p>";
 };
 $("mem-q").onkeydown=e=>{if(e.key==="Enter")$("mem-search").click();};
@@ -423,9 +472,16 @@ function buildConfigForm(){
         <select id="${id}" data-path="${f.path}"><option value="true">sim</option><option value="false">não</option></select>
         ${f.hint?`<div class="hint">${f.hint}</div>`:""}</div>`;
     }
-    if(f.type==="select"){
+    if(f.type==="lmSelect"){
       return `<div class="field"><label for="${id}">${f.label}</label>
-        <select id="${id}" data-path="${f.path}">${f.options.map(o=>`<option value="${o}">${o}</option>`).join("")}</select>
+        <select id="${id}" data-path="${f.path}" data-lm-pool="${f.pool}" data-empty="${f.emptyOption||""}"></select>
+        ${f.hint?`<div class="hint">${f.hint}</div>`:""}</div>`;
+    }
+    if(f.type==="select"){
+      const opts=(f.labels||f.options.map(o=>({v:o,l:o})))
+        .map(o=>`<option value="${typeof o==="string"?o:o.v}">${typeof o==="string"?o:o.l}</option>`).join("");
+      return `<div class="field"><label for="${id}">${f.label}</label>
+        <select id="${id}" data-path="${f.path}">${opts}</select>
         ${f.hint?`<div class="hint">${f.hint}</div>`:""}</div>`;
     }
     return `<div class="field"><label for="${id}">${f.label}</label>
@@ -434,20 +490,61 @@ function buildConfigForm(){
   }).join("")}</div>`).join("");
 }
 
+function fillLmSelects(){
+  document.querySelectorAll("[data-lm-pool]").forEach(sel=>{
+    const pool=sel.dataset.lmPool;
+    const cur=sel.value;
+    const list=lmModels[pool]?.length?lmModels[pool]:
+      (pool==="rerank"?(lmModels.all||[]).filter(id=>/rerank/i.test(id)):[]);
+    const empty=sel.dataset.empty;
+    let html=empty?`<option value="">${empty}</option>`:"";
+    html+=list.map(id=>`<option value="${esc(id)}">${esc(id)}</option>`).join("");
+    if(!list.length){
+      html+=`<option value="" disabled>(nenhum no LM Studio)</option>`;
+    }
+    sel.innerHTML=html;
+    if(cur)sel.value=cur;
+  });
+}
+
+async function refreshLmModels(){
+  $("cfg-lm-status").textContent="Conectando ao LM Studio…";
+  const r=await fetch("/api/lm/models").then(x=>x.json());
+  if(r.ok){
+    lmModels=r;
+    $("cfg-lm-status").textContent=`${r.chat.length} chat · ${r.embed.length} embed · ${r.rerank.length} rerank`;
+    fillLmSelects();
+  }else{
+    $("cfg-lm-status").textContent=`Erro: ${r.error}`;
+  }
+  return r;
+}
+
+function applyConfigToForm(cfg){
+  document.querySelectorAll("[data-path]").forEach(el=>{
+    const v=get(cfg,el.dataset.path);
+    if(el.tagName==="SELECT"&&el.querySelector('option[value="true"]')&&!el.dataset.lmPool){
+      el.value=v===false||v==="false"?"false":"true";
+    }else{
+      el.value=v==null?"":v;
+    }
+  });
+  fillLmSelects();
+  document.querySelectorAll("[data-path]").forEach(el=>{
+    const v=get(cfg,el.dataset.path);
+    if(v!=null&&v!=="")el.value=v;
+  });
+}
+
 function loadConfigForm(){
-  fetch("/api/config").then(r=>r.json()).then(cfg=>{
+  fetch("/api/config").then(r=>r.json()).then(async cfg=>{
     cfgCache=cfg;
     $("cfg-info").textContent=`${cfg.configPath||"defaults"} · hash ${cfg.version||"?"}`;
     const rt=cfg.runtime||{},m=rt.models||{};
-    $("cfg-runtime").textContent=`Whisper: ${rt.whisperDeviceEffective} · CUDA: ${rt.cudaAvailable?"sim":"não"} · modelos: ${m.fast} / ${m.deep} / ${m.whisper}`;
-    document.querySelectorAll("[data-path]").forEach(el=>{
-      const v=get(cfg,el.dataset.path);
-      if(el.tagName==="SELECT"&&el.querySelector('option[value="true"]')){
-        el.value=v===false||v==="false"?"false":"true";
-      }else{
-        el.value=v==null?"":v;
-      }
-    });
+    $("cfg-runtime").textContent=`Whisper: ${rt.whisperDeviceEffective} · CUDA: ${rt.cudaAvailable?"sim":"não"} · fast=${m.fast} · deep=${m.deep} · embed=${m.embed} · rerank=${m.rerank||"—"}`;
+    applyConfigToForm(cfg);
+    await refreshLmModels();
+    applyConfigToForm(cfg);
   });
 }
 
@@ -475,12 +572,13 @@ $("cfg-form").onsubmit=async e=>{
 };
 
 $("cfg-reload").onclick=loadConfigForm;
+$("cfg-lm-refresh").onclick=refreshLmModels;
 
 $("lb-close").onclick=()=>$("lightbox").classList.remove("open");
 $("lightbox").onclick=e=>{if(e.target.id==="lightbox")$("lightbox").classList.remove("open");};
 
 loadDay();
-setInterval(()=>{loadPills();if(!$("view-day").hidden)loadDay();},12000);
+setInterval(()=>{loadPills();if(!$("view-day").hidden)loadDay();},15000);
 </script>
 </body>
 </html>

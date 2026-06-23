@@ -41,8 +41,8 @@
   },
   "digest": {
     "auto": true,
-    "intervalMs": 1800000,
-    "passDTemperature": 0.35
+    "intervalMs": 300000,
+    "passDTemperature": 0.42
   },
   "episodes": {
     "gapMin": 12,
@@ -66,7 +66,14 @@
     "graphMinScore": 0.15,
     "profileLimit": 32,
     "minFactTextLength": 5,
-    "fallbackLexical": false
+    "fallbackLexical": false,
+    "rerank": {
+      "enabled": false,
+      "model": null,
+      "url": null,
+      "candidateLimit": 40,
+      "topK": 14
+    }
   },
   "node": {
     "wifiRetryMs": 5000,

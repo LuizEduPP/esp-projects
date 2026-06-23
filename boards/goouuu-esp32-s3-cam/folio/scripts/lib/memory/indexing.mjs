@@ -65,6 +65,18 @@ function* iterDigestProfileFacts(passB, passC) {
       };
     }
   }
+
+  for (const cm of passC?.approved_cross_modal ?? []) {
+    if (factLongEnough(cm.inference)) {
+      const rule = DIGEST_FACT_RULES.claim;
+      yield {
+        ...rule,
+        text: cm.inference,
+        confidence: cm.confidence ?? rule.confidence,
+        evidence: cm.evidence ?? [],
+      };
+    }
+  }
 }
 
 export function syncDigestProfile(db, day, passB, passC) {

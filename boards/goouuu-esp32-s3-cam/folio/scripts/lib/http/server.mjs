@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { resolve } from "node:path";
 import { CFG, nodeConfigPayload, publicConfig, updateConfig } from "../config/index.mjs";
-import { runDigestForDay } from "../services/index.mjs";
+import { runDigestForDay, needsDigestRefresh } from "../services/digest/index.mjs";
 import { runPendingQueueOnce } from "../services/pipeline/index.mjs";
 import { reindexMemoriesFromDigests } from "../memory/index.mjs";
 import {
@@ -20,6 +20,7 @@ import {
 } from "../db/index.mjs";
 import { ingestAudioChunk, ingestFrame, ingestEvent } from "../services/index.mjs";
 import { retrieveMemories } from "../memory/index.mjs";
+import { fetchLmModels } from "../llm/models-catalog.mjs";
 import { errMsg, pcmToWav, sendBytes, sendJson, today } from "../util/index.mjs";
 
 let quietSkipCount = 0;
@@ -208,6 +209,22 @@ export function createFolioServer(viewHtml) {
         return;
       }
 
+      if (path === "/api/digest/status") {
+        const day = qs.get("day") ?? today();
+        const db = openDb();
+        const check = needsDigestRefresh(db, day);
+        const row = getDigest(db, day);
+        sendJson(res, 200, {
+          day,
+          auto: CFG.digestAuto,
+          interval_ms: CFG.digestIntervalMs,
+          has_prose: Boolean(row?.prose),
+          updated_at: row?.updated_at ?? null,
+          ...check,
+        });
+        return;
+      }
+
       if (path === "/api/digest/run" && req.method === "POST") {
         const day = qs.get("day") ?? today();
         const db = openDb();
@@ -248,6 +265,11 @@ export function createFolioServer(viewHtml) {
 
       if (path === "/api/config" && req.method === "GET") {
         sendJson(res, 200, publicConfig());
+        return;
+      }
+
+      if (path === "/api/lm/models" && req.method === "GET") {
+        sendJson(res, 200, await fetchLmModels());
         return;
       }
 
