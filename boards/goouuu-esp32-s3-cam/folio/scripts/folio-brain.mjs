@@ -29,16 +29,17 @@ function main() {
       `audio: chunk=${CFG.audioChunkMs}ms rate=${CFG.audioSampleRate} ` +
         `speech≥${CFG.speechEnergyThreshold} retention=${CFG.audioRetentionDays}d`,
     );
-    console.log(`models: fast=${CFG.modelFast} deep=${CFG.modelDeep}`);
+    console.log(`models: ${CFG.modelFast} · locale: ${activeLocale()} (${promptLanguageName()})`);
     console.log(
-      `locale: ${activeLocale()} (${promptLanguageName()}) · whisper=${whisperLanguageCode()} @ ${CFG.whisperBin}`,
+      `whisper: ${CFG.whisperBin} model=${CFG.whisperModel} device=${CFG.whisperDevice} ` +
+        `lang=${whisperLanguageCode()}`,
     );
   });
 
   if (CFG.pipelineEnabled) {
     startProcessingLoop();
   } else {
-    console.log("[worker] disabled (FOLIO_PIPELINE=0) — run: yarn folio process");
+    console.log("[worker] disabled (FOLIO_PIPELINE=0) — set pipeline.enabled in config");
   }
 
   if (CFG.digestAuto) {

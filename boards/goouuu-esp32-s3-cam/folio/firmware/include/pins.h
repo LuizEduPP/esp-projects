@@ -1,11 +1,27 @@
 #pragma once
 
-// GOOUUU ESP32-S3-CAM — folio-node (passive witness)
-// Camera pins match rc-car; I2S INMP441 from project-twelve reference.
+// GOOUUU ESP32-S3-CAM — see firmware/PINOUT.md (ESP32-S3 map + Folio wiring).
+//
+// INMP441 I2S (module pin "SD" = serial data, NOT the microSD slot):
+//   WS=GPIO1  SCK=GPIO2  DOUT=GPIO21
+// Keyestudio KS5028 diagram uses DOUT=GPIO42 (MTMS / JTAG block) — do not use on Folio.
+//
+// microSD slot (SD_MMC 1-bit, separate from I2S):
+//   CLK=GPIO39  CMD=GPIO38  D0=GPIO40
+//
+// Strap pins: GPIO0, GPIO3, GPIO45, GPIO46 — do not use for peripherals.
 
+#ifndef PIN_I2S_WS
 #define PIN_I2S_WS  1
+#endif
+#ifndef PIN_I2S_SCK
 #define PIN_I2S_SCK 2
-#define PIN_I2S_SD  42
+#endif
+#ifndef PIN_I2S_DOUT
+#define PIN_I2S_DOUT 21
+#endif
+/** INMP441 datasheet label for the data pin — not the microSD card. */
+#define PIN_I2S_SD PIN_I2S_DOUT
 
 #define CAM_LEDC_CHANNEL LEDC_CHANNEL_1
 #define CAM_LEDC_TIMER   LEDC_TIMER_1
@@ -27,7 +43,6 @@
 #define CAM_PIN_HREF   7
 #define CAM_PIN_PCLK   13
 
-// SD_MMC 1-bit (GOOUUU ESP32-S3-CAM v1.3)
 #define SD_PIN_CLK  39
 #define SD_PIN_CMD  38
 #define SD_PIN_D0   40

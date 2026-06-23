@@ -5,11 +5,16 @@
 
 #include "audio_capture.h"
 
+#ifndef FOLIO_MICROSD_SPOOL
+#define FOLIO_MICROSD_SPOOL 1
+#endif
+
 bool spoolBegin();
 bool spoolOk();
-/** Re-mount if needed; returns false when no SD (push-only mode). */
+/** Re-mount microSD if needed. Required when FOLIO_MICROSD_SPOOL=1. */
 bool spoolEnsure();
 void spoolTick();
+bool spoolRequired();
 
 bool spoolSaveAudio(uint32_t seq, const int16_t *pcm, const char *meta);
 bool spoolSaveFrame(uint32_t id, const uint8_t *jpeg, size_t len, const char *meta);

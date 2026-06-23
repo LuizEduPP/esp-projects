@@ -154,7 +154,7 @@ The brain runs passes A→D **automatically** when new witness data arrives (che
 
 Witness payloads are **compacted** before each LM call (sampled moments, truncated text) to fit typical 16k context. If LM Studio still errors, reload the model with a larger context length.
 
-Manual override: `yarn folio:digest` or `POST /api/digest/run?day=…`
+Manual override: `POST /api/digest/run?day=…` or `node scripts/folio.mjs digest --day …`
 
 ## Continuity across days
 

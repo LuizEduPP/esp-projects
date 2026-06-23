@@ -22,9 +22,16 @@ function findWhisperJson(outDir, wavPath) {
   return null;
 }
 
-export async function transcribeWav(wavPath) {
+export async function transcribeWav(wavPath, { chunkId } = {}) {
+  const tag = chunkId != null ? `chunk=${chunkId}` : basename(wavPath);
   const outDir = join(tmpdir(), `folio-whisper-${Date.now()}-${process.pid}`);
   mkdirSync(outDir, { recursive: true });
+  const t0 = Date.now();
+
+  console.log(
+    `[whisper] ${tag} start model=${CFG.whisperModel} lang=${whisperLanguageCode()} ` +
+      `device=${CFG.whisperDevice} bin=${CFG.whisperBin}`,
+  );
 
   try {
     await execFileAsync(
@@ -60,14 +67,24 @@ export async function transcribeWav(wavPath) {
       end: s.end,
       text: String(s.text ?? "").trim(),
     }));
+    const ms = Date.now() - t0;
+    if (text) {
+      const preview = text.length > 160 ? `${text.slice(0, 160)}…` : text;
+      console.log(`[whisper] ${tag} ok ${ms}ms (${segments.length} seg) "${preview}"`);
+    } else {
+      console.log(`[whisper] ${tag} empty ${ms}ms — no speech in audio`);
+    }
     return { text, segments, confidence: segments.length ? 0.85 : 0 };
   } catch (err) {
+    const ms = Date.now() - t0;
     if (err.code === "ENOENT") {
+      console.error(`[whisper] ${tag} fail ${ms}ms — CLI not found (${CFG.whisperBin})`);
       throw new Error(
         `Whisper CLI not found (${CFG.whisperBin}). Install openai-whisper or set FOLIO_WHISPER_BIN.`,
       );
     }
     const detail = err.stderr?.toString?.() || err.stdout?.toString?.() || err.message;
+    console.error(`[whisper] ${tag} fail ${ms}ms — ${String(detail).split("\n").slice(-2).join(" ").trim()}`);
     throw new Error(`Whisper failed: ${String(detail).split("\n").slice(-3).join(" ").trim()}`);
   } finally {
     try {

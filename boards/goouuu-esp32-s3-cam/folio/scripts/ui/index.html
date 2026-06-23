@@ -200,26 +200,14 @@ audio{width:100%;height:40px;border-radius:8px}
     </div>
     <p class="chronicle-meta" id="cfg-meta">Synced with ESP via /api/node/config</p>
     <form id="settings-form">
-      <div class="settings-section">Locale &amp; pipeline</div>
+      <div class="settings-section">Brain</div>
       <div class="settings-grid">
         <div class="field"><label>Locale</label><input name="locale" id="cfg-locale"/></div>
         <div class="field"><label>Speech threshold</label><input name="speechEnergyThreshold" id="cfg-speech" type="number" step="0.001"/></div>
-        <div class="field"><label>Pipeline interval (ms)</label><input name="pipelineIntervalMs" id="cfg-pipe-int" type="number"/></div>
-        <div class="field"><label>Retention sweep (ms)</label><input name="retentionSweepMs" id="cfg-ret-sweep" type="number"/></div>
-        <div class="field"><label>Frame caption gap (ms)</label><input name="captionIntervalMs" id="cfg-cap-int" type="number"/></div>
-      </div>
-      <div class="settings-section">Worker (queue scaling)</div>
-      <div class="settings-grid">
-        <div class="field"><label>Backlog high</label><input name="backlogHigh" id="cfg-worker-high" type="number"/></div>
-        <div class="field"><label>Backlog medium</label><input name="backlogMedium" id="cfg-worker-med" type="number"/></div>
-        <div class="field"><label>Batch max (high)</label><input name="batchMaxHigh" id="cfg-worker-batch-hi" type="number"/></div>
-        <div class="field"><label>Batch max (medium)</label><input name="batchMaxMedium" id="cfg-worker-batch-med" type="number"/></div>
-      </div>
-      <div class="settings-section">Episodes &amp; digest</div>
-      <div class="settings-grid">
+        <div class="field"><label>LM URL</label><input name="lmUrl" id="cfg-lm-url" type="url"/></div>
+        <div class="field"><label>LM model</label><input name="lmModel" id="cfg-lm-model"/></div>
+        <div class="field"><label>Whisper model</label><input name="whisperModel" id="cfg-whisper-model"/></div>
         <div class="field"><label>Episode gap (min)</label><input name="gapMin" id="cfg-ep-gap" type="number"/></div>
-        <div class="field"><label>Frame align window (ms)</label><input name="frameAlignMs" id="cfg-ep-align" type="number"/></div>
-        <div class="field"><label>Pass D temperature</label><input name="passDTemperature" id="cfg-digest-temp" type="number" step="0.01"/></div>
       </div>
       <div class="settings-section">ESP node (synced)</div>
       <div class="settings-grid">
@@ -233,26 +221,6 @@ audio{width:100%;height:40px;border-radius:8px}
         <div class="field"><label>WiFi retry (ms)</label><input name="wifiRetryMs" id="cfg-wifi" type="number"/></div>
         <div class="field"><label>Push backoff max (ms)</label><input name="pushBackoffMaxMs" id="cfg-backoff" type="number"/></div>
         <div class="field"><label>Status interval (ms)</label><input name="statusIntervalMs" id="cfg-status" type="number"/></div>
-      </div>
-      <div class="settings-section">Memory (RAG)</div>
-      <div class="settings-grid">
-        <div class="field"><label>Lookback days</label><input name="lookbackDays" id="cfg-mem-days" type="number"/></div>
-        <div class="field"><label>Retrieve limit</label><input name="retrieveLimit" id="cfg-mem-limit" type="number"/></div>
-        <div class="field"><label>Min score</label><input name="minScore" id="cfg-mem-min-score" type="number" step="0.01"/></div>
-        <div class="field"><label>Graph retrieve limit</label><input name="graphRetrieveLimit" id="cfg-mem-graph-limit" type="number"/></div>
-        <div class="field"><label>Graph min score</label><input name="graphMinScore" id="cfg-mem-graph-score" type="number" step="0.01"/></div>
-        <div class="field"><label>Profile limit</label><input name="profileLimit" id="cfg-mem-profile" type="number"/></div>
-        <div class="field"><label>Min fact length</label><input name="minFactTextLength" id="cfg-mem-fact-len" type="number"/></div>
-        <div class="field"><label>Fallback lexical</label>
-          <select name="fallbackLexical" id="cfg-mem-fallback">
-            <option value="false">false</option><option value="true">true</option>
-          </select>
-        </div>
-        <div class="field"><label>Use embeddings</label>
-          <select name="useEmbeddings" id="cfg-mem-embed">
-            <option value="false">false</option><option value="true">true</option>
-          </select>
-        </div>
       </div>
       <div class="settings-actions">
         <button type="submit" class="primary">Save &amp; sync</button>
@@ -466,32 +434,17 @@ async function loadSettings(){
   ]);
   $('cfg-locale').value=cfg.locale;
   $('cfg-speech').value=cfg.audio.speechEnergyThreshold;
-  $('cfg-pipe-int').value=cfg.pipeline.intervalMs;
-  $('cfg-ret-sweep').value=cfg.audio.retentionSweepMs;
-  $('cfg-cap-int').value=cfg.frames.captionIntervalMs;
-  $('cfg-worker-high').value=cfg.worker.backlogHigh;
-  $('cfg-worker-med').value=cfg.worker.backlogMedium;
-  $('cfg-worker-batch-hi').value=cfg.worker.batchMaxHigh;
-  $('cfg-worker-batch-med').value=cfg.worker.batchMaxMedium;
+  $('cfg-lm-url').value=cfg.lm.url;
+  $('cfg-lm-model').value=cfg.lm.model||cfg.lm.modelFast||'';
+  $('cfg-whisper-model').value=cfg.audio.whisperModel;
   $('cfg-ep-gap').value=cfg.episodes.gapMin;
-  $('cfg-ep-align').value=cfg.episodes.frameAlignMs;
-  $('cfg-digest-temp').value=cfg.digest.passDTemperature;
   $('cfg-frame-int').value=cfg.frames.captureIntervalMs;
   $('cfg-jpeg').value=cfg.frames.jpegQuality;
   $('cfg-frame-size').value=cfg.frames.size;
   $('cfg-wifi').value=cfg.node.wifiRetryMs;
   $('cfg-backoff').value=cfg.node.pushBackoffMaxMs;
   $('cfg-status').value=cfg.node.statusIntervalMs;
-  $('cfg-mem-days').value=cfg.memory.lookbackDays;
-  $('cfg-mem-limit').value=cfg.memory.retrieveLimit;
-  $('cfg-mem-min-score').value=cfg.memory.minScore;
-  $('cfg-mem-graph-limit').value=cfg.memory.graphRetrieveLimit;
-  $('cfg-mem-graph-score').value=cfg.memory.graphMinScore;
-  $('cfg-mem-profile').value=cfg.memory.profileLimit;
-  $('cfg-mem-fact-len').value=cfg.memory.minFactTextLength;
-  $('cfg-mem-fallback').value=String(cfg.memory.fallbackLexical);
-  $('cfg-mem-embed').value=String(cfg.memory.useEmbeddings);
-  $('cfg-meta').textContent=`Brain config v${cfg.version||'?'} · ${cfg.configPath||'defaults'}`;
+  $('cfg-meta').textContent=`v${cfg.version||'?'} · ${cfg.configPath||'defaults'}`;
   const lines=(dev.devices||[]).map(d=>{
     const ok=d.node_config_applied===dev.brain_config_version;
     return `<div class="${ok?'sync-ok':'sync-warn'}">${escapeHtml(d.id)}: applied <code>${escapeHtml(d.node_config_applied||'—')}</code> · brain <code>${escapeHtml(dev.brain_config_version)}</code></div>`;
@@ -503,22 +456,11 @@ $('settings-form').onsubmit=async e=>{
   e.preventDefault();
   const body={
     locale:$('cfg-locale').value,
-    audio:{speechEnergyThreshold:Number($('cfg-speech').value),retentionSweepMs:Number($('cfg-ret-sweep').value)},
-    pipeline:{intervalMs:Number($('cfg-pipe-int').value)},
-    worker:{
-      backlogHigh:Number($('cfg-worker-high').value),
-      backlogMedium:Number($('cfg-worker-med').value),
-      batchMaxHigh:Number($('cfg-worker-batch-hi').value),
-      batchMaxMedium:Number($('cfg-worker-batch-med').value),
-    },
-    episodes:{
-      gapMin:Number($('cfg-ep-gap').value),
-      frameAlignMs:Number($('cfg-ep-align').value),
-    },
-    digest:{passDTemperature:Number($('cfg-digest-temp').value)},
+    lm:{url:$('cfg-lm-url').value,model:$('cfg-lm-model').value},
+    audio:{speechEnergyThreshold:Number($('cfg-speech').value),whisperModel:$('cfg-whisper-model').value},
+    episodes:{gapMin:Number($('cfg-ep-gap').value)},
     frames:{
       captureIntervalMs:Number($('cfg-frame-int').value),
-      captionIntervalMs:Number($('cfg-cap-int').value),
       jpegQuality:Number($('cfg-jpeg').value),
       size:$('cfg-frame-size').value,
     },
@@ -526,17 +468,6 @@ $('settings-form').onsubmit=async e=>{
       wifiRetryMs:Number($('cfg-wifi').value),
       pushBackoffMaxMs:Number($('cfg-backoff').value),
       statusIntervalMs:Number($('cfg-status').value),
-    },
-    memory:{
-      lookbackDays:Number($('cfg-mem-days').value),
-      retrieveLimit:Number($('cfg-mem-limit').value),
-      minScore:Number($('cfg-mem-min-score').value),
-      graphRetrieveLimit:Number($('cfg-mem-graph-limit').value),
-      graphMinScore:Number($('cfg-mem-graph-score').value),
-      profileLimit:Number($('cfg-mem-profile').value),
-      minFactTextLength:Number($('cfg-mem-fact-len').value),
-      fallbackLexical:$('cfg-mem-fallback').value==='true',
-      useEmbeddings:$('cfg-mem-embed').value==='true',
     },
   };
   const res=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

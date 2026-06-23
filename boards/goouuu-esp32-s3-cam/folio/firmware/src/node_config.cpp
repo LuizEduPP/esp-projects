@@ -120,7 +120,7 @@ static bool fetchFromBrain() {
                   FOLIO_FRAME_SIZE_ID);
   }
   if (gCfg.audioChunkMs != FOLIO_CHUNK_MS || gCfg.audioSampleRate != FOLIO_SAMPLE_RATE) {
-    Serial.printf("[config] audio %uHz/%ums — reflash for buffer match (compiled %d/%d)\n",
+    Serial.printf("[config] audio %uHz/%ums - reflash for buffer match (compiled %d/%d)\n",
                   gCfg.audioSampleRate, gCfg.audioChunkMs, FOLIO_SAMPLE_RATE,
                   FOLIO_CHUNK_MS);
   }

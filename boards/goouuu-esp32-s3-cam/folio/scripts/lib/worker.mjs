@@ -112,6 +112,9 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
 
   for (const chunk of chunks) {
     if (!isSpeechChunk(chunk.energy ?? 0)) {
+      console.log(
+        `[whisper] chunk=${chunk.id} skip silence energy=${(chunk.energy ?? 0).toFixed(4)}`,
+      );
       discardAudioChunk(db, chunk);
       results.push({ id: chunk.id, skipped: "silence" });
       continue;
@@ -122,7 +125,7 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
     writeWav(wavPath, pcm, CFG.audioSampleRate);
 
     try {
-      const stt = await transcribeWav(wavPath);
+      const stt = await transcribeWav(wavPath, { chunkId: chunk.id });
       if (stt.text) {
         insertUtterance(db, {
           chunk_id: chunk.id,
@@ -135,12 +138,12 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
         results.push({ id: chunk.id, text: stt.text.slice(0, 80) });
         markAudioProcessed(db, chunk.id);
       } else {
+        console.log(`[whisper] chunk=${chunk.id} discard — STT returned no text`);
         discardAudioChunk(db, chunk);
         results.push({ id: chunk.id, skipped: "empty_stt" });
       }
     } catch (err) {
       results.push({ id: chunk.id, error: err.message });
-      console.warn(`[worker] audio ${chunk.id} whisper: ${err.message}`);
     } finally {
       try {
         unlinkSync(wavPath);
@@ -220,32 +223,26 @@ export function startProcessingLoop(intervalMs = CFG.pipelineIntervalMs) {
         return;
       }
 
+      if (pending.audio > 0) {
+        console.log(`[whisper] queue ${pending.audio} audio chunk(s)`);
+      }
+
       const audio = await processPendingAudio();
       const frames = await processPendingFrames();
 
       const whisperErrors = audio.filter((r) => r.error?.includes("Whisper"));
       if (whisperErrors.length && !loggedWhisperMissing) {
         loggedWhisperMissing = true;
-        console.warn(
-          "[worker] Whisper not available — utterances disabled. " +
-            "pip install openai-whisper or set FOLIO_WHISPER_BIN",
+        console.error(
+          "[whisper] CLI not available — pip install openai-whisper or set audio.whisperBin in config",
         );
       }
 
       const done = [...audio, ...frames].filter((r) => r.text || r.caption);
-      const whisperOk = audio.filter((r) => r.text);
-      const whisperErr = audio.filter((r) => r.error);
-      if (whisperOk.length) {
-        console.log(`[worker] whisper ok=${whisperOk.length} "${whisperOk[0].text}"`);
-      }
-      if (whisperErr.length) {
-        console.warn(`[worker] whisper fail=${whisperErr.length} ${whisperErr[0].error}`);
-      }
-      if (done.length) {
+      if (done.length && pending.frames > 0) {
         console.log(
-          `[worker] queue audio=${pending.audio} frames=${pending.frames} → ` +
-            `done ${done.length} (utt=${audio.filter((r) => r.text).length} ` +
-            `caption=${frames.filter((r) => r.caption).length})`,
+          `[worker] done utt=${audio.filter((r) => r.text).length} ` +
+            `caption=${frames.filter((r) => r.caption).length}`,
         );
       }
     } catch (err) {

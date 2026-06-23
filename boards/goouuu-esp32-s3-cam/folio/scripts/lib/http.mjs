@@ -26,16 +26,20 @@ let lastQuietLogAt = 0;
 function logAudioIngest(deviceId, body, result) {
   if (!result.skipped) {
     console.log(
-      `[ingest] audio ${deviceId} id=${result.id} bytes=${body.length} energy=${result.energy?.toFixed(4)}`,
+      `[ingest] audio ${deviceId} id=${result.id} bytes=${body.length} energy=${result.energy?.toFixed(4)} → whisper queue`,
     );
     return;
   }
 
   quietSkipCount++;
   const now = Date.now();
-  if (now - lastQuietLogAt >= 60_000) {
-    console.log(`[ingest] audio ${deviceId} skipped ${quietSkipCount} empty/quiet chunks (last 60s)`);
-    quietSkipCount = 0;
+  if (quietSkipCount <= 3 || now - lastQuietLogAt >= 30_000) {
+    console.log(
+      `[ingest] audio ${deviceId} skip ${result.skipped} energy=${result.energy?.toFixed(4)} (no whisper)`,
+    );
+    if (quietSkipCount > 3) {
+      quietSkipCount = 0;
+    }
     lastQuietLogAt = now;
   }
 }

@@ -13,31 +13,32 @@ The ESP32 **does not respond**. It listens and sees; the PC processes, stores, a
 ## Hardware
 
 - GOOUUU ESP32-S3-CAM (onboard camera)
-- INMP441 I2S — GPIO 1 (WS), 2 (SCK), 42 (SD)
-- USB power (no external PIR / presence sensor)
+- INMP441 I2S — **GPIO 1 (WS), 2 (SCK), 21 (DOUT)** — see [`firmware/PINOUT.md`](firmware/PINOUT.md) (map; Keyestudio kit uses GPIO42 = MTMS, wrong for Folio)
 
 No speaker, no OLED.
 
-## Wiring — INMP441 (I2S)
+## Wiring — INMP441 (Keyestudio KS5028 / kit S3-CAM)
 
-Source of truth: `firmware/include/pins.h`
+GPIO **1**, **2**, and **21** are safe general-purpose pins on the ESP32-S3 — that is why Folio uses them for INMP441 I2S. **GPIO42** is MTMS/JTAG (caution); the Keyestudio kit diagram is wrong for this board. Full tables: [`firmware/PINOUT.md`](firmware/PINOUT.md).
 
-| INMP441 pin | ESP32-S3-CAM | Notes |
-|-------------|--------------|-------|
-| VDD | **3.3 V** | Not 5 V |
+| INMP441 | GOOUUU GPIO | note |
+|---------|-------------|------------|
+| VDD | **3.3 V** | |
 | GND | **GND** | |
-| SCK (BCLK) | **GPIO 2** | I2S bit clock |
-| WS (LRCLK) | **GPIO 1** | I2S word select |
-| SD (DOUT) | **GPIO 42** | Mic → ESP data in |
-| L/R | **GND** | Left channel (mono) |
+| **L/R** | **GND** | Tie L/R to the same GND rail |
+| WS | **GPIO 1** | ADC1_0 |
+| SCK | **GPIO 2** | ADC1_1 |
+| SD (DOUT) | **GPIO 21** | Module I2S data — **not** the microSD slot (38/39/40) |
 
-I2S: 16 kHz, 16-bit, mono left. On boot, serial should show `[audio] INMP441 OK 16kHz mono`.
+**L/R “junto”** = L/R tied to **GND**, not floating.
+
+Boot: `[audio] OK DOUT GPIO21 ... pcmPeak=...` — when speaking, `pcmPeak` ~500–15000 (not 0, not 32767).
 
 **Power:** USB-C only (for now).
 
 ### Camera
 
-Uses onboard OV2640 — no extra wiring. GPIO map in `pins.h` (`CAM_PIN_*`).
+Uses onboard OV2640 — no extra wiring. GPIO map in `pins.h` (`CAM_PIN_*`) and full table in [`firmware/PINOUT.md`](firmware/PINOUT.md).
 
 ## Presence (brain only)
 
@@ -75,7 +76,7 @@ Edit `firmware/platformio.ini`:
 
 ```bash
 # From monorepo root
-yarn folio:brain          # terminal 1 — ingest + UI (hot reload on script changes)
+yarn folio:brain          # terminal 1 — ingest, Whisper, digest, UI (all automatic)
 
 yarn folio:flash          # terminal 2 — flash ESP (SD card required for offline spool)
 yarn folio:monitor        # node logs
@@ -84,9 +85,9 @@ yarn folio:monitor        # node logs
 # Digest runs automatically inside folio-brain (A→D, saves ~/.folio/digests/YYYY-MM-DD.md)
 ```
 
-`yarn folio:brain` restarts automatically when you edit files under `scripts/`. Use `yarn workspace goouuu-s3-cam-folio brain:once` for a single run without watch.
+`yarn folio:brain` restarts automatically when you edit files under `scripts/`. Whisper, digest A→D, and memory indexing run in the background (`pipeline.enabled`, `digest.auto` in config).
 
-Manual overrides: `yarn folio:digest`, `yarn folio:process`, `yarn folio:enroll`.
+Debug CLI (no yarn script): `node scripts/folio.mjs digest --today`, `process`, `enroll`, `memory reindex`.
 
 ### Scripts layout
 
@@ -109,11 +110,14 @@ scripts/
     └── util.mjs
 ```
 
-## Offline spool (SD card)
+## Offline spool (microSD card — slot onboard)
 
-The ESP **always** writes captures to the microSD (`/folio/audio`, `/folio/frames`). If WiFi or the brain is down, files stay on the card. When the network returns, the node drains the oldest pending files first (with backoff on HTTP errors — e.g. brain hot reload).
+**Always:** capture → **microSD** (`/folio/audio`, `/folio/frames`) → push to brain when WiFi is up.  
+On successful push, the file is removed from the card. Pending files drain oldest-first.
 
-SD_MMC 1-bit pins (GOOUUU v1.3): CLK **39**, CMD **38**, D0 **40**. Insert a FAT32 card before power-on.
+This is the **microSD slot** (CLK 39, CMD 38, D0 40) — not the INMP441 I2S data pin (DOUT).
+
+Insert a **FAT32** card before power-on. Boot should show `[microsd] ok …MB /folio`.
 
 ## Configuration
 
@@ -135,44 +139,18 @@ cp boards/goouuu-esp32-s3-cam/folio/folio.config.example.json ~/.folio/config.js
 
 ESP polls `/api/node/config` every `node.statusIntervalMs` and sends `X-Folio-Config-Version` on ingest. Frame interval + JPEG quality apply at runtime; audio buffer size / frame resolution need matching `platformio.ini` + reflash.
 
-### Brain (`~/.folio/config.json`)
+### Brain — UI settings (`Settings` panel)
 
-| Key | Env override | Default | Description |
-|-----|----------------|---------|-------------|
-| `locale` | `FOLIO_LOCALE` | `pt-BR` | LM prompts + digest language |
-| `frames.captureIntervalMs` | `FOLIO_FRAME_INTERVAL_MS` | `60000` | Doc only — ESP capture rate |
-| `frames.captionIntervalMs` | `FOLIO_FRAME_CAPTION_MS` | `60000` | Min gap between LM vision calls |
-| `frames.captionMaxTokens` | `FOLIO_FRAME_CAPTION_MAX_TOKENS` | `220` | Tokens per frame caption |
-| `frames.pipelineBatch` | `FOLIO_PIPELINE_FRAME_BATCH` | `1` | Frames per pipeline tick |
-| `frames.jpegQuality` | `FOLIO_JPEG_QUALITY` | `12` | Doc — ESP JPEG quality (lower=better) |
-| `frames.size` | `FOLIO_FRAME_SIZE` | `QVGA` | Doc — `QVGA`, `VGA`, `SVGA` |
-| `audio.chunkMs` | `FOLIO_AUDIO_CHUNK_MS` | `1000` | PCM chunk length |
-| `audio.speechEnergyThreshold` | `FOLIO_SPEECH_ENERGY` | `0.008` | Gate for speech / presence |
-| `audio.whisperModel` | `FOLIO_WHISPER_MODEL` | `base` | Whisper model size |
-| `audio.pipelineBatch` | `FOLIO_PIPELINE_AUDIO_BATCH` | `4` | Chunks per worker tick |
-| `audio.retentionDays` | `FOLIO_AUDIO_RETENTION_DAYS` | `7` | Keep PCM with transcript |
-| `audio.retentionSweepMs` | `FOLIO_AUDIO_RETENTION_SWEEP_MS` | `21600000` | Interval for stale-audio prune (6h) |
-| `pipeline.intervalMs` | `FOLIO_PIPELINE_INTERVAL_MS` | `30000` | Queue worker interval |
-| `worker.backlogHigh` | `FOLIO_WORKER_BACKLOG_HIGH` | `200` | Pending audio count → scale batch ×3 |
-| `worker.backlogMedium` | `FOLIO_WORKER_BACKLOG_MEDIUM` | `50` | Pending audio count → scale batch ×2 |
-| `worker.batchMaxHigh` | `FOLIO_WORKER_BATCH_MAX_HIGH` | `12` | Max chunks per tick (high backlog) |
-| `worker.batchMaxMedium` | `FOLIO_WORKER_BATCH_MAX_MEDIUM` | `8` | Max chunks per tick (medium backlog) |
-| `digest.intervalMs` | `FOLIO_DIGEST_INTERVAL_MS` | `1800000` | Auto digest check interval |
-| `digest.passDTemperature` | `FOLIO_DIGEST_PASS_D_TEMP` | `0.35` | Pass D prose LM temperature |
-| `episodes.gapMin` | `FOLIO_EPISODE_GAP_MIN` | `12` | Silence minutes → new episode |
-| `episodes.frameAlignMs` | `FOLIO_EPISODE_FRAME_ALIGN_MS` | `60000` | Frame↔episode alignment window |
-| `episodes.graphEdge.*` | `FOLIO_EP_GRAPH_*` | themed `0.8`, decided `0.7`, open `0.75`, rejected `0.9` | Day-graph edge confidence |
-| `memory.lookbackDays` | `FOLIO_MEMORY_LOOKBACK_DAYS` | `90` | RAG retrieval window |
-| `memory.retrieveLimit` | `FOLIO_MEMORY_RETRIEVE` | `14` | Max memory chunks per digest |
-| `memory.minScore` | `FOLIO_MEMORY_MIN_SCORE` | `0.08` | Min cosine score for RAG hit |
-| `memory.graphRetrieveLimit` | `FOLIO_MEMORY_GRAPH_LIMIT` | `8` | Max graph nodes per digest |
-| `memory.graphMinScore` | `FOLIO_MEMORY_GRAPH_MIN_SCORE` | `0.15` | Min token overlap for graph hit |
-| `memory.profileLimit` | `FOLIO_MEMORY_PROFILE_LIMIT` | `32` | Max profile facts in RAG context |
-| `memory.minFactTextLength` | `FOLIO_MEMORY_MIN_FACT_LEN` | `5` | Min chars to index a fact |
-| `memory.fallbackLexical` | `FOLIO_MEMORY_FALLBACK_LEXICAL` | `false` | On embed failure: warn + lexical (else fail) |
-| `memory.useEmbeddings` | `FOLIO_MEMORY_EMBEDDINGS` | `false` | Use LM `/v1/embeddings` vs lexical |
-| `lm.modelFast` / `modelDeep` | `FOLIO_MODEL_*` | ministral-3-3b | LM Studio models |
-| `lm.url` | `LM_URL` | `127.0.0.1:1234` | LM Studio API |
+| Key | Default | Description |
+|-----|---------|-------------|
+| `locale` | `pt-BR` | Language |
+| `lm.url` / `lm.model` | LM Studio | Vision + digest |
+| `audio.whisperModel` | `base` | Whisper |
+| `audio.speechEnergyThreshold` | `0.008` | Speech gate |
+| `episodes.gapMin` | `12` | Episode split (min silence) |
+| `frames.*` / `node.*` | — | ESP sync |
+
+Everything else (`pipeline`, `digest`, `memory`, `worker`) runs automatically — tune in `~/.folio/config.json` only if needed.
 
 ### ESP (`firmware/platformio.ini` build_flags)
 
@@ -223,7 +201,7 @@ Persistent memory lives in `~/.folio/folio.db`:
 | `profile_facts` | Long-term patterns, decisions, open loops, approved claims |
 | `day_rollups` | Yesterday's compact arc (fast continuity) |
 
-After each digest: index today's witness → `memory_chunks`. Before Pass B/D: **RAG** pulls top matches from the last `memory.lookbackDays` (default 90).
+After each digest: index today's witness → `memory_chunks`. Before Pass B/D: **RAG** pulls top lexical matches from the last 90 days + graph theme overlap + `profile_facts`. Set `memory.useEmbeddings: true` in config only if LM Studio exposes `/v1/embeddings`.
 
 ```bash
 # Backfill index from existing digests
@@ -238,7 +216,7 @@ Optional semantic embeddings: `"memory.useEmbeddings": true` (LM Studio `/v1/emb
 ## Speaker enrollment (optional)
 
 ```bash
-yarn folio:enroll luiz "Luiz Eduardo"
+node scripts/folio.mjs enroll luiz "Luiz Eduardo"
 ```
 
 Metadata only; voice embeddings are a future extension.

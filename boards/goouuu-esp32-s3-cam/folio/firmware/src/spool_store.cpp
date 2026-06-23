@@ -1,19 +1,90 @@
 #include "spool_store.h"
 
-#include <SD_MMC.h>
+#include <Arduino.h>
+#include <dirent.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
+
+#include <esp_err.h>
+#include <esp_log.h>
+#include <esp_task_wdt.h>
+#include <esp_vfs_fat.h>
+#include <driver/sdmmc_host.h>
+#include <sdmmc_cmd.h>
 
 #include "pins.h"
 
-// Paths must be under the SD_MMC mount point (/sdcard).
+// microSD slot (SD_MMC 1-bit) — independent from INMP441 I2S DOUT pin.
 static const char *SPOOL_ROOT = "/sdcard/folio";
 static const char *SPOOL_AUDIO = "/sdcard/folio/audio";
 static const char *SPOOL_FRAMES = "/sdcard/folio/frames";
 
+static sdmmc_card_t *gCard = nullptr;
 static bool gSpoolOk = false;
-static bool gSpoolAbsent = false;
 static unsigned long gLastMountTryMs = 0;
+static int gSdClk = SD_PIN_CLK;
+static int gSdCmd = SD_PIN_CMD;
+static int gSdD0 = SD_PIN_D0;
 
-static bool cardMounted() { return SD_MMC.cardType() != CARD_NONE; }
+static bool cardMounted() { return gCard != nullptr; }
+
+bool spoolRequired() { return FOLIO_MICROSD_SPOOL != 0; }
+
+static void unmountCard() {
+  if (!gCard) {
+    return;
+  }
+  esp_vfs_fat_sdcard_unmount(SD_MOUNT, gCard);
+  gCard = nullptr;
+  gSpoolOk = false;
+}
+
+static bool tryMountOnce(int clk, int cmd, int d0, int freqKhz, esp_err_t *outErr) {
+  esp_task_wdt_reset();
+  unmountCard();
+  delay(30);
+
+  sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+  host.flags = SDMMC_HOST_FLAG_1BIT;
+  host.slot = SDMMC_HOST_SLOT_1;
+  host.max_freq_khz = freqKhz;
+
+  sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
+  slot.width = 1;
+  slot.clk = static_cast<gpio_num_t>(clk);
+  slot.cmd = static_cast<gpio_num_t>(cmd);
+  slot.d0 = static_cast<gpio_num_t>(d0);
+  slot.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+
+  esp_vfs_fat_sdmmc_mount_config_t mountConfig = {
+      .format_if_mount_failed = false,
+      .max_files = 5,
+      .allocation_unit_size = 16 * 1024,
+  };
+
+  esp_err_t ret = esp_vfs_fat_sdmmc_mount(SD_MOUNT, &host, &slot, &mountConfig, &gCard);
+  esp_task_wdt_reset();
+  if (outErr) {
+    *outErr = ret;
+  }
+  if (ret != ESP_OK) {
+    unmountCard();
+    return false;
+  }
+  gSdClk = clk;
+  gSdCmd = cmd;
+  gSdD0 = d0;
+  return true;
+}
+
+static bool mkdirIfNeeded(const char *path) {
+  struct stat st;
+  if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) {
+    return true;
+  }
+  return mkdir(path, 0755) == 0 || (stat(path, &st) == 0 && S_ISDIR(st.st_mode));
+}
 
 static void spoolPath(char *out, size_t outLen, const char *dir, uint32_t id,
                       const char *ext) {
@@ -25,12 +96,12 @@ static bool writeFile(const char *path, const uint8_t *data, size_t len) {
     gSpoolOk = false;
     return false;
   }
-  File f = SD_MMC.open(path, FILE_WRITE);
+  FILE *f = fopen(path, "wb");
   if (!f) {
     return false;
   }
-  const size_t n = f.write(data, len);
-  f.close();
+  const size_t n = fwrite(data, 1, len, f);
+  fclose(f);
   return n == len;
 }
 
@@ -39,23 +110,23 @@ static bool writeText(const char *path, const char *text) {
     gSpoolOk = false;
     return false;
   }
-  File f = SD_MMC.open(path, FILE_WRITE);
+  FILE *f = fopen(path, "wb");
   if (!f) {
     return false;
   }
-  const size_t n = f.print(text);
-  f.close();
+  const size_t n = fwrite(text, 1, strlen(text), f);
+  fclose(f);
   return n == strlen(text);
 }
 
 static bool readText(const char *path, char *out, size_t metaLen) {
-  File f = SD_MMC.open(path, FILE_READ);
+  FILE *f = fopen(path, "rb");
   if (!f) {
     return false;
   }
-  size_t n = f.readBytes(out, metaLen - 1);
+  const size_t n = fread(out, 1, metaLen - 1, f);
   out[n] = '\0';
-  f.close();
+  fclose(f);
   return true;
 }
 
@@ -65,9 +136,9 @@ static bool deletePair(const char *dir, uint32_t id, const char *dataExt) {
   }
   char path[80];
   spoolPath(path, sizeof(path), dir, id, dataExt);
-  SD_MMC.remove(path);
+  unlink(path);
   spoolPath(path, sizeof(path), dir, id, "meta");
-  SD_MMC.remove(path);
+  unlink(path);
   return true;
 }
 
@@ -76,33 +147,36 @@ static bool oldestInDir(const char *dir, const char *dataExt, uint32_t *outId) {
     gSpoolOk = false;
     return false;
   }
-  File root = SD_MMC.open(dir);
-  if (!root || !root.isDirectory()) {
+  DIR *root = opendir(dir);
+  if (!root) {
     return false;
   }
 
   uint32_t best = UINT32_MAX;
-  File entry;
-  while ((entry = root.openNextFile())) {
-    if (entry.isDirectory()) {
-      entry.close();
+  struct dirent *entry;
+  while ((entry = readdir(root)) != nullptr) {
+    if (entry->d_type != DT_REG) {
       continue;
     }
-    String name = entry.name();
-    entry.close();
-    if (!name.endsWith(dataExt)) {
+    const char *name = entry->d_name;
+    const size_t nameLen = strlen(name);
+    const size_t extLen = strlen(dataExt);
+    if (nameLen <= extLen || strcmp(name + nameLen - extLen, dataExt) != 0) {
       continue;
     }
-    const int dot = name.lastIndexOf('.');
-    if (dot <= 0) {
+    char idBuf[16];
+    const size_t idLen = nameLen - extLen;
+    if (idLen >= sizeof(idBuf)) {
       continue;
     }
-    const uint32_t id = (uint32_t)name.substring(0, dot).toInt();
+    memcpy(idBuf, name, idLen);
+    idBuf[idLen] = '\0';
+    const uint32_t id = (uint32_t)strtoul(idBuf, nullptr, 10);
     if (id < best) {
       best = id;
     }
   }
-  root.close();
+  closedir(root);
 
   if (best == UINT32_MAX) {
     return false;
@@ -115,77 +189,103 @@ static uint32_t countInDir(const char *dir, const char *dataExt) {
   if (!gSpoolOk || !cardMounted()) {
     return 0;
   }
-  File root = SD_MMC.open(dir);
-  if (!root || !root.isDirectory()) {
+  DIR *root = opendir(dir);
+  if (!root) {
     return 0;
   }
   uint32_t n = 0;
-  File entry;
-  while ((entry = root.openNextFile())) {
-    if (!entry.isDirectory()) {
-      String name = entry.name();
-      if (name.endsWith(dataExt)) {
-        n++;
-      }
+  struct dirent *entry;
+  while ((entry = readdir(root)) != nullptr) {
+    if (entry->d_type != DT_REG) {
+      continue;
     }
-    entry.close();
+    const char *name = entry->d_name;
+    const size_t nameLen = strlen(name);
+    const size_t extLen = strlen(dataExt);
+    if (nameLen > extLen && strcmp(name + nameLen - extLen, dataExt) == 0) {
+      n++;
+    }
   }
-  root.close();
+  closedir(root);
   return n;
 }
 
 bool spoolBegin() {
-  if (gSpoolAbsent) {
-    return false;
-  }
-  SD_MMC.setPins(SD_PIN_CLK, SD_PIN_CMD, SD_PIN_D0);
-  if (cardMounted()) {
-    SD_MMC.end();
-  }
-  if (!SD_MMC.begin(SD_MOUNT, true, false)) {
+#if !FOLIO_MICROSD_SPOOL
+  return false;
+#endif
+  esp_log_level_set("vfs_fat_sdmmc", ESP_LOG_NONE);
+  esp_log_level_set("sdmmc_req", ESP_LOG_NONE);
+  esp_log_level_set("sdmmc_common", ESP_LOG_NONE);
+
+  esp_err_t lastErr = ESP_FAIL;
+
+  // GOOUUU ESP32-S3-CAM only: CLK39 CMD38 D0=40. Never probe GPIO35-37 (onboard PSRAM).
+  if (!tryMountOnce(SD_PIN_CLK, SD_PIN_CMD, SD_PIN_D0, SDMMC_FREQ_PROBING, &lastErr) &&
+      !tryMountOnce(SD_PIN_CLK, SD_PIN_CMD, SD_PIN_D0, SDMMC_FREQ_DEFAULT, &lastErr)) {
     gSpoolOk = false;
-    if (SD_MMC.cardType() == CARD_NONE) {
-      if (!gSpoolAbsent) {
-        Serial.println("[spool] no SD — push-only (offline spool disabled)");
-      }
-      gSpoolAbsent = true;
+    if (lastErr == ESP_ERR_TIMEOUT) {
+      Serial.printf(
+          "[microsd] mount fail err=TIMEOUT — card not responding (empty slot? reseat FAT32 card)\n");
+    } else {
+      Serial.printf("[microsd] mount fail err=%s — need FAT32 card in slot before power-on\n",
+                    esp_err_to_name(lastErr));
     }
+    Serial.printf("[microsd] pins CLK%d CMD%d D0%d (GOOUUU onboard slot)\n", SD_PIN_CLK, SD_PIN_CMD,
+                  SD_PIN_D0);
     return false;
   }
+
   if (!cardMounted()) {
     gSpoolOk = false;
     return false;
   }
-  SD_MMC.mkdir(SPOOL_ROOT);
-  SD_MMC.mkdir(SPOOL_AUDIO);
-  SD_MMC.mkdir(SPOOL_FRAMES);
+
+  if (!mkdirIfNeeded(SPOOL_ROOT) || !mkdirIfNeeded(SPOOL_AUDIO) ||
+      !mkdirIfNeeded(SPOOL_FRAMES)) {
+    gSpoolOk = false;
+    Serial.println("[microsd] mkdir /sdcard/folio failed");
+    unmountCard();
+    return false;
+  }
+
   gSpoolOk = true;
-  Serial.printf("[spool] SD ok %lluMB path=%s\n", SD_MMC.cardSize() / 1048576ULL, SPOOL_ROOT);
+  const uint64_t sizeMb = ((uint64_t)gCard->csd.capacity * gCard->csd.sector_size) / 1048576ULL;
+  Serial.printf("[microsd] ok %lluMB CLK%d CMD%d D0%d /folio\n", sizeMb, gSdClk, gSdCmd, gSdD0);
   return true;
 }
 
 bool spoolOk() { return gSpoolOk && cardMounted(); }
 
 bool spoolEnsure() {
+#if !FOLIO_MICROSD_SPOOL
+  return false;
+#endif
   if (spoolOk()) {
     return true;
   }
+  const unsigned long now = millis();
+  if (now - gLastMountTryMs < 5000) {
+    return false;
+  }
+  gLastMountTryMs = now;
   return spoolBegin();
 }
 
 void spoolTick() {
-  if (spoolOk() || gSpoolAbsent) {
+#if !FOLIO_MICROSD_SPOOL
+  return;
+#endif
+  if (spoolOk()) {
     return;
   }
   const unsigned long now = millis();
-  if (now - gLastMountTryMs < 30000) {
+  if (now - gLastMountTryMs < 15000) {
     return;
   }
   gLastMountTryMs = now;
   if (spoolBegin()) {
-    Serial.println("[spool] SD re-mounted");
-  } else if (SD_MMC.cardType() == CARD_NONE) {
-    gSpoolAbsent = true;
+    Serial.println("[microsd] re-mounted");
   }
 }
 
@@ -255,12 +355,12 @@ bool spoolReadAudio(uint32_t seq, int16_t *pcmOut, char *metaOut, size_t metaLen
   }
   char path[80];
   spoolPath(path, sizeof(path), SPOOL_AUDIO, seq, "pcm");
-  File f = SD_MMC.open(path, FILE_READ);
+  FILE *f = fopen(path, "rb");
   if (!f) {
     return false;
   }
-  const size_t n = f.read(reinterpret_cast<uint8_t *>(pcmOut), FOLIO_CHUNK_BYTES);
-  f.close();
+  const size_t n = fread(pcmOut, 1, FOLIO_CHUNK_BYTES, f);
+  fclose(f);
   if (n != FOLIO_CHUNK_BYTES) {
     return false;
   }
@@ -276,26 +376,32 @@ bool spoolReadFrame(uint32_t id, uint8_t **jpegOut, size_t *lenOut, char *metaOu
   }
   char path[80];
   spoolPath(path, sizeof(path), SPOOL_FRAMES, id, "jpg");
-  File f = SD_MMC.open(path, FILE_READ);
+  FILE *f = fopen(path, "rb");
   if (!f) {
     return false;
   }
-  const size_t len = f.size();
-  uint8_t *buf = len ? (uint8_t *)ps_malloc(len) : nullptr;
-  if (!buf) {
-    f.close();
+  fseek(f, 0, SEEK_END);
+  const long len = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  if (len <= 0) {
+    fclose(f);
     return false;
   }
-  const size_t n = f.read(buf, len);
-  f.close();
-  if (n != len) {
+  uint8_t *buf = static_cast<uint8_t *>(ps_malloc(static_cast<size_t>(len)));
+  if (!buf) {
+    fclose(f);
+    return false;
+  }
+  const size_t n = fread(buf, 1, static_cast<size_t>(len), f);
+  fclose(f);
+  if (n != static_cast<size_t>(len)) {
     free(buf);
     return false;
   }
   spoolPath(path, sizeof(path), SPOOL_FRAMES, id, "meta");
   readText(path, metaOut, metaLen);
   *jpegOut = buf;
-  *lenOut = len;
+  *lenOut = static_cast<size_t>(len);
   return true;
 }
 

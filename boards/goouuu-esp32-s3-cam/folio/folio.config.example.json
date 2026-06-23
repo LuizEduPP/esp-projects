@@ -4,8 +4,7 @@
   "dataDir": null,
   "lm": {
     "url": "http://127.0.0.1:1234/v1/chat/completions",
-    "modelFast": "mistralai/ministral-3-3b",
-    "modelDeep": "mistralai/ministral-3-3b"
+    "model": "mistralai/ministral-3-3b"
   },
   "frames": {
     "captureIntervalMs": 60000,
@@ -60,13 +59,11 @@
     "retrieveLimit": 14,
     "minScore": 0.08,
     "useEmbeddings": false,
-    "embeddingModel": null,
-    "embeddingsUrl": null,
-    "fallbackLexical": false,
     "graphRetrieveLimit": 8,
     "graphMinScore": 0.15,
     "profileLimit": 32,
-    "minFactTextLength": 5
+    "minFactTextLength": 5,
+    "fallbackLexical": false
   },
   "node": {
     "wifiRetryMs": 5000,

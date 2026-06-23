@@ -214,7 +214,16 @@ export function saveConfigPatch(patch) {
   };
 }
 
+function resolveLmModels(file) {
+  const model =
+    cfgStr(file, "lm.model", "FOLIO_LM_MODEL") ||
+    cfgStr(file, "lm.modelFast", "FOLIO_MODEL_FAST");
+  const deep = cfgStr(file, "lm.modelDeep", "FOLIO_MODEL_DEEP") || model;
+  return { modelFast: model, modelDeep: deep };
+}
+
 function buildCfgFromFile(file = getFileData()) {
+  const { modelFast, modelDeep } = resolveLmModels(file);
   const dataDir =
     envStr(getPath(file, "dataDir"), "FOLIO_DATA_DIR", "") || join(homedir(), ".folio");
   return {
@@ -223,8 +232,8 @@ function buildCfgFromFile(file = getFileData()) {
     dataDir,
 
     lmUrl: cfgStr(file, "lm.url", "LM_URL"),
-    modelFast: cfgStr(file, "lm.modelFast", "FOLIO_MODEL_FAST"),
-    modelDeep: cfgStr(file, "lm.modelDeep", "FOLIO_MODEL_DEEP"),
+    modelFast,
+    modelDeep,
 
     frameCaptureIntervalMs: cfgNum(file, "frames.captureIntervalMs", "FOLIO_FRAME_INTERVAL_MS"),
     frameCaptionIntervalMs: cfgNum(file, "frames.captionIntervalMs", "FOLIO_FRAME_CAPTION_MS"),
