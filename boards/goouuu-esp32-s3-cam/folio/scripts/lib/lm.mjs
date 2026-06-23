@@ -1,4 +1,5 @@
 import { CFG } from "./config.mjs";
+import { promptLanguageRule } from "./locale.mjs";
 import { parseJsonLoose } from "./util.mjs";
 
 export async function chatCompletion({ model, messages, temperature = 0.2, maxTokens = 2048 }) {
@@ -34,8 +35,10 @@ export async function chatJson({ model, messages, temperature = 0.1, maxTokens =
 export async function captionFrame(b64, reason) {
   const prompt =
     "Room witness camera frame. Reply raw JSON only, no markdown: " +
-    '{"scene":"short label","people":0,"activity":"what is happening","objects":["up to 4"],"mood":"calm|focused|tense|social|empty","note":"max 20 words"}. ' +
-    `Trigger: ${reason || "interval"}. Describe only visible facts.`;
+    '{"person_present":bool,"people":0,"scene":"short label","activity":"what is happening","objects":["up to 4"],"mood":"calm|focused|tense|social|empty","note":"max 20 words"}. ' +
+    "person_present=true ONLY for a real human (face/body). false for empty room. " +
+    `Trigger: ${reason || "interval"}. Describe only visible facts. ` +
+    promptLanguageRule();
 
   return chatJson({
     model: CFG.modelFast,

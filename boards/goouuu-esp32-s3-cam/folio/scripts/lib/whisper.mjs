@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { CFG } from "./config.mjs";
+import { whisperLanguage } from "./locale.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -19,7 +20,7 @@ export async function transcribeWav(wavPath) {
         "--model",
         CFG.whisperModel,
         "--language",
-        "Portuguese",
+        whisperLanguage(),
         "--output_format",
         "json",
         "--output_file",

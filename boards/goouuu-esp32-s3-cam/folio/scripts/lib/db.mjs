@@ -225,6 +225,14 @@ export function pendingFrames(db, limit = 10) {
     .all(limit);
 }
 
+export function pendingCounts(db) {
+  const audio = db
+    .prepare("SELECT COUNT(*) AS n FROM audio_chunks WHERE processed = 0")
+    .get().n;
+  const frames = db.prepare("SELECT COUNT(*) AS n FROM frames WHERE processed = 0").get().n;
+  return { audio, frames };
+}
+
 export function markAudioProcessed(db, id) {
   db.prepare("UPDATE audio_chunks SET processed = 1 WHERE id = ?").run(id);
 }
@@ -233,6 +241,26 @@ export function markFrameProcessed(db, id, caption, sceneJson) {
   db.prepare(
     `UPDATE frames SET processed = 1, caption = @caption, scene_json = @scene_json WHERE id = @id`,
   ).run({ id, caption, scene_json: sceneJson });
+}
+
+export function getAudioChunk(db, id) {
+  return db.prepare("SELECT * FROM audio_chunks WHERE id = ?").get(id);
+}
+
+export function getFrame(db, id) {
+  return db.prepare("SELECT * FROM frames WHERE id = ?").get(id);
+}
+
+export function audioChunksForDay(db, day) {
+  return db
+    .prepare(
+      `SELECT c.*, u.text AS utterance_text
+       FROM audio_chunks c
+       LEFT JOIN utterances u ON u.chunk_id = c.id
+       WHERE c.captured_at >= ? AND c.captured_at < ?
+       ORDER BY c.captured_at`,
+    )
+    .all(`${day}T00:00:00.000Z`, `${day}T23:59:59.999Z`);
 }
 
 export function utterancesForDay(db, day) {
@@ -383,26 +411,24 @@ export function updateEpisodeSummary(db, episodeId, summaryJson, label) {
 }
 
 export function timelineForDay(db, day) {
-  const utterances = utterancesForDay(db, day).map((u) => ({
-    type: "utterance",
-    at: u.started_at,
-    id: `utt:${u.id}`,
-    text: u.text,
-    speaker_id: u.speaker_id,
+  const audio = audioChunksForDay(db, day).map((c) => ({
+    type: "audio",
+    at: c.captured_at,
+    id: `aud:${c.id}`,
+    chunk_id: c.id,
+    energy: c.energy,
+    speech: (c.energy ?? 0) >= 0.008,
+    text: c.utterance_text ?? null,
+    processed: !!c.processed,
   }));
   const frames = framesForDay(db, day).map((f) => ({
     type: "frame",
     at: f.captured_at,
     id: `frm:${f.id}`,
+    frame_id: f.id,
     caption: f.caption,
     reason: f.reason,
+    processed: !!f.processed,
   }));
-  const events = eventsForDay(db, day).map((e) => ({
-    type: "event",
-    at: e.at,
-    id: `evt:${e.id}`,
-    kind: e.kind,
-    payload: e.payload_json,
-  }));
-  return [...utterances, ...frames, ...events].sort((a, b) => a.at.localeCompare(b.at));
+  return [...audio, ...frames].sort((a, b) => a.at.localeCompare(b.at));
 }

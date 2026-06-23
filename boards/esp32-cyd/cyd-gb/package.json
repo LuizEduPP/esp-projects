@@ -1,5 +1,6 @@
 {
   "name": "esp32-cyd-gb",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "fw:build": "cd firmware && bash ../../../scripts/pio.sh run",

@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "fw:setup": "bash ../../../scripts/fw-setup-linux.sh",
-    "fw:build": "cd firmware && bash ../../../scripts/pio.sh run",
-    "fw:upload": "cd firmware && bash ../../../scripts/pio.sh run -t upload",
-    "fw:flash": "cd firmware && bash ../../../scripts/pio.sh run && bash ../../../scripts/pio.sh run -t upload",
-    "fw:monitor": "cd firmware && bash ../../../scripts/pio.sh device monitor -b 115200 --filter direct",
-    "brain": "node scripts/folio-brain.mjs",
+    "fw:build": "bash ../../../scripts/pio.sh run -d firmware",
+    "fw:upload": "bash ../../../scripts/pio.sh run -d firmware -t upload",
+    "fw:flash": "bash ../../../scripts/pio.sh run -d firmware && bash ../../../scripts/pio.sh run -d firmware -t upload",
+    "fw:monitor": "cd firmware && bash ../../../../scripts/pio.sh device monitor -b 115200 --filter direct",
+    "brain": "node --watch scripts/folio-brain.mjs",
+    "brain:once": "node scripts/folio-brain.mjs",
+    "brain:process": "node scripts/folio-process.mjs",
     "digest": "node scripts/folio-digest.mjs",
     "digest:today": "node scripts/folio-digest.mjs --today",
     "enroll": "node scripts/folio-enroll.mjs"

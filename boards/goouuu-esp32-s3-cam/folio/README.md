@@ -6,17 +6,62 @@ The ESP32 **does not respond**. It listens and sees; the PC processes, stores, a
 
 | Layer | Role |
 |-------|------|
-| **folio-node** (ESP32-S3-CAM + INMP441) | Push 1 s audio + JPEG every 60 s (+ motion) |
-| **folio-brain** (PC, Node 22+) | Ingest, Whisper STT, LM Studio vision, `node:sqlite` |
+| **folio-node** (ESP32-S3-CAM + INMP441) | Push 1 s audio + JPEG every 60 s (USB power) |
+| **folio-brain** (PC, Node 22+) | Ingest, presence from camera/audio, Whisper, LM Studio, `node:sqlite` |
 | **Digest A→D** | Facts → interpretation → critique → prose |
 
 ## Hardware
 
 - GOOUUU ESP32-S3-CAM (onboard camera)
 - INMP441 I2S — GPIO 1 (WS), 2 (SCK), 42 (SD)
-- Motion sensor (optional) — GPIO 3
+- USB power (no external PIR / presence sensor)
 
 No speaker, no OLED.
+
+## Wiring — INMP441 (I2S)
+
+Source of truth: `firmware/include/pins.h`
+
+| INMP441 pin | ESP32-S3-CAM | Notes |
+|-------------|--------------|-------|
+| VDD | **3.3 V** | Not 5 V |
+| GND | **GND** | |
+| SCK (BCLK) | **GPIO 2** | I2S bit clock |
+| WS (LRCLK) | **GPIO 1** | I2S word select |
+| SD (DOUT) | **GPIO 42** | Mic → ESP data in |
+| L/R | **GND** | Left channel (mono) |
+
+I2S: 16 kHz, 16-bit, mono left. On boot, serial should show `[audio] INMP441 OK 16kHz mono`.
+
+**Power:** USB-C only (for now).
+
+### Camera
+
+Uses onboard OV2640 — no extra wiring. GPIO map in `pins.h` (`CAM_PIN_*`).
+
+## Presence (brain only)
+
+No PIR on the device. **folio-brain** infers activity from:
+
+| Source | Signal |
+|--------|--------|
+| **Camera** | Vision caption → `person_present` / `people` → `presence` event |
+| **Audio** | Non-silent chunk (energy gate) → `presence` event + Whisper STT |
+
+The ESP always streams; presence logic runs on the PC.
+
+**ESP only pushes.** The brain stores everything, drains the pending queue (Whisper + LM), and serves the UI. The node does not wait for captions or transcripts.
+
+## Witness UI
+
+Open `http://localhost:8770` (or your PC LAN IP). The log shows:
+
+| Capture | What you see |
+|---------|----------------|
+| **Frame** | JPEG thumbnail (click to open full size) + LM description when processed |
+| **Audio** | 1 s WAV player + Whisper transcript when processed |
+
+Media API (same host): `GET /api/frame/:id`, `GET /api/audio/:id`.
 
 ## Firmware configuration
 
@@ -30,14 +75,22 @@ Edit `firmware/platformio.ini`:
 
 ```bash
 # From monorepo root
-yarn folio:brain          # terminal 1 — ingest + UI http://localhost:8770
+yarn folio:brain          # terminal 1 — ingest + UI (hot reload on script changes)
 
-yarn folio:flash          # terminal 2 — flash ESP
+yarn folio:flash          # terminal 2 — flash ESP (SD card required for offline spool)
 yarn folio:monitor        # node logs
 
 # After collecting data for the day
-yarn folio:digest         # A→D pipeline + saves ~/.folio/digests/YYYY-MM-DD.md
+# Digest runs automatically inside folio-brain (A→D, saves ~/.folio/digests/YYYY-MM-DD.md)
 ```
+
+`yarn folio:brain` restarts automatically when you edit files under `scripts/`. Use `yarn workspace goouuu-s3-cam-folio brain:once` for a single run without watch.
+
+## Offline spool (SD card)
+
+The ESP **always** writes captures to the microSD (`/folio/audio`, `/folio/frames`). If WiFi or the brain is down, files stay on the card. When the network returns, the node drains the oldest pending files first (with backoff on HTTP errors — e.g. brain hot reload).
+
+SD_MMC 1-bit pins (GOOUUU v1.3): CLK **39**, CMD **38**, D0 **40**. Insert a FAT32 card before power-on.
 
 ## Brain environment variables
 
@@ -51,7 +104,10 @@ yarn folio:digest         # A→D pipeline + saves ~/.folio/digests/YYYY-MM-DD.m
 | `FOLIO_WHISPER_BIN` | `whisper` | OpenAI Whisper CLI |
 | `FOLIO_WHISPER_MODEL` | `base` | Whisper model |
 | `FOLIO_EPISODE_GAP_MIN` | `12` | Minutes of silence → new episode |
-| `FOLIO_LOCALE` | `pt-BR` | Digest output locale |
+| `FOLIO_DIGEST_INTERVAL_MS` | `1800000` | How often brain checks whether to refresh digest |
+| `FOLIO_DIGEST_AUTO` | `1` | Set `0` to disable automatic digest |
+| `FOLIO_LOCALE` | `pt-BR` | **Prompt + digest language** (BCP-47: `en-US`, `es-ES`, `fr-FR`, …) |
+| `FOLIO_WHISPER_LANGUAGE` | *(from locale)* | Whisper `--language` override (e.g. `Portuguese`, `English`) |
 
 ## Local ESP endpoints
 

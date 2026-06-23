@@ -1,5 +1,6 @@
 import { CFG } from "./config.mjs";
 import { chatCompletion, chatJson } from "./lm.mjs";
+import { dateLabelForDay, evidenceFooterRule, promptLanguageRule } from "./locale.mjs";
 import { isoNow } from "./util.mjs";
 import { upsertDayRollup, upsertDigest, upsertProfileFact } from "./db.mjs";
 import { rebuildEpisodesForDay } from "./episodes.mjs";
@@ -70,7 +71,8 @@ export async function passA(db, day) {
         content:
           "You are Pass A of folio digest pipeline. Extract only verifiable facts from witness data. " +
           "Reply raw JSON: {\"timeline\":[{\"at\":\"ISO\",\"fact\":\"\",\"evidence\":[\"utt:N|frm:N|ep:ID\"]}],\"episode_facts\":[{\"episode_id\":\"\",\"facts\":[]}],\"events_notable\":[]}. " +
-          "No interpretation. No markdown.",
+          "No interpretation. No markdown. " +
+          promptLanguageRule(),
       },
       {
         role: "user",
@@ -95,7 +97,7 @@ export async function passB(db, day, passAJson, prior) {
           "You are Pass B (interpretation). Given Pass A facts and episode semantics, infer meaning: emotional arc, " +
           "decisions vs brainstorming, what was abandoned, what remains open, cross-modal alignments (speech + visual timing). " +
           "Reply raw JSON: {\"narrative_arc\":\"\",\"shifts\":[{\"at\":\"\",\"description\":\"\",\"evidence\":[]}],\"decisions_real\":[{\"text\":\"\",\"evidence\":[]}],\"open_loops\":[],\"patterns\":[],\"tomorrow_pull\":[]}. " +
-          `Locale ${CFG.defaultLocale}. Write JSON values in Portuguese.`,
+          promptLanguageRule(),
       },
       {
         role: "user",
@@ -116,7 +118,8 @@ export async function passC(passAJson, passBJson, moments) {
         content:
           "You are Pass C (critic). Compare Pass B claims to Pass A facts and raw moments. " +
           "Remove or downgrade any claim lacking evidence. Reply raw JSON: " +
-          "{\"approved_claims\":[{\"text\":\"\",\"evidence\":[],\"confidence\":0-1}],\"rejected_claims\":[{\"text\":\"\",\"reason\":\"\"}],\"evidence_gaps\":[]}",
+          "{\"approved_claims\":[{\"text\":\"\",\"evidence\":[],\"confidence\":0-1}],\"rejected_claims\":[{\"text\":\"\",\"reason\":\"\"}],\"evidence_gaps\":[]}. " +
+          promptLanguageRule(),
       },
       {
         role: "user",
@@ -129,11 +132,7 @@ export async function passC(passAJson, passBJson, moments) {
 
 /** Pass D — final prose letter (no section templates) */
 export async function passD(day, passAJson, passBJson, passCJson, prior) {
-  const dateLabel = new Date(`${day}T12:00:00.000Z`).toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  const dateLabel = dateLabelForDay(day);
 
   return chatCompletion({
     model: CFG.modelDeep,
@@ -143,12 +142,13 @@ export async function passD(day, passAJson, passBJson, passCJson, prior) {
       {
         role: "system",
         content:
-          "You are Pass D (folio chronicler). Write a single intelligent letter about the person's day in Portuguese (Brazil). " +
-          "NO markdown headings, NO bullet lists, NO template sections. Write flowing prose paragraphs like a perceptive analyst who watched the whole day. " +
+          `You are Pass D (folio chronicler). Write a single intelligent letter about the person's day. ` +
+          promptLanguageRule() +
+          " NO markdown headings, NO bullet lists, NO template sections. Write flowing prose paragraphs like a perceptive analyst who watched the whole day. " +
           "Include: arc of the day, what mattered vs noise, cross-modal observations (when speech aligned with what was seen), " +
           "implicit decisions, open threads for tomorrow, patterns vs prior day if provided. " +
-          "End with one short italic line: Evidência: comma-separated evidence IDs used. " +
-          "Only include claims approved in Pass C.",
+          evidenceFooterRule() +
+          " Only include claims approved in Pass C.",
       },
       {
         role: "user",

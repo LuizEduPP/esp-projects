@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { CFG } from "./config.mjs";
 import { chatJson } from "./lm.mjs";
+import { promptLanguageRule } from "./locale.mjs";
 import { isoNow } from "./util.mjs";
 import {
   clearEpisodesForDay,
@@ -82,7 +83,7 @@ Reply raw JSON only:
   "implicit_shifts": ["what changed beneath the words"],
   "notable_quotes": [{"text":"","evidence":["utt:ID"]}]
 }
-Use evidence IDs from the input when possible. Locale: ${CFG.defaultLocale}. Facts only from input; infer carefully.`;
+Use evidence IDs from the input when possible. Facts only from input; infer carefully. ${promptLanguageRule()}`;
 
   const parsed = await chatJson({
     model: CFG.modelFast,

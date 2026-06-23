@@ -23,7 +23,7 @@ Data directory: `~/.folio/` (override with `FOLIO_DATA_DIR`).
 | `audio_chunks` | Raw PCM paths, seq, energy, `processed` |
 | `utterances` | STT output linked to chunk |
 | `frames` | JPEG paths + vision caption + `scene_json` |
-| `events` | boot, motion |
+| `events` | boot, `audio`, `frame` (on ingest), `presence` (mic energy or LM camera) |
 
 ### Structure
 
@@ -92,7 +92,7 @@ Passes must cite these IDs. Pass C drops claims without backing.
 
 ### Pass D — `prose`
 
-Plain text (`FOLIO_LOCALE`, default `pt-BR`). No `##` headings. Final line:
+Plain text in the language set by `FOLIO_LOCALE` (default `pt-BR`). Applies to frame captions, episode labels, digest passes A–D, and Pass D prose. No `##` headings. Final line uses localized evidence label (`Evidência:` / `Evidence:` / …).
 
 `*Evidence: utt:12, frm:3, ep:…*`
 
@@ -114,10 +114,44 @@ Plain text (`FOLIO_LOCALE`, default `pt-BR`). No `##` headings. Final line:
 
 ## Processing loop
 
-1. ESP pushes PCM → `audio_chunks`
-2. Brain: energy gate → Whisper → `utterances`
-3. ESP pushes JPEG → `frames` → LM vision → caption
-4. On digest: cluster utterances → episodes → graph → passes A–D
+Two paths — **ingest is fast**, **LM/Whisper drain a pending queue**.
+
+### Ingest (no LM)
+
+1. ESP pushes PCM → file + `audio_chunks` (`processed=0`) + `events` kind `audio`
+2. Speech energy → extra `presence` event (`source: audio`)
+3. ESP pushes JPEG → file + `frames` (`processed=0`) + `events` kind `frame`
+
+### Pending queue worker
+
+Runs every `FOLIO_PIPELINE_INTERVAL_MS` (default 30s). Config:
+
+| Env | Default | Meaning |
+|-----|---------|---------|
+| `FOLIO_PIPELINE_INTERVAL_MS` | 30000 | Worker wake interval |
+| `FOLIO_PIPELINE_AUDIO_BATCH` | 2 | Whisper chunks per tick |
+| `FOLIO_PIPELINE_FRAME_BATCH` | 1 | LM frames per tick |
+| `FOLIO_FRAME_CAPTION_MS` | 60000 | Min gap between LM vision calls |
+| `FOLIO_PIPELINE` | 1 | Set `0` for ingest-only brain |
+
+- **Audio:** energy gate → Whisper → `utterances` → mark `processed`
+- **Frames:** LM vision captions one pending frame per gap → mark `processed`
+- LM failures leave the frame in the queue for retry
+
+Manual drain: `yarn brain:process`
+
+### Media API
+
+| Route | Returns |
+|-------|---------|
+| `GET /api/frame/:id` | JPEG from `frames` row |
+| `GET /api/audio/:id` | 16 kHz mono WAV from `audio_chunks` PCM |
+
+### Digest (automatic)
+
+The brain runs passes A→D **automatically** when new witness data arrives (checked every `FOLIO_DIGEST_INTERVAL_MS`, default 30 min). On day rollover it finalizes yesterday. Prose appears in the UI and `~/.folio/digests/YYYY-MM-DD.md`.
+
+Manual override: `yarn folio:digest` or `POST /api/digest/run?day=…`
 
 ## Continuity across days
 

@@ -7,9 +7,6 @@
 #define PIN_I2S_SCK 2
 #define PIN_I2S_SD  42
 
-// Optional PIR / motion (-1 = disabled)
-#define PIN_MOTION  3
-
 #define CAM_LEDC_CHANNEL LEDC_CHANNEL_1
 #define CAM_LEDC_TIMER   LEDC_TIMER_1
 
@@ -29,3 +26,9 @@
 #define CAM_PIN_VSYNC  6
 #define CAM_PIN_HREF   7
 #define CAM_PIN_PCLK   13
+
+// SD_MMC 1-bit (GOOUUU ESP32-S3-CAM v1.3)
+#define SD_PIN_CLK  39
+#define SD_PIN_CMD  38
+#define SD_PIN_D0   40
+#define SD_MOUNT    "/sdcard"

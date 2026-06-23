@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Folio</title>
+<style>
+:root{
+  --bg:#141210;--bg2:#1c1916;--bg3:#242019;--line:#322c26;
+  --text:#ece6dc;--muted:#9a9288;--dim:#6d665c;
+  --accent:#c4a574;--accent-dim:#8a7350;
+  --frame:#6b9ec4;--audio:#9ec49a;--warn:#c49a6b;
+  --radius:12px;--shadow:0 8px 32px rgba(0,0,0,.35);
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --serif:Georgia,"Iowan Old Style","Palatino Linotype",serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5}
+a{color:var(--accent);text-decoration:none}
+button,input{font:inherit}
+.app-header{
+  position:sticky;top:0;z-index:20;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:14px 24px;border-bottom:1px solid var(--line);
+  background:rgba(20,18,16,.92);backdrop-filter:blur(10px);
+}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand h1{font-family:var(--serif);font-size:1.35rem;font-weight:500;letter-spacing:.02em}
+.brand span{font-size:.8rem;color:var(--dim)}
+.day-nav{display:flex;align-items:center;gap:6px}
+.day-nav button{
+  width:34px;height:34px;border:1px solid var(--line);border-radius:8px;
+  background:var(--bg2);color:var(--muted);cursor:pointer;
+}
+.day-nav button:hover{border-color:var(--accent-dim);color:var(--text)}
+.day-nav input{
+  border:1px solid var(--line);border-radius:8px;background:var(--bg2);
+  color:var(--text);padding:7px 10px;width:148px;
+}
+.status{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.pill{
+  font-size:.72rem;padding:5px 10px;border-radius:999px;
+  border:1px solid var(--line);background:var(--bg2);color:var(--muted);
+}
+.pill.warn{border-color:#5a4030;color:var(--warn)}
+.pill.ok{border-color:#304a30;color:var(--audio)}
+.layout{
+  display:grid;grid-template-columns:minmax(280px,380px) 1fr;
+  gap:0;max-width:1400px;margin:0 auto;min-height:calc(100vh - 64px);
+}
+.chronicle{
+  border-right:1px solid var(--line);padding:28px 24px 40px;
+  position:sticky;top:64px;height:calc(100vh - 64px);overflow:auto;
+}
+.chronicle-label{
+  font-size:.68rem;text-transform:uppercase;letter-spacing:.12em;
+  color:var(--dim);margin-bottom:12px;
+}
+.chronicle-meta{font-size:.78rem;color:var(--muted);margin-bottom:20px}
+.chronicle-body{
+  font-family:var(--serif);font-size:1.08rem;line-height:1.75;
+  white-space:pre-wrap;color:#e2dcd0;
+}
+.chronicle-empty{color:var(--muted);font-family:var(--serif);font-style:italic}
+.feed{padding:24px 24px 48px;min-width:0}
+.feed-toolbar{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;margin-bottom:20px;
+}
+.feed-toolbar h2{font-size:.95rem;font-weight:600}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filter{
+  border:1px solid var(--line);background:var(--bg2);color:var(--muted);
+  padding:6px 12px;border-radius:999px;font-size:.78rem;cursor:pointer;
+}
+.filter.active{border-color:var(--accent);color:var(--accent);background:#2a2418}
+.feed-stats{font-size:.75rem;color:var(--dim)}
+.timeline{display:flex;flex-direction:column;gap:16px}
+.entry{
+  display:grid;grid-template-columns:56px 1fr;gap:14px;
+  padding-bottom:16px;border-bottom:1px solid var(--line);
+}
+.entry:last-child{border-bottom:none}
+.entry-time{
+  font-size:.72rem;color:var(--dim);padding-top:4px;text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+.entry-card{
+  background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);
+  overflow:hidden;box-shadow:var(--shadow);
+}
+.entry-head{
+  display:flex;align-items:center;gap:8px;padding:10px 14px;
+  border-bottom:1px solid var(--line);font-size:.75rem;
+}
+.badge{padding:3px 8px;border-radius:6px;font-weight:600;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em}
+.badge.frame{background:#1a2838;color:var(--frame)}
+.badge.audio{background:#1a2a1c;color:var(--audio)}
+.badge.pending{background:#2a2218;color:var(--warn)}
+.entry-reason{margin-left:auto;color:var(--dim)}
+.entry-body{padding:14px}
+.frame-img{
+  display:block;width:100%;max-height:420px;object-fit:contain;
+  background:#0a0908;cursor:zoom-in;
+}
+.caption{margin-top:12px;font-size:.92rem;line-height:1.55;color:#ddd6ca}
+.caption.pending{color:var(--muted);font-style:italic}
+.transcript{
+  margin-top:10px;padding:12px 14px;border-left:3px solid var(--accent-dim);
+  font-family:var(--serif);font-size:.95rem;color:#e8e0d4;
+}
+.transcript.pending{color:var(--muted);font-style:italic;border-color:var(--line)}
+audio{width:100%;height:40px;border-radius:8px}
+.empty{
+  text-align:center;padding:48px 24px;color:var(--muted);
+  border:1px dashed var(--line);border-radius:var(--radius);
+}
+.load-more{
+  display:block;width:100%;margin-top:8px;padding:12px;
+  border:1px solid var(--line);border-radius:10px;background:var(--bg2);
+  color:var(--muted);cursor:pointer;
+}
+.load-more:hover{border-color:var(--accent-dim);color:var(--text)}
+.lightbox{
+  position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.88);
+  display:none;align-items:center;justify-content:center;padding:24px;
+}
+.lightbox.open{display:flex}
+.lightbox img{max-width:min(96vw,1100px);max-height:92vh;border-radius:8px}
+.lightbox button{
+  position:absolute;top:20px;right:20px;width:40px;height:40px;
+  border:none;border-radius:50%;background:rgba(255,255,255,.12);
+  color:#fff;font-size:1.4rem;cursor:pointer;
+}
+@media(max-width:960px){
+  .layout{grid-template-columns:1fr}
+  .chronicle{position:relative;top:0;height:auto;border-right:none;border-bottom:1px solid var(--line)}
+}
+</style>
+</head>
+<body>
+<header class="app-header">
+  <div class="brand">
+    <h1>Folio</h1>
+    <span>day witness</span>
+  </div>
+  <div class="day-nav">
+    <button type="button" id="day-prev" title="Previous day">‹</button>
+    <input type="date" id="day-input"/>
+    <button type="button" id="day-next" title="Next day">›</button>
+  </div>
+  <div class="status" id="status"></div>
+</header>
+
+<div class="layout">
+  <aside class="chronicle">
+    <div class="chronicle-label">Chronicle</div>
+    <p class="chronicle-meta" id="digest-meta">Updating automatically…</p>
+    <div class="chronicle-body" id="digest"></div>
+  </aside>
+
+  <section class="feed">
+    <div class="feed-toolbar">
+      <div>
+        <h2>Witness feed</h2>
+        <p class="feed-stats" id="counts"></p>
+      </div>
+      <div class="filters" id="filters">
+        <button class="filter active" data-f="all">All</button>
+        <button class="filter" data-f="frames">Frames</button>
+        <button class="filter" data-f="speech">Speech</button>
+        <button class="filter" data-f="quiet">Quiet audio</button>
+      </div>
+    </div>
+    <div class="timeline" id="timeline"></div>
+    <button class="load-more" id="load-more" hidden>Load older captures</button>
+  </section>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <button type="button" id="lightbox-close">×</button>
+  <img id="lightbox-img" alt=""/>
+</div>
+
+<script>
+const PAGE=30;
+let day=new URLSearchParams(location.search).get('day')||new Date().toISOString().slice(0,10);
+let allItems=[];
+let filter='all';
+let shown=PAGE;
+
+const $=id=>document.getElementById(id);
+
+function setDay(d){
+  day=d;
+  $('day-input').value=d;
+  const u=new URL(location.href);
+  u.searchParams.set('day',d);
+  history.replaceState(null,'',u);
+  shown=PAGE;
+  load();
+}
+
+function shiftDay(n){
+  const d=new Date(day+'T12:00:00');
+  d.setDate(d.getDate()+n);
+  setDay(d.toISOString().slice(0,10));
+}
+
+$('day-input').value=day;
+$('day-prev').onclick=()=>shiftDay(-1);
+$('day-next').onclick=()=>shiftDay(1);
+$('day-input').onchange=e=>setDay(e.target.value);
+
+document.querySelectorAll('.filter').forEach(btn=>{
+  btn.onclick=()=>{
+    document.querySelectorAll('.filter').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    filter=btn.dataset.f;
+    shown=PAGE;
+    renderTimeline();
+  };
+});
+
+$('load-more').onclick=()=>{shown+=PAGE;renderTimeline();};
+
+function filteredItems(){
+  return allItems.filter(i=>{
+    if(filter==='frames')return i.type==='frame';
+    if(filter==='speech')return i.type==='audio'&&i.speech;
+    if(filter==='quiet')return i.type==='audio'&&!i.speech;
+    if(filter==='all')return i.type==='frame'||(i.type==='audio'&&i.speech);
+    return true;
+  });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function localTime(iso){
+  try{
+    return new Date(iso).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }catch{return iso.slice(11,19);}
+}
+
+function renderItem(i){
+  const t=localTime(i.at);
+  if(i.type==='frame'){
+    const pending=!i.caption;
+    const cap=i.caption
+      ?`<p class="caption">${escapeHtml(i.caption)}</p>`
+      :`<p class="caption pending">Waiting for vision model…</p>`;
+    return `<article class="entry">
+      <div class="entry-time">${t}</div>
+      <div class="entry-card">
+        <div class="entry-head">
+          <span class="badge frame">Frame</span>
+          ${pending?'<span class="badge pending">queued</span>':''}
+          <span class="entry-reason">${escapeHtml(i.reason||'')}</span>
+        </div>
+        <div class="entry-body">
+          <img class="frame-img" src="/api/frame/${i.frame_id}" alt="Frame ${i.frame_id}" loading="lazy" data-full="/api/frame/${i.frame_id}"/>
+          ${cap}
+        </div>
+      </div>
+    </article>`;
+  }
+  if(i.type==='audio'){
+    const txt=i.text
+      ?`<blockquote class="transcript">“${escapeHtml(i.text)}”</blockquote>`
+      :`<p class="transcript pending">Transcript pending…</p>`;
+    return `<article class="entry">
+      <div class="entry-time">${t}</div>
+      <div class="entry-card">
+        <div class="entry-head">
+          <span class="badge audio">${i.speech?'Speech':'Quiet'}</span>
+        </div>
+        <div class="entry-body">
+          <audio controls preload="none" src="/api/audio/${i.chunk_id}"></audio>
+          ${txt}
+        </div>
+      </div>
+    </article>`;
+  }
+  return '';
+}
+
+function renderTimeline(){
+  const items=filteredItems().slice().sort((a,b)=>b.at.localeCompare(a.at));
+  const slice=items.slice(0,shown);
+  const el=$('timeline');
+  if(!slice.length){
+    el.innerHTML='<div class="empty">No captures for this filter.<br>ESP pushes → brain stores → feed fills up.</div>';
+    $('load-more').hidden=true;
+    return;
+  }
+  el.innerHTML=slice.map(renderItem).join('');
+  $('load-more').hidden=items.length<=shown;
+  el.querySelectorAll('.frame-img').forEach(img=>{
+    img.onclick=()=>{
+      $('lightbox-img').src=img.dataset.full;
+      $('lightbox').classList.add('open');
+    };
+  });
+}
+
+$('lightbox-close').onclick=()=>$('lightbox').classList.remove('open');
+$('lightbox').onclick=e=>{if(e.target.id==='lightbox')$('lightbox').classList.remove('open');};
+
+async function load(){
+  const [tl,q,d]=await Promise.all([
+    fetch('/api/timeline?day='+day).then(r=>r.json()),
+    fetch('/api/queue').then(r=>r.json()),
+    fetch('/api/digest?day='+day).then(r=>r.json()).catch(()=>({})),
+  ]);
+  allItems=tl.items||[];
+  const frames=allItems.filter(i=>i.type==='frame').length;
+  const speech=allItems.filter(i=>i.type==='audio'&&i.speech).length;
+  const quiet=allItems.filter(i=>i.type==='audio'&&!i.speech).length;
+  $('counts').textContent=`${frames} frames · ${speech} speech · ${quiet} quiet`;
+  const pending=q.pending||{};
+  const pa=pending.audio||0;
+  const pf=pending.frames||0;
+  $('status').innerHTML=
+    (pa+pf>0?`<span class="pill warn">${pa} audio · ${pf} frames in queue</span>`:'')+
+    `<span class="pill ok">brain :__PORT__</span>`;
+  $('digest').textContent=d.prose||'';
+  $('digest').className=d.prose?'chronicle-body':'chronicle-body chronicle-empty';
+  if(!d.prose)$('digest').textContent='Collecting the day… the chronicle writes itself as witness data arrives.';
+  $('digest-meta').textContent=d.updated_at
+    ?`Updated ${localTime(d.updated_at)} · auto`
+    :'Auto-updates when new data arrives';
+  renderTimeline();
+}
+
+load();
+setInterval(load,10000);
+</script>
+</body>
+</html>
