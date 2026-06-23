@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { resolve } from "node:path";
 import { CFG, nodeConfigPayload, publicConfig, updateConfig } from "./config.mjs";
-import { runDigestForDay } from "./digest/scheduler.mjs";
+import { runDigestForDay } from "./digest.mjs";
 import {
   getAudioChunk,
   getDigest,
@@ -17,7 +17,7 @@ import {
   touchDevice,
 } from "./db.mjs";
 import { ingestAudioChunk, ingestFrame, ingestEvent } from "./ingest.mjs";
-import { retrieveMemories } from "./memory/retrieve.mjs";
+import { retrieveMemories } from "./memory.mjs";
 import { errMsg, pcmToWav, sendBytes, sendJson, today } from "./util.mjs";
 
 let quietSkipCount = 0;

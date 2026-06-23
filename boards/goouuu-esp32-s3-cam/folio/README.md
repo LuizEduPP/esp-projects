@@ -96,22 +96,17 @@ scripts/
 ├── folio.mjs            # CLI: digest | process | enroll | memory reindex
 ├── ui/index.html
 └── lib/
-    ├── config.mjs       # ~/.folio/config.json + CFG (defaults from folio.config.example.json)
-    ├── db.mjs           # SQLite schema + queries
+    ├── config.mjs       # ~/.folio/config.json + CFG
+    ├── db.mjs           # SQLite schema + queries + openDb
+    ├── digest.mjs       # episodes, graph, passes A→D, scheduler
+    ├── memory.mjs       # RAG embed/retrieve + index
     ├── http.mjs         # routes (/ingest, /api/*)
     ├── ingest.mjs       # fast path: save PCM/JPEG
-    ├── worker.mjs       # Whisper + LM queue drain
-    ├── retention.mjs    # audio file cleanup
-    ├── digest/
-    │   ├── passes.mjs   # A→D pipeline
-    │   ├── compact.mjs
-    │   └── scheduler.mjs
-    ├── memory/          # RAG index + retrieve
-    ├── episodes.mjs
-    ├── graph.mjs
+    ├── worker.mjs       # Whisper + LM queue + retention
     ├── lm.mjs
     ├── whisper.mjs
     ├── locale.mjs
+    └── util.mjs
 ```
 
 ## Offline spool (SD card)
@@ -157,8 +152,23 @@ ESP polls `/api/node/config` every `node.statusIntervalMs` and sends `X-Folio-Co
 | `audio.pipelineBatch` | `FOLIO_PIPELINE_AUDIO_BATCH` | `4` | Chunks per worker tick |
 | `audio.retentionDays` | `FOLIO_AUDIO_RETENTION_DAYS` | `7` | Keep PCM with transcript |
 | `pipeline.intervalMs` | `FOLIO_PIPELINE_INTERVAL_MS` | `30000` | Queue worker interval |
+| `worker.backlogHigh` | `FOLIO_WORKER_BACKLOG_HIGH` | `200` | Pending audio count → scale batch ×3 |
+| `worker.backlogMedium` | `FOLIO_WORKER_BACKLOG_MEDIUM` | `50` | Pending audio count → scale batch ×2 |
+| `worker.batchMaxHigh` | `FOLIO_WORKER_BATCH_MAX_HIGH` | `12` | Max chunks per tick (high backlog) |
+| `worker.batchMaxMedium` | `FOLIO_WORKER_BATCH_MAX_MEDIUM` | `8` | Max chunks per tick (medium backlog) |
 | `digest.intervalMs` | `FOLIO_DIGEST_INTERVAL_MS` | `1800000` | Auto digest check interval |
+| `digest.passDTemperature` | `FOLIO_DIGEST_PASS_D_TEMP` | `0.35` | Pass D prose LM temperature |
 | `episodes.gapMin` | `FOLIO_EPISODE_GAP_MIN` | `12` | Silence minutes → new episode |
+| `episodes.frameAlignMs` | `FOLIO_EPISODE_FRAME_ALIGN_MS` | `60000` | Frame↔episode alignment window |
+| `memory.lookbackDays` | `FOLIO_MEMORY_LOOKBACK_DAYS` | `90` | RAG retrieval window |
+| `memory.retrieveLimit` | `FOLIO_MEMORY_RETRIEVE` | `14` | Max memory chunks per digest |
+| `memory.minScore` | `FOLIO_MEMORY_MIN_SCORE` | `0.08` | Min cosine score for RAG hit |
+| `memory.graphRetrieveLimit` | `FOLIO_MEMORY_GRAPH_LIMIT` | `8` | Max graph nodes per digest |
+| `memory.graphMinScore` | `FOLIO_MEMORY_GRAPH_MIN_SCORE` | `0.15` | Min token overlap for graph hit |
+| `memory.profileLimit` | `FOLIO_MEMORY_PROFILE_LIMIT` | `32` | Max profile facts in RAG context |
+| `memory.minFactTextLength` | `FOLIO_MEMORY_MIN_FACT_LEN` | `5` | Min chars to index a fact |
+| `memory.fallbackLexical` | `FOLIO_MEMORY_FALLBACK_LEXICAL` | `false` | On embed failure: warn + lexical (else fail) |
+| `memory.useEmbeddings` | `FOLIO_MEMORY_EMBEDDINGS` | `false` | Use LM `/v1/embeddings` vs lexical |
 | `lm.modelFast` / `modelDeep` | `FOLIO_MODEL_*` | ministral-3-3b | LM Studio models |
 | `lm.url` | `LM_URL` | `127.0.0.1:1234` | LM Studio API |
 

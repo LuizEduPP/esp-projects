@@ -6,11 +6,10 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CFG } from "./lib/config.mjs";
-import { startDigestLoop } from "./lib/digest/scheduler.mjs";
+import { startDigestLoop } from "./lib/digest.mjs";
 import { createFolioServer, logServerStartup } from "./lib/http.mjs";
 import { activeLocale, promptLanguageName, whisperLanguageCode } from "./lib/locale.mjs";
-import { startRetentionLoop } from "./lib/retention.mjs";
-import { startProcessingLoop } from "./lib/worker.mjs";
+import { startRetentionLoop, startProcessingLoop } from "./lib/worker.mjs";
 
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "ui");
 const viewHtml = readFileSync(join(UI_DIR, "index.html"), "utf8").replaceAll(

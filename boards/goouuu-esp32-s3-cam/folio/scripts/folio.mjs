@@ -5,8 +5,8 @@
  */
 import { CFG } from "./lib/config.mjs";
 import { getDigest, openDb, memoryChunkCount, pendingCounts, upsertSpeaker } from "./lib/db.mjs";
-import { runDigestForDay } from "./lib/digest/scheduler.mjs";
-import { reindexMemoriesFromDigests } from "./lib/memory/index.mjs";
+import { runDigestForDay } from "./lib/digest.mjs";
+import { reindexMemoriesFromDigests } from "./lib/memory.mjs";
 import { runPendingQueueOnce } from "./lib/worker.mjs";
 import { errMsg, today } from "./lib/util.mjs";
 
