@@ -63,7 +63,3 @@ export function cosineDense(a, b) {
   }
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
-
-export function lexicalScore(queryText, docText) {
-  return cosineSimilarity(termVector(queryText), termVector(docText));
-}

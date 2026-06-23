@@ -15,11 +15,12 @@ import {
 const GAP_MS = () => CFG.episodeGapMin * 60 * 1000;
 
 function alignFrameToEpisode(frameAt, episodes) {
+  const windowMs = CFG.episodeFrameAlignMs;
   const t = Date.parse(frameAt);
   for (const ep of episodes) {
     const start = Date.parse(ep.started_at);
     const end = Date.parse(ep.ended_at);
-    if (t >= start - 60000 && t <= end + 60000) {
+    if (t >= start - windowMs && t <= end + windowMs) {
       return ep.id;
     }
   }
@@ -113,19 +114,14 @@ export async function rebuildEpisodesForDay(db, day) {
     const epUtterances = utterances.filter((u) => cluster.utterance_ids.includes(u.id));
     const epFrames = frames.filter((f) => alignFrameToEpisode(f.captured_at, [cluster]));
 
-    let summary = null;
-    try {
-      summary = await extractEpisodeSemantics(cluster, epUtterances, epFrames);
-    } catch (err) {
-      summary = { label: "unprocessed", error: err.message };
-    }
+    const summary = await extractEpisodeSemantics(cluster, epUtterances, epFrames);
 
     insertEpisode(db, {
       id: cluster.id,
       day,
       started_at: cluster.started_at,
       ended_at: cluster.ended_at,
-      label: summary?.label ?? "episode",
+      label: summary.label,
       summary_json: JSON.stringify(summary),
       created_at: isoNow(),
     });

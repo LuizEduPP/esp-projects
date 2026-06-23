@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+/** esp_camera framesize_t IDs — must match firmware FOLIO_FRAME_SIZE_ID / platformio.ini */
 const FRAME_SIZE_TO_ID = { CIF: 5, QVGA: 6, VGA: 7, SVGA: 8, XGA: 9 };
 
 const EXAMPLE_PATH = join(
@@ -22,21 +23,30 @@ function envNum(fileVal, envKey, fallback) {
   if (process.env[envKey] !== undefined && process.env[envKey] !== "") {
     return Number(process.env[envKey]);
   }
-  return fileVal !== undefined ? Number(fileVal) : fallback;
+  if (fileVal === null || fileVal === undefined) {
+    return fallback;
+  }
+  return Number(fileVal);
 }
 
 function envStr(fileVal, envKey, fallback) {
   if (process.env[envKey] !== undefined && process.env[envKey] !== "") {
     return process.env[envKey];
   }
-  return fileVal !== undefined ? String(fileVal) : fallback;
+  if (fileVal === null || fileVal === undefined) {
+    return fallback;
+  }
+  return String(fileVal);
 }
 
 function envBool(fileVal, envKey, fallback) {
   if (process.env[envKey] !== undefined && process.env[envKey] !== "") {
     return process.env[envKey] !== "0" && process.env[envKey] !== "false";
   }
-  return fileVal !== undefined ? Boolean(fileVal) : fallback;
+  if (fileVal === null || fileVal === undefined) {
+    return fallback;
+  }
+  return Boolean(fileVal);
 }
 
 function cfgNum(file, dotPath, envKey) {
@@ -111,7 +121,12 @@ function getFileData() {
 }
 
 export function frameSizeId(sizeName) {
-  return FRAME_SIZE_TO_ID[String(sizeName ?? "QVGA").toUpperCase()] ?? 6;
+  const key = String(sizeName ?? DEFAULT_CONFIG.frames.size).toUpperCase();
+  const id = FRAME_SIZE_TO_ID[key];
+  if (id === undefined) {
+    throw new Error(`Unknown frame size: ${key}`);
+  }
+  return id;
 }
 
 export function nodeConfigVersion(data = fileData) {
@@ -240,6 +255,14 @@ function buildCfgFromFile(file = getFileData()) {
     digestAuto: cfgBool(file, "digest.auto", "FOLIO_DIGEST_AUTO"),
 
     episodeGapMin: cfgNum(file, "episodes.gapMin", "FOLIO_EPISODE_GAP_MIN"),
+    episodeFrameAlignMs: cfgNum(file, "episodes.frameAlignMs", "FOLIO_EPISODE_FRAME_ALIGN_MS"),
+
+    workerBacklogHigh: cfgNum(file, "worker.backlogHigh", "FOLIO_WORKER_BACKLOG_HIGH"),
+    workerBacklogMedium: cfgNum(file, "worker.backlogMedium", "FOLIO_WORKER_BACKLOG_MEDIUM"),
+    workerBatchMaxHigh: cfgNum(file, "worker.batchMaxHigh", "FOLIO_WORKER_BATCH_MAX_HIGH"),
+    workerBatchMaxMedium: cfgNum(file, "worker.batchMaxMedium", "FOLIO_WORKER_BATCH_MAX_MEDIUM"),
+
+    digestPassDTemperature: cfgNum(file, "digest.passDTemperature", "FOLIO_DIGEST_PASS_D_TEMP"),
 
     memoryEnabled: cfgBool(file, "memory.enabled", "FOLIO_MEMORY"),
     memoryLookbackDays: cfgNum(file, "memory.lookbackDays", "FOLIO_MEMORY_LOOKBACK_DAYS"),
@@ -248,12 +271,13 @@ function buildCfgFromFile(file = getFileData()) {
     memoryUseEmbeddings: cfgBool(file, "memory.useEmbeddings", "FOLIO_MEMORY_EMBEDDINGS"),
     memoryEmbeddingModel: cfgStr(file, "memory.embeddingModel", "FOLIO_MEMORY_EMBED_MODEL") || null,
     memoryEmbeddingsUrl: cfgStr(file, "memory.embeddingsUrl", "FOLIO_MEMORY_EMBED_URL") || null,
+    memoryFallbackLexical: cfgBool(file, "memory.fallbackLexical", "FOLIO_MEMORY_FALLBACK_LEXICAL"),
+    memoryGraphRetrieveLimit: cfgNum(file, "memory.graphRetrieveLimit", "FOLIO_MEMORY_GRAPH_LIMIT"),
+    memoryGraphMinScore: cfgNum(file, "memory.graphMinScore", "FOLIO_MEMORY_GRAPH_MIN_SCORE"),
+    memoryProfileLimit: cfgNum(file, "memory.profileLimit", "FOLIO_MEMORY_PROFILE_LIMIT"),
+    memoryMinFactTextLength: cfgNum(file, "memory.minFactTextLength", "FOLIO_MEMORY_MIN_FACT_LEN"),
 
     defaultLocale: cfgStr(file, "locale", "FOLIO_LOCALE"),
-
-    nodeWifiRetryMs: cfgNum(file, "node.wifiRetryMs", "FOLIO_WIFI_RETRY_MS"),
-    nodePushBackoffMaxMs: cfgNum(file, "node.pushBackoffMaxMs", "FOLIO_PUSH_BACKOFF_MAX_MS"),
-    nodeStatusIntervalMs: cfgNum(file, "node.statusIntervalMs", "FOLIO_STATUS_INTERVAL_MS"),
   };
 }
 

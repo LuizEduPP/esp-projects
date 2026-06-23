@@ -6,7 +6,7 @@
 import { CFG } from "./lib/config.mjs";
 import { getDigest, openDb, memoryChunkCount, pendingCounts, upsertSpeaker } from "./lib/db.mjs";
 import { runDigestForDay } from "./lib/digest/scheduler.mjs";
-import { reindexMemoriesFromDigests } from "./lib/memory/reindex.mjs";
+import { reindexMemoriesFromDigests } from "./lib/memory/index.mjs";
 import { runPendingQueueOnce } from "./lib/worker.mjs";
 import { errMsg, today } from "./lib/util.mjs";
 
@@ -83,7 +83,6 @@ function cmdEnroll(argv) {
 
   upsertSpeaker(openDb(), speakerId, displayName);
   console.log(`Speaker enrolled: ${speakerId} (${displayName})`);
-  console.log("Voice embedding: not implemented — diarization uses STT text only for now.");
 }
 
 async function cmdMemory(argv) {

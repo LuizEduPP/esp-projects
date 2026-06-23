@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 const NUM_CHANNELS = 1;
 const BITS_PER_SAMPLE = 16;
 
-export function pcmToWav(pcmBuffer, sampleRate = 16000) {
+export function pcmToWav(pcmBuffer, sampleRate) {
   const dataSize = pcmBuffer.length;
   const header = Buffer.alloc(44);
   header.write("RIFF", 0);
@@ -23,7 +23,7 @@ export function pcmToWav(pcmBuffer, sampleRate = 16000) {
   return Buffer.concat([header, pcmBuffer]);
 }
 
-export function writeWav(path, pcmBuffer, sampleRate = 16000) {
+export function writeWav(path, pcmBuffer, sampleRate) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, pcmToWav(pcmBuffer, sampleRate));
 }
@@ -96,10 +96,6 @@ export function parseJsonLoose(text) {
     }
   }
   return null;
-}
-
-export function clamp(n, lo, hi) {
-  return Math.max(lo, Math.min(hi, n));
 }
 
 export function errMsg(err) {

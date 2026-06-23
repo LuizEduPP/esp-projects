@@ -1,7 +1,14 @@
 import { CFG } from "../config.mjs";
-import { deleteMemoryForDay, insertMemoryChunk } from "../db.mjs";
+import {
+  deleteMemoryForDay,
+  episodeSummariesForDay,
+  getDigest,
+  graphNodesForDay,
+  insertMemoryChunk,
+  openDb,
+} from "../db.mjs";
 import { isoNow } from "../util.mjs";
-import { iterDigestProfileFacts } from "./digest-facts.mjs";
+import { iterDigestProfileFacts, syncDigestProfile } from "./digest-facts.mjs";
 import { embedText, serializeEmbedding } from "./embed.mjs";
 
 function push(items, kind, day, text, evidence = [], weight = 1) {
@@ -51,6 +58,8 @@ export function collectMemoryItems(day, { episodes, passB, passC, prose, graphNo
 }
 
 export async function indexDayMemories(db, day, payload) {
+  syncDigestProfile(db, day, payload.passB, payload.passC);
+
   if (!CFG.memoryEnabled) {
     return { indexed: 0 };
   }
@@ -75,4 +84,29 @@ export async function indexDayMemories(db, day, payload) {
 
   console.log(`[memory] indexed ${indexed} chunks for ${day}`);
   return { indexed };
+}
+
+export async function reindexMemoriesFromDigests(db = openDb()) {
+  const days = db
+    .prepare("SELECT day FROM digests WHERE prose IS NOT NULL ORDER BY day")
+    .all()
+    .map((r) => r.day);
+
+  let total = 0;
+  for (const day of days) {
+    const digest = getDigest(db, day);
+    if (!digest?.prose) {
+      continue;
+    }
+    const { indexed } = await indexDayMemories(db, day, {
+      episodes: episodeSummariesForDay(db, day),
+      passB: JSON.parse(digest.pass_b_json || "{}"),
+      passC: JSON.parse(digest.pass_c_json || "{}"),
+      prose: digest.prose,
+      graphNodes: graphNodesForDay(db, day),
+    });
+    total += indexed;
+  }
+
+  return { days: days.length, chunks: total };
 }

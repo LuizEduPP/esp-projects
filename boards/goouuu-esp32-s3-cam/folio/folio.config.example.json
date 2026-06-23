@@ -32,12 +32,20 @@
     "enabled": true,
     "intervalMs": 30000
   },
+  "worker": {
+    "backlogHigh": 200,
+    "backlogMedium": 50,
+    "batchMaxHigh": 12,
+    "batchMaxMedium": 8
+  },
   "digest": {
     "auto": true,
-    "intervalMs": 1800000
+    "intervalMs": 1800000,
+    "passDTemperature": 0.35
   },
   "episodes": {
-    "gapMin": 12
+    "gapMin": 12,
+    "frameAlignMs": 60000
   },
   "memory": {
     "enabled": true,
@@ -46,7 +54,12 @@
     "minScore": 0.08,
     "useEmbeddings": false,
     "embeddingModel": null,
-    "embeddingsUrl": null
+    "embeddingsUrl": null,
+    "fallbackLexical": false,
+    "graphRetrieveLimit": 8,
+    "graphMinScore": 0.15,
+    "profileLimit": 32,
+    "minFactTextLength": 5
   },
   "node": {
     "wifiRetryMs": 5000,

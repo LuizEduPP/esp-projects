@@ -131,7 +131,3 @@ export function compactMomentsForPass(moments, maxChars = 18_000) {
   }
   return compact;
 }
-
-export function buildMomentsPayload(moments, maxChars = 18_000) {
-  return JSON.stringify(compactMomentsForPass(moments, maxChars), null, 2);
-}

@@ -47,7 +47,7 @@ export async function retrieveMemories(db, queryText, { day, limit = CFG.memoryR
   return scored;
 }
 
-export function retrieveGraphContext(db, day, queryText, limit = 8) {
+export function retrieveGraphContext(db, day, queryText, limit = CFG.memoryGraphRetrieveLimit) {
   const tokens = new Set(tokenize(queryText));
   if (!tokens.size) {
     return [];
@@ -65,7 +65,7 @@ export function retrieveGraphContext(db, day, queryText, limit = 8) {
       }
       return { ...n, score: overlap / Math.max(labelTokens.length, 1) };
     })
-    .filter((n) => n.score > 0.15)
+    .filter((n) => n.score >= CFG.memoryGraphMinScore)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((n) => ({
@@ -83,7 +83,7 @@ export async function buildRagContext(db, day, { episodes, passAJson }) {
   const [memories, graph, profile] = await Promise.all([
     retrieveMemories(db, query, { day }),
     Promise.resolve(retrieveGraphContext(db, day, query)),
-    Promise.resolve(profileFacts(db).slice(0, 32)),
+    Promise.resolve(profileFacts(db).slice(0, CFG.memoryProfileLimit)),
   ]);
 
   if (memories.length) {

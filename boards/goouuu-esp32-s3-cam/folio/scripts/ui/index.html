@@ -435,18 +435,18 @@ async function loadSettings(){
     fetch('/api/config').then(r=>r.json()),
     fetch('/api/devices').then(r=>r.json()),
   ]);
-  $('cfg-locale').value=cfg.locale||'pt-BR';
-  $('cfg-speech').value=cfg.audio?.speechEnergyThreshold??0.008;
-  $('cfg-pipe-int').value=cfg.pipeline?.intervalMs??30000;
-  $('cfg-cap-int').value=cfg.frames?.captionIntervalMs??60000;
-  $('cfg-frame-int').value=cfg.frames?.captureIntervalMs??60000;
-  $('cfg-jpeg').value=cfg.frames?.jpegQuality??12;
-  $('cfg-frame-size').value=cfg.frames?.size||'QVGA';
-  $('cfg-wifi').value=cfg.node?.wifiRetryMs??5000;
-  $('cfg-backoff').value=cfg.node?.pushBackoffMaxMs??30000;
-  $('cfg-status').value=cfg.node?.statusIntervalMs??15000;
-  $('cfg-mem-days').value=cfg.memory?.lookbackDays??90;
-  $('cfg-mem-limit').value=cfg.memory?.retrieveLimit??14;
+  $('cfg-locale').value=cfg.locale;
+  $('cfg-speech').value=cfg.audio.speechEnergyThreshold;
+  $('cfg-pipe-int').value=cfg.pipeline.intervalMs;
+  $('cfg-cap-int').value=cfg.frames.captionIntervalMs;
+  $('cfg-frame-int').value=cfg.frames.captureIntervalMs;
+  $('cfg-jpeg').value=cfg.frames.jpegQuality;
+  $('cfg-frame-size').value=cfg.frames.size;
+  $('cfg-wifi').value=cfg.node.wifiRetryMs;
+  $('cfg-backoff').value=cfg.node.pushBackoffMaxMs;
+  $('cfg-status').value=cfg.node.statusIntervalMs;
+  $('cfg-mem-days').value=cfg.memory.lookbackDays;
+  $('cfg-mem-limit').value=cfg.memory.retrieveLimit;
   $('cfg-meta').textContent=`Brain config v${cfg.version||'?'} · ${cfg.configPath||'defaults'}`;
   const lines=(dev.devices||[]).map(d=>{
     const ok=d.node_config_applied===dev.brain_config_version;

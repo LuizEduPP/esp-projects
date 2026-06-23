@@ -20,10 +20,10 @@ let lastFrameLmAt = 0;
 export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
   const db = openDb();
   const pending = pendingCounts(db);
-  if (pending.audio > 200) {
-    limit = Math.min(12, limit * 3);
-  } else if (pending.audio > 50) {
-    limit = Math.min(8, limit * 2);
+  if (pending.audio > CFG.workerBacklogHigh) {
+    limit = Math.min(CFG.workerBatchMaxHigh, limit * 3);
+  } else if (pending.audio > CFG.workerBacklogMedium) {
+    limit = Math.min(CFG.workerBatchMaxMedium, limit * 2);
   }
 
   const chunks = pendingAudioChunks(db, limit);

@@ -1,132 +1,59 @@
 import { CFG } from "./config.mjs";
 
-/** Whisper CLI --language (ISO 639-1 codes). */
-const WHISPER_CODE_BY_LOCALE = {
-  "pt-BR": "pt",
-  "pt-PT": "pt",
-  pt: "pt",
-  "en-US": "en",
-  "en-GB": "en",
-  en: "en",
-  "es-ES": "es",
-  es: "es",
-  "fr-FR": "fr",
-  fr: "fr",
-  "de-DE": "de",
-  de: "de",
-  "it-IT": "it",
-  it: "it",
-  "ja-JP": "ja",
-  ja: "ja",
-  "zh-CN": "zh",
-  zh: "zh",
+const LOCALE_META = {
+  "pt-BR": { whisper: "pt", whisperName: "Portuguese", prompt: "Portuguese (Brazil)" },
+  "pt-PT": { whisper: "pt", whisperName: "Portuguese", prompt: "Portuguese (Portugal)" },
+  pt: { whisper: "pt", whisperName: "Portuguese", prompt: "Portuguese" },
+  "en-US": { whisper: "en", whisperName: "English", prompt: "English (US)" },
+  "en-GB": { whisper: "en", whisperName: "English", prompt: "English (UK)" },
+  en: { whisper: "en", whisperName: "English", prompt: "English" },
+  "es-ES": { whisper: "es", whisperName: "Spanish", prompt: "Spanish" },
+  es: { whisper: "es", whisperName: "Spanish", prompt: "Spanish" },
+  "fr-FR": { whisper: "fr", whisperName: "French", prompt: "French" },
+  fr: { whisper: "fr", whisperName: "French", prompt: "French" },
+  "de-DE": { whisper: "de", whisperName: "German", prompt: "German" },
+  de: { whisper: "de", whisperName: "German", prompt: "German" },
+  "it-IT": { whisper: "it", whisperName: "Italian", prompt: "Italian" },
+  it: { whisper: "it", whisperName: "Italian", prompt: "Italian" },
+  "ja-JP": { whisper: "ja", whisperName: "Japanese", prompt: "Japanese" },
+  ja: { whisper: "ja", whisperName: "Japanese", prompt: "Japanese" },
+  "zh-CN": { whisper: "zh", whisperName: "Chinese", prompt: "Chinese (Simplified)" },
+  zh: { whisper: "zh", whisperName: "Chinese", prompt: "Chinese" },
 };
 
-/** Human-readable Whisper language names for FOLIO_WHISPER_LANGUAGE lookup. */
-const WHISPER_NAME_BY_LOCALE = {
-  "pt-BR": "Portuguese",
-  "pt-PT": "Portuguese",
-  pt: "Portuguese",
-  "en-US": "English",
-  "en-GB": "English",
-  en: "English",
-  "es-ES": "Spanish",
-  es: "Spanish",
-  "fr-FR": "French",
-  fr: "French",
-  "de-DE": "German",
-  de: "German",
-  "it-IT": "Italian",
-  it: "Italian",
-  "ja-JP": "Japanese",
-  ja: "Japanese",
-  "zh-CN": "Chinese",
-  zh: "Chinese",
+const EVIDENCE_FOOTER_BY_BASE = {
+  pt: "End with one short italic line: Evidência: comma-separated evidence IDs used.",
+  es: "End with one short italic line: Evidencia: comma-separated evidence IDs used.",
+  fr: "End with one short italic line: Preuves : comma-separated evidence IDs used.",
+  de: "End with one short italic line: Belege: comma-separated evidence IDs used.",
 };
 
-/** Human label for LM prompts */
-const PROMPT_LANGUAGE = {
-  "pt-BR": "Portuguese (Brazil)",
-  "pt-PT": "Portuguese (Portugal)",
-  pt: "Portuguese",
-  "en-US": "English (US)",
-  "en-GB": "English (UK)",
-  en: "English",
-  "es-ES": "Spanish",
-  es: "Spanish",
-  "fr-FR": "French",
-  fr: "French",
-  "de-DE": "German",
-  de: "German",
-  "it-IT": "Italian",
-  it: "Italian",
-  "ja-JP": "Japanese",
-  ja: "Japanese",
-  "zh-CN": "Chinese (Simplified)",
-  zh: "Chinese",
-};
-
-/** Minimum token length for lexical RAG (tokens shorter than this are dropped). */
 export const LEXICAL_MIN_TOKEN_LENGTH = 3;
 
 const LEXICAL_STOP_WORDS_PT = [
-  "a",
-  "o",
-  "e",
-  "de",
-  "da",
-  "do",
-  "das",
-  "dos",
-  "em",
-  "no",
-  "na",
-  "nos",
-  "nas",
-  "um",
-  "uma",
-  "uns",
-  "umas",
-  "para",
-  "por",
-  "com",
-  "sem",
-  "que",
-  "se",
-  "as",
-  "os",
+  "a", "o", "e", "de", "da", "do", "das", "dos", "em", "no", "na", "nos", "nas",
+  "um", "uma", "uns", "umas", "para", "por", "com", "sem", "que", "se", "as", "os",
 ];
 
 const LEXICAL_STOP_WORDS_EN = [
-  "the",
-  "and",
-  "or",
-  "of",
-  "to",
-  "in",
-  "on",
-  "at",
-  "is",
-  "it",
+  "the", "and", "or", "of", "to", "in", "on", "at", "is", "it",
 ];
-
-const LEXICAL_STOP_WORDS_BY_BASE = {
-  pt: LEXICAL_STOP_WORDS_PT,
-  en: LEXICAL_STOP_WORDS_EN,
-};
 
 function baseLocale(locale) {
   return locale.split("-")[0];
+}
+
+function localeMeta(locale) {
+  return LOCALE_META[locale] ?? LOCALE_META[baseLocale(locale)];
 }
 
 export function activeLocale() {
   return CFG.defaultLocale || "pt-BR";
 }
 
-/** Stop words for lexical memory retrieval, keyed off active locale. */
 export function lexicalStopWordSet() {
   const base = baseLocale(activeLocale());
-  const primary = LEXICAL_STOP_WORDS_BY_BASE[base] ?? LEXICAL_STOP_WORDS_BY_BASE.en;
+  const primary = base === "pt" ? LEXICAL_STOP_WORDS_PT : LEXICAL_STOP_WORDS_EN;
   const extra = base === "pt" ? LEXICAL_STOP_WORDS_EN : [];
   return new Set([...primary, ...extra]);
 }
@@ -137,24 +64,21 @@ export function whisperLanguageCode() {
     if (w.length <= 3) {
       return w;
     }
-    const fromName = Object.entries(WHISPER_NAME_BY_LOCALE).find(([, name]) =>
-      name.toLowerCase().startsWith(w),
+    const fromName = Object.entries(LOCALE_META).find(([, meta]) =>
+      meta.whisperName.toLowerCase().startsWith(w),
     );
     if (fromName) {
-      return WHISPER_CODE_BY_LOCALE[fromName[0]] ?? fromName[0];
+      return fromName[1].whisper;
     }
     return CFG.whisperLanguage;
   }
-  const loc = activeLocale();
-  return WHISPER_CODE_BY_LOCALE[loc] ?? WHISPER_CODE_BY_LOCALE[baseLocale(loc)] ?? "en";
+  return localeMeta(activeLocale())?.whisper ?? "en";
 }
 
 export function promptLanguageName() {
-  const loc = activeLocale();
-  return PROMPT_LANGUAGE[loc] ?? PROMPT_LANGUAGE[baseLocale(loc)] ?? loc;
+  return localeMeta(activeLocale())?.prompt ?? activeLocale();
 }
 
-/** Appended to every LM system/user prompt that emits natural language. */
 export function promptLanguageRule() {
   return (
     `Respond in ${promptLanguageName()}. ` +
@@ -172,19 +96,9 @@ export function dateLabelForDay(day) {
 }
 
 export function evidenceFooterRule() {
-  const loc = activeLocale();
-  const base = baseLocale(loc);
-  if (base === "pt") {
-    return "End with one short italic line: Evidência: comma-separated evidence IDs used.";
-  }
-  if (base === "es") {
-    return "End with one short italic line: Evidencia: comma-separated evidence IDs used.";
-  }
-  if (base === "fr") {
-    return "End with one short italic line: Preuves : comma-separated evidence IDs used.";
-  }
-  if (base === "de") {
-    return "End with one short italic line: Belege: comma-separated evidence IDs used.";
-  }
-  return "End with one short italic line: Evidence: comma-separated evidence IDs used.";
+  const base = baseLocale(activeLocale());
+  return (
+    EVIDENCE_FOOTER_BY_BASE[base] ??
+    "End with one short italic line: Evidence: comma-separated evidence IDs used."
+  );
 }

@@ -15,7 +15,6 @@ import {
 import { rebuildEpisodesForDay } from "../episodes.mjs";
 import { buildGraphFromEpisodes } from "../graph.mjs";
 import { indexDayMemories } from "../memory/index.mjs";
-import { syncProfileFromDigest } from "../memory/profile.mjs";
 import { buildRagContext } from "../memory/retrieve.mjs";
 import {
   buildPassAPayload,
@@ -127,7 +126,7 @@ export async function passD(day, passAJson, passBJson, passCJson, prior, rag) {
 
   return chatCompletion({
     model: CFG.modelDeep,
-    temperature: 0.35,
+    temperature: CFG.digestPassDTemperature,
     maxTokens: 2800,
     messages: [
       {
@@ -213,8 +212,6 @@ export async function runDigestPipeline(db, day) {
     patterns: b.patterns,
   };
   upsertDayRollup(db, day, JSON.stringify(compact));
-
-  syncProfileFromDigest(db, day, b, c);
 
   await indexDayMemories(db, day, {
     episodes: episodes.map((ep) => ({

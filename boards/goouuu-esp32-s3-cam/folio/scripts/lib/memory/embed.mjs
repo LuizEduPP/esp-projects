@@ -50,7 +50,11 @@ export async function embedText(text) {
       throw new Error("no embedding vector");
     }
     return { kind: "float", vector: vec };
-  } catch {
+  } catch (err) {
+    if (!CFG.memoryFallbackLexical) {
+      throw new Error(`embeddings failed: ${err.message}`);
+    }
+    console.warn(`[memory] embeddings failed, fallback lexical: ${err.message}`);
     return { kind: "lexical", vector: [...termVector(text).entries()] };
   }
 }
