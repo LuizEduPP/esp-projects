@@ -103,6 +103,32 @@ function resolveWhisperBin(fileVal, envVal) {
   }
 }
 
+function cudaAvailable() {
+  try {
+    const out = execSync("nvidia-smi -L", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 3000,
+    });
+    return /GPU/i.test(out);
+  } catch {
+    return false;
+  }
+}
+
+/** openai-whisper --device: cpu | cuda | mps. "auto" picks cuda when NVIDIA is present. */
+function resolveWhisperDevice(fileVal, envVal) {
+  let device = envVal || fileVal || "auto";
+  if (device === "auto") {
+    device = cudaAvailable() ? "cuda" : "cpu";
+  }
+  if (device === "cuda" && !cudaAvailable()) {
+    console.warn("[whisper] cuda requested but no NVIDIA GPU — using cpu");
+    return "cpu";
+  }
+  return device;
+}
+
 let configPath = null;
 let fileData = clone(DEFAULT_CONFIG);
 
@@ -251,7 +277,10 @@ function buildCfgFromFile(file = getFileData()) {
       process.env.FOLIO_WHISPER_BIN,
     ),
     whisperModel: cfgStr(file, "audio.whisperModel", "FOLIO_WHISPER_MODEL"),
-    whisperDevice: cfgStr(file, "audio.whisperDevice", "FOLIO_WHISPER_DEVICE"),
+    whisperDevice: resolveWhisperDevice(
+      getPath(file, "audio.whisperDevice"),
+      process.env.FOLIO_WHISPER_DEVICE,
+    ),
     whisperTimeoutMs: cfgNum(file, "audio.whisperTimeoutMs", "FOLIO_WHISPER_TIMEOUT_MS"),
     whisperLanguage: cfgStr(file, "audio.whisperLanguage", "FOLIO_WHISPER_LANGUAGE") || null,
     pipelineAudioBatch: cfgNum(file, "audio.pipelineBatch", "FOLIO_PIPELINE_AUDIO_BATCH"),

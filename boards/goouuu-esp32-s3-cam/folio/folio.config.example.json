@@ -21,7 +21,7 @@
     "speechEnergyThreshold": 0.008,
     "whisperBin": "whisper",
     "whisperModel": "base",
-    "whisperDevice": "cpu",
+    "whisperDevice": "cuda",
     "whisperTimeoutMs": 120000,
     "whisperLanguage": null,
     "pipelineBatch": 4,

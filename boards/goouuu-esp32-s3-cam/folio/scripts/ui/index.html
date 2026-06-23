@@ -207,6 +207,14 @@ audio{width:100%;height:40px;border-radius:8px}
         <div class="field"><label>LM URL</label><input name="lmUrl" id="cfg-lm-url" type="url"/></div>
         <div class="field"><label>LM model</label><input name="lmModel" id="cfg-lm-model"/></div>
         <div class="field"><label>Whisper model</label><input name="whisperModel" id="cfg-whisper-model"/></div>
+        <div class="field"><label>Whisper device</label>
+          <select name="whisperDevice" id="cfg-whisper-device">
+            <option value="cuda">cuda (NVIDIA GPU)</option>
+            <option value="auto">auto</option>
+            <option value="cpu">cpu</option>
+            <option value="mps">mps (Apple)</option>
+          </select>
+        </div>
         <div class="field"><label>Episode gap (min)</label><input name="gapMin" id="cfg-ep-gap" type="number"/></div>
       </div>
       <div class="settings-section">ESP node (synced)</div>
@@ -437,6 +445,7 @@ async function loadSettings(){
   $('cfg-lm-url').value=cfg.lm.url;
   $('cfg-lm-model').value=cfg.lm.model||cfg.lm.modelFast||'';
   $('cfg-whisper-model').value=cfg.audio.whisperModel;
+  $('cfg-whisper-device').value=cfg.audio.whisperDevice||'cuda';
   $('cfg-ep-gap').value=cfg.episodes.gapMin;
   $('cfg-frame-int').value=cfg.frames.captureIntervalMs;
   $('cfg-jpeg').value=cfg.frames.jpegQuality;
@@ -457,7 +466,7 @@ $('settings-form').onsubmit=async e=>{
   const body={
     locale:$('cfg-locale').value,
     lm:{url:$('cfg-lm-url').value,model:$('cfg-lm-model').value},
-    audio:{speechEnergyThreshold:Number($('cfg-speech').value),whisperModel:$('cfg-whisper-model').value},
+    audio:{speechEnergyThreshold:Number($('cfg-speech').value),whisperModel:$('cfg-whisper-model').value,whisperDevice:$('cfg-whisper-device').value},
     episodes:{gapMin:Number($('cfg-ep-gap').value)},
     frames:{
       captureIntervalMs:Number($('cfg-frame-int').value),

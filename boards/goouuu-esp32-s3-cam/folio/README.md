@@ -145,7 +145,8 @@ ESP polls `/api/node/config` every `node.statusIntervalMs` and sends `X-Folio-Co
 |-----|---------|-------------|
 | `locale` | `pt-BR` | Language |
 | `lm.url` / `lm.model` | LM Studio | Vision + digest |
-| `audio.whisperModel` | `base` | Whisper |
+| `audio.whisperModel` | `base` | Whisper model |
+| `audio.whisperDevice` | `cuda` | `cpu`, `cuda` (NVIDIA), `mps` (Apple), or `auto` |
 | `audio.speechEnergyThreshold` | `0.008` | Speech gate |
 | `episodes.gapMin` | `12` | Episode split (min silence) |
 | `frames.*` / `node.*` | — | ESP sync |
