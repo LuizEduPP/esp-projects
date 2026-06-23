@@ -87,6 +87,6 @@ yarn folio:enroll luiz "Luiz Eduardo"
 
 Metadata only; voice embeddings are a future extension.
 
-## Memory store
+## Memory
 
-Folio uses its own local store (`~/.folio/`, `node:sqlite`). It does **not** integrate with [rememb](https://github.com/LuizEduPP/Rememb); day continuity is handled via `day_rollups` and `profile_facts` inside folio.db.
+All witness data and digests live in `~/.folio/` (`folio.db`, audio, frames, digests). Day continuity uses `day_rollups` and `profile_facts` inside that store.
