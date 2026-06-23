@@ -284,9 +284,11 @@ function renderWitnessGroups(groups) {
       </article>`;
     }
 
-    const fid = g.frame_ids?.[0];
+    const fid = g.frame_ids?.[g.frame_ids.length - 1];
+    const n = g.count ?? g.frame_ids?.length ?? 1;
+    const header = n > 1 ? `${n} imagens na fila…` : "Processando imagem…";
     return `${hourMark}<article class="witness-group pending">
-      <header>Processando imagem…</header>
+      <header>${esc(header)}</header>
       ${fid ? `<img src="/api/frame/${fid}" alt="" loading="lazy" class="dim"/>` : ""}
     </article>`;
   }).join("");

@@ -145,7 +145,7 @@ export async function processPendingFrames(limit = CFG.pipelineFrameBatch, { byp
   const db = openDb();
   const pending = pendingCounts(db);
   if (pending.frames > CFG.workerBacklogHigh) {
-    limit = Math.min(CFG.workerBatchMaxHigh, limit * 2);
+    limit = Math.max(CFG.workerFrameSkipBatch ?? 32, limit);
   } else if (pending.frames > CFG.workerBacklogMedium) {
     limit = Math.min(CFG.workerBatchMaxMedium, limit * 2);
   }
@@ -164,10 +164,15 @@ export async function processPendingFrames(limit = CFG.pipelineFrameBatch, { byp
     }
     try {
       const result = await processFrame(db, frame);
-      lastFrameLmAt = Date.now();
       results.push(result);
+      if (result.usedLm) {
+        lastFrameLmAt = Date.now();
+        if (minGap > 0) {
+          break;
+        }
+      }
     } catch (err) {
-      results.push({ id: frame.id, error: err.message });
+      results.push({ id: frame.id, error: err.message, usedLm: false });
       console.warn(`[perception] frame ${frame.id}: ${err.message}`);
     }
   }
@@ -221,9 +226,10 @@ export function startProcessingLoop(intervalMs = CFG.pipelineIntervalMs) {
 
       const utt = audio.filter((r) => r.text).length;
       const cap = frames.filter((r) => r.caption).length;
+      const skipped = frames.filter((r) => r.skipped).length;
       const snd = audio.filter((r) => r.sound).length;
-      if (utt > 0 || cap > 0 || snd > 0) {
-        console.log(`[worker] done utt=${utt} caption=${cap} sounds=${snd}`);
+      if (utt > 0 || cap > 0 || snd > 0 || skipped > 0) {
+        console.log(`[worker] done utt=${utt} caption=${cap} skip=${skipped} sounds=${snd}`);
       }
     } catch (err) {
       console.error(`[worker] ${err.message}`);

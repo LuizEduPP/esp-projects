@@ -10,24 +10,22 @@ import { compareFrames, enhanceJpeg, jpegQuality } from "./image.mjs";
 import { enrichScene, objectsSummary } from "./scene.mjs";
 import { MotionLevel } from "./types.mjs";
 
-function msSince(iso) {
-  if (!iso) {
+function msBetween(earlierIso, laterIso) {
+  if (!earlierIso || !laterIso) {
     return Infinity;
   }
-  return Date.now() - new Date(iso).getTime();
+  return new Date(laterIso).getTime() - new Date(earlierIso).getTime();
 }
 
 function shouldAnalyze({ motion, frame, prev, forceIntervalMs }) {
-  if (frame.reason === "motion") {
-    return true;
-  }
+  const gapMs = msBetween(prev?.captured_at, frame.captured_at);
   if (motion.level === MotionLevel.HIGH) {
     return true;
   }
-  if (motion.level === MotionLevel.LOW && msSince(prev?.captured_at) >= forceIntervalMs / 2) {
+  if (motion.level === MotionLevel.LOW && gapMs >= forceIntervalMs / 2) {
     return true;
   }
-  if (msSince(prev?.captured_at) >= forceIntervalMs) {
+  if (gapMs >= forceIntervalMs) {
     return true;
   }
   return motion.changed && motion.score >= CFG.perceptionMotionMin;
@@ -48,7 +46,7 @@ function markSkipped(db, frame, motion, quality) {
     { motion, quality },
   );
   markFrameProcessed(db, frame.id, scene.summary, JSON.stringify(scene));
-  return { id: frame.id, skipped: "no_motion", motion: motion.score };
+  return { id: frame.id, skipped: "no_motion", motion: motion.score, usedLm: false };
 }
 
 export async function processFrame(db, frame) {
@@ -128,5 +126,6 @@ export async function processFrame(db, frame) {
     motion: motion.score,
     lighting: scene.lighting,
     unchanged: !!scene.unchanged,
+    usedLm: true,
   };
 }

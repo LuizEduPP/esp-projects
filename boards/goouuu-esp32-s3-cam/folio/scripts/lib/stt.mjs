@@ -70,6 +70,29 @@ function findWhisperJson(outDir, wavPath) {
   return null;
 }
 
+export function shouldRejectTranscript(stt) {
+  const text = String(stt?.text ?? "").trim();
+  if (!text) {
+    return false;
+  }
+  const lower = text.toLowerCase();
+  for (const pat of CFG.audioSttRejectPatterns ?? []) {
+    if (pat && lower.includes(String(pat).toLowerCase())) {
+      return true;
+    }
+  }
+  const probs = (stt?.segments ?? [])
+    .map((s) => s.noSpeechProb)
+    .filter((p) => typeof p === "number");
+  if (probs.length > 0) {
+    const avg = probs.reduce((a, b) => a + b, 0) / probs.length;
+    if (avg >= CFG.audioSttMaxNoSpeechProb) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function transcribeWav(wavPath, { chunkId } = {}) {
   const { bin, device, timeoutMs, language } = whisperRuntime();
   const model = modelId(ModelSlot.WHISPER);
@@ -132,7 +155,12 @@ export async function transcribeWav(wavPath, { chunkId } = {}) {
     } else {
       console.log(`[whisper] ${tag} empty ${ms}ms — no speech in audio`);
     }
-    return { text, segments, confidence };
+    const result = { text, segments, confidence };
+    if (shouldRejectTranscript(result)) {
+      console.log(`[whisper] ${tag} rejected — hallucination / no-speech (${text.slice(0, 80)})`);
+      return { text: "", segments, confidence: 0 };
+    }
+    return result;
   } catch (err) {
     const ms = Date.now() - t0;
     if (err.code === "ENOENT") {

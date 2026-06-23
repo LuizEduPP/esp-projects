@@ -243,7 +243,7 @@ export function createFolioServer(ui) {
       }
 
       if (path === "/api/process" && req.method === "POST") {
-        const { audio, frames } = await runPendingQueueOnce();
+        const { audio, frames } = await runPendingQueueOnce({ bypassFrameGap: true });
         sendJson(res, 200, {
           ok: true,
           pending: pendingCounts(openDb()),

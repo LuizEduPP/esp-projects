@@ -9,19 +9,6 @@ import { normalizeOpenAiBase } from "../llm/openai-base.mjs";
 /** esp_camera framesize_t IDs — must match firmware FOLIO_FRAME_SIZE_ID / platformio.ini */
 const FRAME_SIZE_TO_ID = { CIF: 5, QVGA: 6, VGA: 7, SVGA: 8, XGA: 9 };
 
-/** Auto-injected PT list — removed; stopWords must be explicit in user config. */
-const LEGACY_MEMORY_STOP_WORDS = [
-  "a", "o", "e", "de", "da", "do", "das", "dos", "em", "no", "na", "nos", "nas",
-  "um", "uma", "para", "por", "com", "sem", "que", "se", "as", "os",
-];
-
-function isLegacyMemoryStopWords(list) {
-  if (!Array.isArray(list) || list.length !== LEGACY_MEMORY_STOP_WORDS.length) {
-    return false;
-  }
-  return list.every((w, i) => w === LEGACY_MEMORY_STOP_WORDS[i]);
-}
-
 const EXAMPLE_PATH = join(
   dirname(fileURLToPath(import.meta.url)),
   "../../../folio.config.example.json",
@@ -335,10 +322,6 @@ function migrateConfigSchema(file) {
         }
       }
     }
-    if (isLegacyMemoryStopWords(file.memory.lexical?.stopWords)) {
-      file.memory.lexical.stopWords = [];
-      changed = true;
-    }
   }
 
   if (!file.speaker || typeof file.speaker !== "object") {
@@ -637,6 +620,13 @@ function buildCfgFromFile(file = getFileData()) {
     lmChatMaxTokensDeep: cfgNum(file, "lm.chatMaxTokensDeep", "FOLIO_LM_CHAT_MAX_TOKENS_DEEP"),
 
     audioSttMaxAttempts: cfgNum(file, "audio.sttMaxAttempts", "FOLIO_STT_MAX_ATTEMPTS"),
+    audioSttMaxNoSpeechProb: cfgNum(file, "audio.sttMaxNoSpeechProb", "FOLIO_STT_MAX_NO_SPEECH"),
+    audioSttRejectPatterns: cfgStrArray(
+      file,
+      "audio.sttRejectPatterns",
+      "FOLIO_STT_REJECT_PATTERNS",
+      { noFallback: true },
+    ),
     audioChunkMs:
       cfgNum(file, "audio.vad.frameMs", "FOLIO_VAD_FRAME_MS") ||
       cfgNum(file, "audio.chunkMs", "FOLIO_AUDIO_CHUNK_MS"),
@@ -709,8 +699,10 @@ function buildCfgFromFile(file = getFileData()) {
     speakerMaxEnrollmentSamples: cfgNum(file, "speaker.maxEnrollmentSamples", "FOLIO_SPEAKER_MAX_SAMPLES"),
 
     perceptionMotionMin: cfgNum(file, "perception.motionMin", "FOLIO_MOTION_MIN"),
+    workerBacklogHigh: cfgNum(file, "worker.backlogHigh", "FOLIO_WORKER_BACKLOG_HIGH"),
     workerBacklogMedium: cfgNum(file, "worker.backlogMedium", "FOLIO_WORKER_BACKLOG_MEDIUM"),
     workerBatchMaxHigh: cfgNum(file, "worker.batchMaxHigh", "FOLIO_WORKER_BATCH_MAX_HIGH"),
+    workerFrameSkipBatch: cfgNum(file, "worker.frameSkipBatch", "FOLIO_WORKER_FRAME_SKIP_BATCH"),
     workerBatchMaxMedium: cfgNum(file, "worker.batchMaxMedium", "FOLIO_WORKER_BATCH_MAX_MEDIUM"),
 
     digestPassDTemperature: cfgNum(file, "digest.passDTemperature", "FOLIO_DIGEST_PASS_D_TEMP"),

@@ -36,9 +36,19 @@ export function groupTimelineItems(items, opts = {}) {
 
   for (const item of sorted) {
     if (item.type === "audio" && item.text) {
+      const text = String(item.text).trim();
+      if (!text) {
+        continue;
+      }
       const last = groups.at(-1);
       const sameSpeaker =
         !item.speaker_id || !last?.speaker_id || last.speaker_id === item.speaker_id;
+      const dupLine =
+        last?.type === "speech" &&
+        last.lines.some((ln) => ln.text.trim().toLowerCase() === text.toLowerCase());
+      if (dupLine) {
+        continue;
+      }
       if (
         last?.type === "speech" &&
         sameSpeaker &&
@@ -46,7 +56,7 @@ export function groupTimelineItems(items, opts = {}) {
       ) {
         last.lines.push({
           at: item.at,
-          text: item.text,
+          text,
           chunk_id: item.chunk_id,
           has_pcm: item.has_pcm,
         });
@@ -61,7 +71,7 @@ export function groupTimelineItems(items, opts = {}) {
         lines: [
           {
             at: item.at,
-            text: item.text,
+            text,
             chunk_id: item.chunk_id,
             has_pcm: item.has_pcm,
           },
@@ -100,6 +110,28 @@ export function groupTimelineItems(items, opts = {}) {
     }
 
     if (item.type === "frame") {
+      if (!item.caption) {
+        const last = groups.at(-1);
+        if (last?.type === "frame_pending") {
+          last.frame_ids.push(item.frame_id);
+          last.at_end = item.at;
+          last.count += 1;
+          continue;
+        }
+        groups.push({
+          type: "frame_pending",
+          at: item.at,
+          at_end: item.at,
+          caption: null,
+          caption_key: "",
+          frame_ids: [item.frame_id],
+          reason: item.reason ?? null,
+          count: 1,
+          processed: false,
+        });
+        continue;
+      }
+
       const key = captionKey(item.caption);
       const last = groups.at(-1);
       if (
@@ -151,7 +183,11 @@ export function timelineWithGroups(items, opts) {
           ? g.count > 1
             ? labels.sceneGroup
             : labels.sceneSingle
-          : labels.pending;
+          : g.type === "frame_pending"
+            ? g.count > 1
+              ? `${g.count} ${labels.pendingPlural ?? labels.pending}`
+              : labels.pending
+            : labels.pending;
     return { ...g, hour, showHour, hour_label: hourLabel(g.at), kind_label: label };
   });
   return { groups: enriched, count: enriched.length };

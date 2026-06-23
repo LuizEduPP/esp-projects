@@ -31,6 +31,8 @@
     "sampleRate": 16000,
     "speechEnergyThreshold": 0.008,
     "sttMaxAttempts": 3,
+    "sttMaxNoSpeechProb": 0.55,
+    "sttRejectPatterns": [],
     "retentionDays": 7,
     "retentionSweepMs": 21600000,
     "whisperBin": "whisper",
@@ -61,7 +63,8 @@
     "backlogHigh": 200,
     "backlogMedium": 50,
     "batchMaxHigh": 12,
-    "batchMaxMedium": 8
+    "batchMaxMedium": 8,
+    "frameSkipBatch": 32
   },
   "insights": {
     "auto": true,
