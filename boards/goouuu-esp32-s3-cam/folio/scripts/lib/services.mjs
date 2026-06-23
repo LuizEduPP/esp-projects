@@ -10,6 +10,7 @@ import {
 import { chatJson, fetchOpenAiModels } from "./llm.mjs";
 import { promptLanguageRule } from "./locale.mjs";
 import { indexDayMemories, retrieveContextForDay, retrieveMemories } from "./memory.mjs";
+import { isMeaningfulFrameItem } from "./present.mjs";
 import { modelId, ModelSlot } from "./models.mjs";
 import { processAudioChunk, processFrame } from "./perception/index.mjs";
 import { isSpeechChunk, pcmEnergy, shouldStoreAudioChunk } from "./stt.mjs";
@@ -368,6 +369,7 @@ function setError(day, err) {
 export function buildDayStats(db, day) {
   const items = timelineForDay(db, day);
   const stats = witnessStats(db, day);
+  const scenes = items.filter(isMeaningfulFrameItem).length;
   const sounds = {};
   const speakers = {};
   const hours = {};
@@ -394,6 +396,7 @@ export function buildDayStats(db, day) {
   return {
     day,
     frames: stats.frames,
+    scenes,
     utterances: stats.utterances,
     speech_chunks: stats.speech,
     sounds,
@@ -484,7 +487,7 @@ function updatePatternsFromStats(db, day, stats) {
 
 export async function runDayInsights(db, day, { force = false } = {}) {
   const stats = buildDayStats(db, day);
-  const hasData = stats.frames + stats.utterances + stats.speech_chunks > 0;
+  const hasData = (stats.scenes ?? 0) + stats.utterances + stats.speech_chunks > 0;
   if (!hasData && !force) {
     return { skipped: true, reason: "no_witness" };
   }
@@ -534,7 +537,9 @@ export async function runDayInsights(db, day, { force = false } = {}) {
 
 export function needsInsightsRefresh(db, day) {
   const stats = witnessStats(db, day);
-  const hasData = stats.frames + stats.utterances + stats.speech > 0;
+  const items = timelineForDay(db, day);
+  const scenes = items.filter(isMeaningfulFrameItem).length;
+  const hasData = scenes + stats.utterances + stats.speech > 0;
   if (!hasData) {
     return { needed: false, reason: "no_witness", stats };
   }

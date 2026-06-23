@@ -104,6 +104,8 @@
     "speechGapMs": 45000,
     "sceneGapMs": 480000,
     "soundGapMs": 20000,
+    "hideStaticFrames": true,
+    "hidePendingInFeed": true,
     "labels": {
       "speechGroup": "Conversa",
       "speechSingle": "Fala",
@@ -128,7 +130,9 @@
       "maxPasses": 4,
       "contrastStretch": true,
       "gammaMin": 0.5,
-      "sharpen": 0.12
+      "sharpen": 0.12,
+      "minBrightnessForLm": 0.1,
+      "darkMotionMin": 0.08
     },
     "storeSounds": true,
     "soundMinEnergy": 0.003,

@@ -341,14 +341,17 @@ export async function captionFrame(b64, reason, ctx = {}) {
   let sceneHints = "";
   if (quality?.nearlyBlack) {
     sceneHints +=
-      "Image is nearly black (underexposed camera) — describe only what is clearly visible; do not invent. ";
+      "Image is nearly black — reply unchanged OR summary admitting visibility is too low. " +
+      "NEVER invent people, phones, beds, laptops, or furniture you cannot clearly see. ";
   } else if (quality?.dark) {
-    sceneHints += "Image was dark and auto-enhanced — infer carefully from visible shapes. ";
+    sceneHints +=
+      "Image is underexposed (auto-enhanced). Only describe clearly visible shapes. " +
+      "If unsure about people or objects, set person_present:false and people:0. ";
   } else if (ctx.vision?.enhanced) {
     sceneHints += "Image was auto-enhanced for visibility. ";
   }
   if (quality?.bright) {
-    sceneHints += "Image is overexposed — infer from silhouettes and context. ";
+    sceneHints += "Image is overexposed — infer from silhouettes only; do not invent details. ";
   }
   if (motion?.level === "high") {
     sceneHints += "Significant motion detected. ";
@@ -361,8 +364,9 @@ export async function captionFrame(b64, reason, ctx = {}) {
     '{"unchanged":false,"summary":"one natural sentence","person_present":bool,"people":0,' +
     '"scene":"room label","activity":"what is happening","objects":[{"name":"object","count":1}],' +
     '"tags":["indoor|outdoor|pet|…"],"mood":"calm|focused|tense|social|empty","note":"optional"}. ' +
-    "Identify visible objects (furniture, pets, devices, people). " +
-    "summary = tell a friend what you see. Real humans only — not photos on walls. " +
+    "Identify visible objects only when clearly seen. " +
+    "summary = one honest sentence; prefer unchanged if the scene matches the last observation. " +
+    "Real humans only — not photos on walls, not guesses in darkness. " +
     `Trigger: ${reason || "interval"}. ` +
     promptLanguageRule();
 

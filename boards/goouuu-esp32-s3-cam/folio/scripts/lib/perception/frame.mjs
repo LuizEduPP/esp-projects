@@ -58,12 +58,14 @@ function motionScore(bufA, bufB, size = GREY_SAMPLES) {
   }
 }
 
-function compareFrames(prevBuf, nextBuf) {
+function compareFrames(prevBuf, nextBuf, { dark = false } = {}) {
   const score = motionScore(prevBuf, nextBuf);
+  const minChanged = dark ? 0.06 : 0.035;
+  const minHigh = dark ? 0.18 : 0.12;
   return {
     score,
-    changed: score >= 0.035,
-    level: score >= 0.12 ? MotionLevel.HIGH : score >= 0.035 ? MotionLevel.LOW : MotionLevel.NONE,
+    changed: score >= minChanged,
+    level: score >= minHigh ? MotionLevel.HIGH : score >= minChanged ? MotionLevel.LOW : MotionLevel.NONE,
   };
 }
 
@@ -375,8 +377,12 @@ function objectsSummary(scene) {
     .join(", ");
 }
 
-function shouldAnalyze({ motion, frame, prev, forceIntervalMs }) {
+function shouldAnalyze({ motion, frame, prev, forceIntervalMs, quality }) {
   const gapMs = msBetween(prev?.captured_at, frame.captured_at);
+  const motionMin = quality?.dark
+    ? (visionOpts().darkMotionMin ?? 0.08)
+    : CFG.perceptionMotionMin;
+
   if (motion.level === MotionLevel.HIGH) {
     return true;
   }
@@ -386,25 +392,56 @@ function shouldAnalyze({ motion, frame, prev, forceIntervalMs }) {
   if (gapMs >= forceIntervalMs) {
     return true;
   }
-  return motion.changed && motion.score >= CFG.perceptionMotionMin;
+  return motion.changed && motion.score >= motionMin;
 }
 
-function markSkipped(db, frame, motion, quality) {
+function markQuietFrame(db, frame, motion, quality, { reason = "static" } = {}) {
   const scene = enrichScene(
     {
+      skipped: true,
+      quiet: true,
       unchanged: true,
-      summary: CFG.frameStaticSummary,
+      summary: null,
       person_present: false,
       people: 0,
       scene: "static",
       activity: "quiet",
       objects: [],
       mood: "empty",
+      skip_reason: reason,
     },
     { motion, quality },
   );
-  markFrameProcessed(db, frame.id, scene.summary, JSON.stringify(scene));
-  return { id: frame.id, skipped: "no_motion", motion: motion.score, usedLm: false };
+  markFrameProcessed(db, frame.id, null, JSON.stringify(scene));
+  return { id: frame.id, skipped: reason, motion: motion.score, usedLm: false };
+}
+
+function sanitizeDarkScene(scene, quality, motion) {
+  if (!quality?.dark && !quality?.nearlyBlack) {
+    return scene;
+  }
+  const out = { ...scene };
+  const summary = String(out.summary ?? "");
+  const guessedPerson =
+    out.person_present ||
+    /pesso|algu[eé]m|deitad|sentad|smartphone|tablet|celular|cama|laptop|computador/i.test(summary);
+
+  if (guessedPerson && (quality.nearlyBlack || quality.brightness < 0.2)) {
+    out.person_present = false;
+    out.people = 0;
+    out.objects = [];
+    out.summary =
+      motion?.level === MotionLevel.HIGH
+        ? "Movimento no escuro — detalhes incertos."
+        : "Ambiente escuro — pouco visível.";
+    out.activity = "unknown";
+    out.hallucination_guard = true;
+  }
+  return out;
+}
+
+function markSkipped(db, frame, motion, quality) {
+  return markQuietFrame(db, frame, motion, quality, { reason: "no_motion" });
 }
 
 export async function processFrame(db, frame) {
@@ -414,10 +451,10 @@ export async function processFrame(db, frame) {
   let motion = { score: 1, changed: true, level: MotionLevel.HIGH };
   const prev = lastProcessedFrame(db);
   if (prev?.path && existsSync(prev.path)) {
-    motion = compareFrames(readFileSync(prev.path), buf);
+    motion = compareFrames(readFileSync(prev.path), buf, { dark: quality.dark });
   }
 
-  if (!shouldAnalyze({ motion, frame, prev, forceIntervalMs: CFG.perceptionMotionForceMs })) {
+  if (!shouldAnalyze({ motion, frame, prev, forceIntervalMs: CFG.perceptionMotionForceMs, quality })) {
     return markSkipped(db, frame, motion, quality);
   }
 
@@ -429,6 +466,12 @@ export async function processFrame(db, frame) {
     visionMeta = prepared;
   }
 
+  const lmQuality = visionMeta.quality ?? quality;
+  const minBright = visionOpts().minBrightnessForLm ?? 0.1;
+  if (lmQuality.nearlyBlack || lmQuality.brightness < minBright) {
+    return markQuietFrame(db, frame, motion, lmQuality, { reason: "too_dark" });
+  }
+
   let previousScene = null;
   if (prev?.scene_json) {
     try {
@@ -438,27 +481,43 @@ export async function processFrame(db, frame) {
     }
   }
 
+  if (
+    previousScene &&
+    !previousScene.skipped &&
+    motion.level === MotionLevel.LOW &&
+    msBetween(prev?.captured_at, frame.captured_at) < CFG.perceptionMotionForceMs / 3
+  ) {
+    return markQuietFrame(db, frame, motion, lmQuality, { reason: "same_scene" });
+  }
+
   const sceneRaw = await captionFrame(visionBuf.toString("base64"), frame.reason, {
     previousCaption: prev?.caption,
     previousScene,
-    quality: visionMeta.quality ?? quality,
+    quality: lmQuality,
     motion,
     vision: visionMeta,
   });
 
-  const scene = enrichScene(sceneRaw, { motion, quality: visionMeta.quality ?? quality, vision: visionMeta });
-  const caption = scene.unchanged && prev?.caption ? prev.caption : formatSceneCaption(scene);
+  const guarded = sanitizeDarkScene(sceneRaw, lmQuality, motion);
+  const scene = enrichScene(guarded, { motion, quality: lmQuality, vision: visionMeta });
+  if (scene.unchanged) {
+    return markQuietFrame(db, frame, motion, lmQuality, { reason: "unchanged" });
+  }
+  if (scene.hallucination_guard && motion.level !== MotionLevel.HIGH) {
+    return markQuietFrame(db, frame, motion, lmQuality, { reason: "dark_uncertain" });
+  }
+
+  const caption = formatSceneCaption(scene);
+  if (!caption?.trim()) {
+    return markQuietFrame(db, frame, motion, lmQuality, { reason: "empty_caption" });
+  }
   const tags = objectsSummary(scene);
   const finalCaption = tags && !caption.includes(tags) ? `${caption} (${tags})` : caption;
 
   markFrameProcessed(db, frame.id, finalCaption, JSON.stringify(scene));
 
-  const people = scene.unchanged
-    ? Number(previousScene?.people ?? 0)
-    : Number(scene.people) || 0;
-  const personPresent = scene.unchanged
-    ? previousScene?.person_present === true
-    : scene.person_present === true;
+  const people = Number(scene.people) || 0;
+  const personPresent = scene.person_present === true;
 
   if (personPresent || people > 0) {
     insertEvent(db, {

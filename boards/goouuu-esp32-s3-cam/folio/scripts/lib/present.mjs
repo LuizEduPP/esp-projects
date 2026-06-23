@@ -6,12 +6,91 @@ function gapMs(a, b) {
   return Math.abs(new Date(a).getTime() - new Date(b).getTime());
 }
 
-function captionKey(caption) {
+function parseSceneJson(raw) {
+  if (!raw) {
+    return null;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeCaption(caption) {
   return String(caption ?? "")
     .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/^parece que\s+/i, "")
+    .replace(/^uma pessoa\s+/i, "pessoa ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 96);
+}
+
+function sceneGroupKey(item) {
+  const scene = parseSceneJson(item.scene_json);
+  if (scene && !scene.skipped && !scene.unchanged) {
+    const fp = sceneFingerprint(scene);
+    if (fp && fp !== "unchanged") {
+      return fp;
+    }
+  }
+  return normalizeCaption(item.caption);
+}
+
+export function isStaticFrameItem(item) {
+  if (item.type !== "frame") {
+    return false;
+  }
+  if (!item.caption) {
+    return true;
+  }
+  if (item.caption === CFG.frameStaticSummary) {
+    return true;
+  }
+  const scene = parseSceneJson(item.scene_json);
+  if (scene?.skipped || scene?.unchanged || scene?.quiet || scene?.hallucination_guard) {
+    return true;
+  }
+  if (scene?.activity === "quiet" && !scene?.person_present) {
+    return true;
+  }
+  if (
+    /smartphone|tablet|celular|cama|deitad|dispositivo pequeno|assistindo algo em um dispositivo/i.test(
+      item.caption,
+    ) &&
+    (scene?.lighting === "dark" ||
+      scene?.lighting === "very_dark" ||
+      (scene?.brightness != null && scene.brightness < 0.22))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function isMeaningfulFrameItem(item) {
+  return item.type === "frame" && !!item.caption && !isStaticFrameItem(item);
+}
+
+/** Drop static/processed-noise frames before grouping — life-log style feed. */
+export function filterWitnessItems(items, opts = {}) {
+  const hideStatic = opts.hideStatic ?? CFG.presentHideStaticFrames ?? true;
+  const hidePending = opts.hidePending ?? CFG.presentHidePendingInFeed ?? true;
+
+  return items.filter((item) => {
+    if (item.type === "frame") {
+      if (hideStatic && isStaticFrameItem(item)) {
+        return false;
+      }
+      if (hidePending && !item.processed) {
+        return false;
+      }
+    }
+    return true;
+  });
 }
 
 function hourLabel(iso) {
@@ -132,7 +211,7 @@ export function groupTimelineItems(items, opts = {}) {
         continue;
       }
 
-      const key = captionKey(item.caption);
+      const key = sceneGroupKey(item);
       const last = groups.at(-1);
       if (
         last?.type === "scene" &&
@@ -146,13 +225,14 @@ export function groupTimelineItems(items, opts = {}) {
         continue;
       }
       groups.push({
-        type: item.caption ? "scene" : "frame_pending",
+        type: "scene",
         at: item.at,
         at_end: item.at,
         caption: item.caption ?? null,
         caption_key: key,
         frame_ids: [item.frame_id],
         reason: item.reason ?? null,
+        scene_json: item.scene_json ?? null,
         count: 1,
         processed: !!item.processed,
       });
@@ -163,7 +243,8 @@ export function groupTimelineItems(items, opts = {}) {
 }
 
 export function timelineWithGroups(items, opts) {
-  const groups = groupTimelineItems(items, opts);
+  const filtered = filterWitnessItems(items, opts);
+  const groups = groupTimelineItems(filtered, opts);
   const labels = presentLabels();
   let lastHour = null;
   const enriched = groups.map((g) => {
@@ -190,7 +271,12 @@ export function timelineWithGroups(items, opts) {
             : labels.pending;
     return { ...g, hour, showHour, hour_label: hourLabel(g.at), kind_label: label };
   });
-  return { groups: enriched, count: enriched.length };
+  return {
+    groups: enriched,
+    count: enriched.length,
+    scenes: enriched.filter((g) => g.type === "scene").length,
+    filtered_from: items.length - filtered.length,
+  };
 }
 
 export { formatSceneCaption, sceneFingerprint };

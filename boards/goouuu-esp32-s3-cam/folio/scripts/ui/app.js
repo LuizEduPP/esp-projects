@@ -195,7 +195,7 @@ function renderInsights(ins) {
 
   const st = ins.stats || {};
   const speech = st.utterances ?? 0;
-  const scenes = st.frames ?? 0;
+  const scenes = st.scenes ?? st.frames ?? 0;
   const summaryEl = $("insights-summary");
   if (ins.summary) {
     summaryEl.textContent = ins.summary;
@@ -203,7 +203,7 @@ function renderInsights(ins) {
   } else if (speech + scenes > 0) {
     summaryEl.textContent =
       speech && scenes
-        ? `${scenes} cena${scenes > 1 ? "s" : ""} e ${speech} fala${speech > 1 ? "s" : ""} registradas — resumo em breve.`
+        ? `${scenes} cena${scenes > 1 ? "s" : ""} e ${speech} fala${speech > 1 ? "s" : ""} — gerando resumo…`
         : speech
           ? `${speech} fala${speech > 1 ? "s" : ""} capturada${speech > 1 ? "s" : ""}.`
           : `${scenes} cena${scenes > 1 ? "s" : ""} do ambiente.`;
@@ -279,13 +279,20 @@ function renderWitnessGroups(groups) {
 
     if (g.type === "scene") {
       const fid = g.frame_ids[g.frame_ids.length - 1];
-      const repeat = g.count > 1 ? `<span class="repeat-note">· ${g.count}× sem mudança</span>` : "";
-      const motion = g.reason === "motion" ? `<span class="badge motion">movimento</span> ` : "";
+      const repeat = g.count > 1 ? `<span class="repeat-note">· ${g.count}×</span>` : "";
+      const scene = g.scene_json ? (() => { try { return JSON.parse(g.scene_json); } catch { return null; } })() : null;
+      const motion = scene?.motion_level === "high"
+        ? `<span class="badge motion">movimento</span> `
+        : "";
       return `${hourMark}<article class="witness-group scene">
         <header>${motion}Cena · ${humanDayMeta(g.at)}${repeat}</header>
         <img src="/api/frame/${fid}" alt="" loading="lazy"/>
         <p>${esc(g.caption)}</p>
       </article>`;
+    }
+
+    if (filter !== "frames") {
+      return "";
     }
 
     const fid = g.frame_ids?.[g.frame_ids.length - 1];
@@ -295,7 +302,7 @@ function renderWitnessGroups(groups) {
       <header>${esc(header)}</header>
       ${fid ? `<img src="/api/frame/${fid}" alt="" loading="lazy" class="dim"/>` : ""}
     </article>`;
-  }).join("");
+  }).filter(Boolean).join("");
 
   $("witness-feed").querySelectorAll("img:not(.dim)").forEach((img) => {
     img.onclick = () => { $("lb-img").src = img.src; $("lightbox").classList.add("open"); };
@@ -329,12 +336,12 @@ async function loadDay() {
   }
 
   timelineGroups = tl.groups || [];
-  const items = tl.items || [];
-  const fr = items.filter((i) => i.type === "frame" && i.caption).length;
-  const sp = items.filter((i) => i.type === "audio" && i.text).length;
+  const sceneCount = tl.scenes ?? timelineGroups.filter((g) => g.type === "scene").length;
+  const speechCount = timelineGroups.filter((g) => g.type === "speech").length;
   $("witness-stats").textContent =
     timelineGroups.length
-      ? `${timelineGroups.length} momento${timelineGroups.length > 1 ? "s" : ""}`
+      ? `${timelineGroups.length} momento${timelineGroups.length > 1 ? "s" : ""}` +
+        (sceneCount || speechCount ? ` · ${sceneCount} cena${sceneCount !== 1 ? "s" : ""}, ${speechCount} fala${speechCount !== 1 ? "s" : ""}` : "")
       : "Aguardando…";
 
   renderInsights(ins);

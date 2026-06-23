@@ -674,6 +674,8 @@ function buildCfgFromFile(file = getFileData()) {
     presentSceneGapMs: cfgNum(file, "present.sceneGapMs", "FOLIO_PRESENT_SCENE_GAP_MS"),
     presentSoundGapMs: cfgNum(file, "present.soundGapMs", "FOLIO_PRESENT_SOUND_GAP_MS"),
     presentLabels: cfgObject(file, "present.labels"),
+    presentHideStaticFrames: cfgBool(file, "present.hideStaticFrames", "FOLIO_PRESENT_HIDE_STATIC"),
+    presentHidePendingInFeed: cfgBool(file, "present.hidePendingInFeed", "FOLIO_PRESENT_HIDE_PENDING"),
 
     entitiesSoundKindEntity: cfgObject(file, "entities.soundKindEntity"),
     perceptionMotionForceMs: cfgNum(file, "perception.motionForceMs", "FOLIO_MOTION_FORCE_MS"),

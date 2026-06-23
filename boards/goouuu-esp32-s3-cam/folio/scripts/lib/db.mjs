@@ -746,6 +746,7 @@ export function timelineForDay(db, day) {
     id: `frm:${f.id}`,
     frame_id: f.id,
     caption: f.caption,
+    scene_json: f.scene_json ?? null,
     reason: f.reason,
     processed: !!f.processed,
   }));
