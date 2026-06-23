@@ -6,517 +6,481 @@
 <title>Folio</title>
 <style>
 :root{
-  --bg:#0f1115;--bg2:#161a21;--bg3:#1c222c;--line:#2a3140;
-  --text:#e8eaed;--muted:#9aa3b2;--dim:#6b7280;
-  --accent:#7cacf8;--accent-dim:#4a7fd4;
-  --frame:#7cacf8;--audio:#6ee7b7;--warn:#fbbf24;
-  --radius:12px;--shadow:0 8px 32px rgba(0,0,0,.4);
-  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --serif:"Iowan Old Style",Georgia,"Palatino Linotype",serif;
+  --bg:#12141a;--panel:#1a1e28;--line:#2d3548;--text:#e8eaef;--muted:#8b95a8;
+  --accent:#6b9fff;--ok:#4ade80;--warn:#fbbf24;--r:10px;
+  --sans:system-ui,sans-serif;--serif:Georgia,"Times New Roman",serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5}
-a{color:var(--accent);text-decoration:none}
-button,input{font:inherit}
-.app-header{
-  position:sticky;top:0;z-index:20;
-  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
-  padding:14px 24px;border-bottom:1px solid var(--line);
-  background:rgba(15,17,21,.9);backdrop-filter:blur(10px);
+body{background:var(--bg);color:var(--text);font:15px/1.5 var(--sans);min-height:100vh}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--accent)}
+header{
+  position:sticky;top:0;z-index:10;background:#12141ae6;backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);padding:12px 16px;
+  display:flex;flex-wrap:wrap;gap:12px;align-items:center;
 }
-.brand{display:flex;align-items:baseline;gap:10px}
-.brand h1{font-family:var(--serif);font-size:1.35rem;font-weight:500;letter-spacing:.02em}
-.brand span{font-size:.8rem;color:var(--dim)}
-.day-nav{display:flex;align-items:center;gap:6px}
-.day-nav button{
-  width:34px;height:34px;border:1px solid var(--line);border-radius:8px;
-  background:var(--bg2);color:var(--muted);cursor:pointer;
+h1{font:500 1.25rem var(--serif)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tab{
+  border:1px solid var(--line);background:var(--panel);padding:7px 14px;
+  border-radius:var(--r);cursor:pointer;color:var(--muted);
 }
-.day-nav button:hover{border-color:var(--accent-dim);color:var(--text)}
-.day-nav input{
-  border:1px solid var(--line);border-radius:8px;background:var(--bg2);
-  color:var(--text);padding:7px 10px;width:148px;
+.tab.on{border-color:var(--accent);color:var(--accent)}
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.pill{font-size:.75rem;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.pill.warn{color:var(--warn);border-color:#5c4818}
+.pill.ok{color:var(--ok);border-color:#1a4d3a}
+.day{display:flex;gap:4px;align-items:center}
+.day button,.day input{
+  border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:6px 10px;
 }
-.status{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
-.pill{
-  font-size:.72rem;padding:5px 10px;border-radius:999px;
-  border:1px solid var(--line);background:var(--bg2);color:var(--muted);
+.day button{cursor:pointer;width:34px}
+main{max-width:1100px;margin:0 auto;padding:16px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:16px}
+.panel h2{font-size:.95rem;margin-bottom:12px}
+.panel h3{font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px}
+.muted{color:var(--muted);font-size:.85rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.row button,.row .btn{
+  border:1px solid var(--line);background:var(--bg);padding:8px 14px;border-radius:var(--r);cursor:pointer;
 }
-.pill.warn{border-color:#5c4818;color:#fcd34d}
-.pill.ok{border-color:#1a4d3a;color:var(--audio)}
-.layout{
-  display:grid;grid-template-columns:minmax(280px,380px) 1fr;
-  gap:0;max-width:1400px;margin:0 auto;min-height:calc(100vh - 64px);
+.row button.primary{border-color:var(--accent);color:var(--accent)}
+.row button:disabled{opacity:.5;cursor:not-allowed}
+.prose{font-family:var(--serif);line-height:1.7;white-space:pre-wrap}
+.empty{color:var(--muted);font-style:italic;padding:24px;text-align:center;border:1px dashed var(--line);border-radius:var(--r)}
+.feed{display:flex;flex-direction:column;gap:12px}
+.item{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.item-head{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);font-size:.78rem;color:var(--muted)}
+.tag{font-size:.68rem;font-weight:600;padding:2px 8px;border-radius:6px;background:#243044;color:var(--accent)}
+.tag.audio{background:#1a2e24;color:var(--ok)}
+.item-body{padding:12px}
+.item img{max-width:100%;border-radius:6px;background:#000;cursor:pointer}
+.item blockquote{border-left:3px solid var(--accent);padding-left:12px;margin-top:8px;font-family:var(--serif)}
+audio{width:100%;margin-top:8px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.field label{display:block;font-size:.72rem;color:var(--muted);margin-bottom:4px}
+.field input,.field select,.field textarea{
+  width:100%;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px;
 }
-.chronicle{
-  border-right:1px solid var(--line);padding:28px 24px 40px;
-  position:sticky;top:64px;height:calc(100vh - 64px);overflow:auto;
+.field textarea{min-height:60px;resize:vertical}
+.field .hint{font-size:.7rem;color:var(--muted);margin-top:2px}
+.devices{font-size:.85rem}
+.devices .ok{color:var(--ok)}.devices .bad{color:var(--warn)}
+.mem-hit{padding:8px 0;border-bottom:1px solid var(--line);font-size:.85rem}
+.mem-hit:last-child{border:none}
+#toast{
+  position:fixed;bottom:16px;right:16px;background:var(--panel);border:1px solid var(--line);
+  padding:10px 16px;border-radius:var(--r);display:none;max-width:360px;z-index:20;
 }
-.chronicle-label{
-  font-size:.68rem;text-transform:uppercase;letter-spacing:.12em;
-  color:var(--dim);margin-bottom:12px;
-}
-.chronicle-meta{font-size:.78rem;color:var(--muted);margin-bottom:20px}
-.chronicle-body{
-  font-family:var(--serif);font-size:1.08rem;line-height:1.75;
-  white-space:pre-wrap;color:var(--text);
-}
-.chronicle-empty{color:var(--muted);font-family:var(--serif);font-style:italic}
-.feed{padding:24px 24px 48px;min-width:0}
-.feed-toolbar{
-  display:flex;align-items:center;justify-content:space-between;
-  gap:12px;flex-wrap:wrap;margin-bottom:20px;
-}
-.feed-toolbar h2{font-size:.95rem;font-weight:600}
-.filters{display:flex;gap:6px;flex-wrap:wrap}
-.filter{
-  border:1px solid var(--line);background:var(--bg2);color:var(--muted);
-  padding:6px 12px;border-radius:999px;font-size:.78rem;cursor:pointer;
-}
-.filter.active{border-color:var(--accent);color:var(--accent);background:#1a2332}
-.feed-stats{font-size:.75rem;color:var(--dim)}
-.timeline{display:flex;flex-direction:column;gap:16px}
-.entry{
-  display:grid;grid-template-columns:56px 1fr;gap:14px;
-  padding-bottom:16px;border-bottom:1px solid var(--line);
-}
-.entry:last-child{border-bottom:none}
-.entry-time{
-  font-size:.72rem;color:var(--dim);padding-top:4px;text-align:right;
-  font-variant-numeric:tabular-nums;
-}
-.entry-card{
-  background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);
-  overflow:hidden;box-shadow:var(--shadow);
-}
-.entry-head{
-  display:flex;align-items:center;gap:8px;padding:10px 14px;
-  border-bottom:1px solid var(--line);font-size:.75rem;
-}
-.badge{padding:3px 8px;border-radius:6px;font-weight:600;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em}
-.badge.frame{background:#1a2438;color:#9ec5fe}
-.badge.audio{background:#142820;color:#86efac}
-.badge.pending{background:#1e2433;color:#fbbf24}
-.entry-reason{margin-left:auto;color:var(--dim)}
-.entry-body{padding:14px}
-.frame-img{
-  display:block;width:100%;max-height:420px;object-fit:contain;
-  background:#080a0e;cursor:zoom-in;
-}
-.caption{margin-top:12px;font-size:.92rem;line-height:1.55;color:var(--muted)}
-.caption.pending{color:var(--muted);font-style:italic}
-.transcript{
-  margin-top:10px;padding:12px 14px;border-left:3px solid var(--accent-dim);
-  font-family:var(--serif);font-size:.95rem;color:var(--text);
-}
-.transcript.pending{color:var(--muted);font-style:italic;border-color:var(--line)}
-audio{width:100%;height:40px;border-radius:8px}
-.empty{
-  text-align:center;padding:48px 24px;color:var(--muted);
-  border:1px dashed var(--line);border-radius:var(--radius);
-}
-.load-more{
-  display:block;width:100%;margin-top:8px;padding:12px;
-  border:1px solid var(--line);border-radius:10px;background:var(--bg2);
-  color:var(--muted);cursor:pointer;
-}
-.load-more:hover{border-color:var(--accent-dim);color:var(--text)}
-.lightbox{
-  position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.88);
-  display:none;align-items:center;justify-content:center;padding:24px;
-}
-.lightbox.open{display:flex}
-.lightbox img{max-width:min(96vw,1100px);max-height:92vh;border-radius:8px}
-.lightbox button{
-  position:absolute;top:20px;right:20px;width:40px;height:40px;
-  border:none;border-radius:50%;background:rgba(255,255,255,.12);
-  color:#fff;font-size:1.4rem;cursor:pointer;
-}
-.settings-btn{
-  border:1px solid var(--line);background:var(--bg2);color:var(--muted);
-  padding:7px 12px;border-radius:8px;cursor:pointer;font-size:.78rem;
-}
-.settings-btn:hover{border-color:var(--accent-dim);color:var(--text)}
-.settings-overlay{
-  position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.72);
-  display:none;align-items:flex-start;justify-content:center;padding:24px;overflow:auto;
-}
-.settings-overlay.open{display:flex}
-.settings-panel{
-  width:min(720px,100%);background:var(--bg2);border:1px solid var(--line);
-  border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px 24px;
-}
-.settings-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.settings-head h2{font-size:1rem}
-.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.field{display:flex;flex-direction:column;gap:4px}
-.field label{font-size:.72rem;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
-.field input,.field select{
-  border:1px solid var(--line);border-radius:8px;background:var(--bg3);
-  color:var(--text);padding:8px 10px;font-size:.85rem;
-}
-.field.full{grid-column:1/-1}
-.settings-section{margin:18px 0 8px;font-size:.75rem;color:var(--accent);text-transform:uppercase;letter-spacing:.08em}
-.settings-actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
-.settings-actions button{
-  border:1px solid var(--line);background:var(--bg3);color:var(--text);
-  padding:10px 16px;border-radius:8px;cursor:pointer;
-}
-.settings-actions button.primary{border-color:var(--accent-dim);background:#1a2332;color:var(--accent)}
-.sync-box{
-  margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:8px;
-  font-size:.8rem;color:var(--muted);
-}
-.sync-ok{color:var(--audio)}
-.sync-warn{color:var(--warn)}
-@media(max-width:640px){.settings-grid{grid-template-columns:1fr}}
-@media(max-width:960px){
-  .layout{grid-template-columns:1fr}
-  .chronicle{position:relative;top:0;height:auto;border-right:none;border-bottom:1px solid var(--line)}
-}
+.lightbox{position:fixed;inset:0;background:#000c;display:none;place-items:center;z-index:30;padding:16px}
+.lightbox.open{display:grid}
+.lightbox img{max-width:100%;max-height:90vh;border-radius:8px}
+.lightbox button{position:absolute;top:12px;right:12px;border:none;background:#fff3;color:#fff;font-size:1.5rem;width:40px;height:40px;border-radius:50%;cursor:pointer}
+@media(max-width:640px){.grid2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header class="app-header">
-  <div class="brand">
-    <h1>Folio</h1>
-    <span>day witness</span>
-  </div>
-  <div class="day-nav">
-    <button type="button" id="day-prev" title="Previous day">‹</button>
+<header>
+  <h1>Folio</h1>
+  <nav class="tabs" id="tabs">
+    <button type="button" class="tab on" data-tab="day">Dia</button>
+    <button type="button" class="tab" data-tab="system">Sistema</button>
+    <button type="button" class="tab" data-tab="config">Config</button>
+  </nav>
+  <div class="day">
+    <button type="button" id="day-prev">‹</button>
     <input type="date" id="day-input"/>
-    <button type="button" id="day-next" title="Next day">›</button>
+    <button type="button" id="day-next">›</button>
   </div>
-  <div class="status" id="status"></div>
-  <button type="button" class="settings-btn" id="open-settings">Settings</button>
+  <div class="pills" id="pills"></div>
 </header>
 
-<div class="settings-overlay" id="settings-overlay">
-  <div class="settings-panel">
-    <div class="settings-head">
-      <h2>Configuration</h2>
-      <button type="button" class="settings-btn" id="close-settings">Close</button>
+<main id="view-day">
+  <section class="panel">
+    <h2>Crônica</h2>
+    <p class="muted" id="digest-meta"></p>
+    <div class="prose" id="digest"></div>
+    <div class="row" style="margin-top:12px">
+      <button type="button" class="primary" id="btn-digest">Gerar digest agora</button>
     </div>
-    <p class="chronicle-meta" id="cfg-meta">Synced with ESP via /api/node/config</p>
-    <form id="settings-form">
-      <div class="settings-section">Brain</div>
-      <div class="settings-grid">
-        <div class="field"><label>Locale</label><input name="locale" id="cfg-locale"/></div>
-        <div class="field"><label>Speech threshold</label><input name="speechEnergyThreshold" id="cfg-speech" type="number" step="0.001"/></div>
-        <div class="field"><label>LM URL</label><input name="lmUrl" id="cfg-lm-url" type="url"/></div>
-        <div class="field"><label>LM model (fast)</label><input name="lmModel" id="cfg-lm-model"/></div>
-        <div class="field"><label>LM model (deep digest)</label><input name="lmModelDeep" id="cfg-lm-model-deep" placeholder="same as fast if empty"/></div>
-        <div class="field"><label>Whisper model</label><input name="whisperModel" id="cfg-whisper-model"/></div>
-        <div class="field"><label>Whisper device</label>
-          <select name="whisperDevice" id="cfg-whisper-device">
-            <option value="cuda">cuda (NVIDIA GPU)</option>
-            <option value="auto">auto</option>
-            <option value="cpu">cpu</option>
-            <option value="mps">mps (Apple)</option>
-          </select>
-        </div>
-        <p class="chronicle-meta" id="cfg-whisper-runtime"></p>
-        <div class="field"><label>Pipeline enabled</label>
-          <select id="cfg-pipeline-enabled"><option value="true">yes</option><option value="false">no</option></select>
-        </div>
-        <div class="field"><label>Digest auto</label>
-          <select id="cfg-digest-auto"><option value="true">yes</option><option value="false">no</option></select>
-        </div>
-        <div class="field"><label>Audio retention (days)</label><input name="retentionDays" id="cfg-retention" type="number" min="0"/></div>
-        <div class="field"><label>Episode gap (min)</label><input name="gapMin" id="cfg-ep-gap" type="number"/></div>
-      </div>
-      <div class="settings-section">ESP node (synced)</div>
-      <div class="settings-grid">
-        <div class="field"><label>Frame interval (ms)</label><input name="captureIntervalMs" id="cfg-frame-int" type="number"/></div>
-        <div class="field"><label>JPEG quality</label><input name="jpegQuality" id="cfg-jpeg" type="number"/></div>
-        <div class="field"><label>Frame size</label>
-          <select name="frameSize" id="cfg-frame-size">
-            <option value="CIF">CIF (reflash)</option>
-            <option value="QVGA">QVGA</option><option value="VGA">VGA</option><option value="SVGA">SVGA</option>
-            <option value="XGA">XGA (reflash)</option>
-          </select>
-        </div>
-        <p class="chronicle-meta">Frame size change needs <code>yarn folio:flash</code> — runtime sync is interval/jpeg only.</p>
-        <div class="field"><label>WiFi retry (ms)</label><input name="wifiRetryMs" id="cfg-wifi" type="number"/></div>
-        <div class="field"><label>Push backoff max (ms)</label><input name="pushBackoffMaxMs" id="cfg-backoff" type="number"/></div>
-        <div class="field"><label>Status interval (ms)</label><input name="statusIntervalMs" id="cfg-status" type="number"/></div>
-      </div>
-      <div class="settings-actions">
-        <button type="submit" class="primary">Save &amp; sync</button>
-        <button type="button" id="reload-settings">Reload</button>
-      </div>
-    </form>
-    <div class="sync-box" id="sync-status">Loading devices…</div>
-  </div>
-</div>
-
-<div class="layout">
-  <aside class="chronicle">
-    <div class="chronicle-label">Chronicle</div>
-    <p class="chronicle-meta" id="digest-meta">Updating automatically…</p>
-    <div class="chronicle-body" id="digest"></div>
-  </aside>
-
-  <section class="feed">
-    <div class="feed-toolbar">
-      <div>
-        <h2>Witness feed</h2>
-        <p class="feed-stats" id="counts"></p>
-      </div>
-      <div class="filters" id="filters">
-        <button class="filter active" data-f="all">All</button>
-        <button class="filter" data-f="frames">Frames</button>
-        <button class="filter" data-f="speech">Speech</button>
-        <button class="filter" data-f="quiet">Quiet audio</button>
-      </div>
-    </div>
-    <div class="timeline" id="timeline"></div>
-    <button class="load-more" id="load-more" hidden>Load older captures</button>
   </section>
-</div>
+  <section class="panel">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2>Timeline</h2>
+      <div class="row" style="margin:0">
+        <button type="button" class="filter on" data-f="all">Tudo</button>
+        <button type="button" class="filter" data-f="frames">Frames</button>
+        <button type="button" class="filter" data-f="speech">Fala</button>
+      </div>
+    </div>
+    <p class="muted" id="feed-stats"></p>
+    <div class="feed" id="feed"></div>
+  </section>
+</main>
 
-<div class="lightbox" id="lightbox">
-  <button type="button" id="lightbox-close">×</button>
-  <img id="lightbox-img" alt=""/>
-</div>
+<main id="view-system" hidden>
+  <section class="panel">
+    <h2>Status</h2>
+    <div class="grid2" id="health-grid"></div>
+    <div class="row" style="margin-top:12px">
+      <button type="button" id="btn-process">Processar fila (Whisper + visão)</button>
+      <button type="button" id="btn-reindex">Reindexar memória</button>
+    </div>
+    <p class="muted" id="action-msg" style="margin-top:8px"></p>
+  </section>
+  <section class="panel">
+    <h2>Dispositivos ESP</h2>
+    <div class="devices" id="devices"></div>
+  </section>
+  <section class="panel">
+    <h2>Memória (RAG)</h2>
+    <p class="muted" id="mem-stats"></p>
+    <div class="row">
+      <input type="search" id="mem-q" placeholder="Buscar na memória…" style="flex:1;min-width:180px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px"/>
+      <button type="button" id="mem-search">Buscar</button>
+    </div>
+    <div id="mem-hits" style="margin-top:12px"></div>
+    <details style="margin-top:12px"><summary class="muted">Perfil (facts)</summary>
+      <pre id="mem-profile" style="font-size:.78rem;margin-top:8px;overflow:auto"></pre>
+    </details>
+  </section>
+</main>
+
+<main id="view-config" hidden>
+  <section class="panel">
+    <p class="muted" id="cfg-info"></p>
+    <p class="muted" id="cfg-runtime"></p>
+    <form id="cfg-form"></form>
+    <div class="row" style="margin-top:16px">
+      <button type="submit" form="cfg-form" class="primary">Salvar</button>
+      <button type="button" id="cfg-reload">Recarregar</button>
+    </div>
+    <p class="muted" id="cfg-save-msg" style="margin-top:8px"></p>
+  </section>
+</main>
+
+<div id="toast"></div>
+<div class="lightbox" id="lightbox"><button type="button" id="lb-close">×</button><img id="lb-img" alt=""/></div>
 
 <script>
-const PAGE=30;
-let day=new URLSearchParams(location.search).get('day')||new Date().toISOString().slice(0,10);
-let allItems=[];
-let filter='all';
-let shown=PAGE;
-
 const $=id=>document.getElementById(id);
+let day=new URLSearchParams(location.search).get("day")||new Date().toISOString().slice(0,10);
+let filter="all";
+let cfgCache=null;
+
+/** Alinhado com folio.config.example.json */
+const SECTIONS=[
+  {title:"Geral",fields:[
+    {path:"locale",label:"Idioma",type:"text"},
+    {path:"port",label:"Porta HTTP",type:"number",hint:"Reinicia brain"},
+    {path:"dataDir",label:"Pasta de dados",type:"text",hint:"Reinicia brain · vazio = ~/.folio"},
+  ]},
+  {title:"LM Studio",fields:[
+    {path:"lm.url",label:"URL chat/completions",type:"text"},
+    {path:"lm.model",label:"Modelo rápido",type:"text"},
+    {path:"lm.modelDeep",label:"Modelo deep (digest)",type:"text",hint:"Vazio = igual ao rápido"},
+  ]},
+  {title:"Áudio (ESP + brain)",fields:[
+    {path:"audio.chunkMs",label:"Chunk (ms)",type:"number",hint:"Reflash ESP se mudar"},
+    {path:"audio.sampleRate",label:"Sample rate",type:"number",hint:"Reflash ESP se mudar"},
+    {path:"audio.speechEnergyThreshold",label:"Limiar fala (RMS)",type:"number",step:"0.001"},
+    {path:"audio.retentionDays",label:"Retenção PCM (dias)",type:"number"},
+    {path:"audio.retentionSweepMs",label:"Varredura retenção (ms)",type:"number"},
+    {path:"audio.pipelineBatch",label:"Batch Whisper",type:"number"},
+  ]},
+  {title:"Whisper",fields:[
+    {path:"audio.whisperBin",label:"Binário",type:"text"},
+    {path:"audio.whisperModel",label:"Modelo",type:"text"},
+    {path:"audio.whisperDevice",label:"Device",type:"select",options:["cuda","auto","cpu","mps"]},
+    {path:"audio.whisperTimeoutMs",label:"Timeout (ms)",type:"number"},
+    {path:"audio.whisperLanguage",label:"Idioma",type:"text",hint:"Vazio = auto do locale"},
+  ]},
+  {title:"Câmera / visão",fields:[
+    {path:"frames.captureIntervalMs",label:"Intervalo captura (ms)",type:"number"},
+    {path:"frames.captionIntervalMs",label:"Intervalo caption LM (ms)",type:"number"},
+    {path:"frames.captionMaxTokens",label:"Caption max tokens",type:"number"},
+    {path:"frames.captionTemperature",label:"Caption temperature",type:"number",step:"0.01"},
+    {path:"frames.pipelineBatch",label:"Batch frames",type:"number"},
+    {path:"frames.jpegQuality",label:"JPEG quality",type:"number"},
+    {path:"frames.size",label:"Resolução",type:"select",options:["CIF","QVGA","VGA","SVGA","XGA"],hint:"CIF/XGA = reflash"},
+  ]},
+  {title:"Pipeline",fields:[
+    {path:"pipeline.enabled",label:"Ativo",type:"bool"},
+    {path:"pipeline.intervalMs",label:"Intervalo worker (ms)",type:"number"},
+  ]},
+  {title:"Worker (backlog)",fields:[
+    {path:"worker.backlogHigh",label:"Backlog alto",type:"number"},
+    {path:"worker.backlogMedium",label:"Backlog médio",type:"number"},
+    {path:"worker.batchMaxHigh",label:"Batch max (alto)",type:"number"},
+    {path:"worker.batchMaxMedium",label:"Batch max (médio)",type:"number"},
+  ]},
+  {title:"Digest",fields:[
+    {path:"digest.auto",label:"Auto",type:"bool"},
+    {path:"digest.intervalMs",label:"Intervalo (ms)",type:"number"},
+    {path:"digest.passDTemperature",label:"Pass D temperature",type:"number",step:"0.01"},
+  ]},
+  {title:"Episódios",fields:[
+    {path:"episodes.gapMin",label:"Gap entre episódios (min)",type:"number"},
+    {path:"episodes.frameAlignMs",label:"Alinhamento frame (ms)",type:"number"},
+    {path:"episodes.graphEdge.themed",label:"Grafo: themed conf",type:"number",step:"0.01"},
+    {path:"episodes.graphEdge.decided",label:"Grafo: decided conf",type:"number",step:"0.01"},
+    {path:"episodes.graphEdge.open",label:"Grafo: open conf",type:"number",step:"0.01"},
+    {path:"episodes.graphEdge.rejected",label:"Grafo: rejected conf",type:"number",step:"0.01"},
+  ]},
+  {title:"Memória RAG",fields:[
+    {path:"memory.enabled",label:"Ativa",type:"bool"},
+    {path:"memory.lookbackDays",label:"Lookback (dias)",type:"number"},
+    {path:"memory.retrieveLimit",label:"Limite retrieve",type:"number"},
+    {path:"memory.minScore",label:"Score mínimo",type:"number",step:"0.01"},
+    {path:"memory.useEmbeddings",label:"Embeddings LM",type:"bool"},
+    {path:"memory.embeddingModel",label:"Modelo embed",type:"text"},
+    {path:"memory.embeddingsUrl",label:"URL embeddings",type:"text"},
+    {path:"memory.fallbackLexical",label:"Fallback lexical",type:"bool"},
+    {path:"memory.graphRetrieveLimit",label:"Grafo limit",type:"number"},
+    {path:"memory.graphMinScore",label:"Grafo min score",type:"number",step:"0.01"},
+    {path:"memory.profileLimit",label:"Profile limit",type:"number"},
+    {path:"memory.minFactTextLength",label:"Min fact length",type:"number"},
+  ]},
+  {title:"ESP (node)",fields:[
+    {path:"node.wifiRetryMs",label:"WiFi retry (ms)",type:"number"},
+    {path:"node.pushBackoffMaxMs",label:"Push backoff max (ms)",type:"number"},
+    {path:"node.statusIntervalMs",label:"Status interval (ms)",type:"number"},
+  ]},
+];
+
+function get(obj,path){
+  return path.split(".").reduce((o,k)=>o?.[k],obj);
+}
+function set(obj,path,val){
+  const keys=path.split(".");
+  let o=obj;
+  for(let i=0;i<keys.length-1;i++){
+    if(!o[keys[i]]||typeof o[keys[i]]!=="object")o[keys[i]]={};
+    o=o[keys[i]];
+  }
+  o[keys[keys.length-1]]=val;
+}
+function esc(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function toast(msg){const t=$("toast");t.textContent=msg;t.style.display="block";setTimeout(()=>t.style.display="none",4000);}
+function time(iso){try{return new Date(iso).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});}catch{return iso?.slice(11,19)||"";}}
 
 function setDay(d){
-  day=d;
-  $('day-input').value=d;
-  const u=new URL(location.href);
-  u.searchParams.set('day',d);
-  history.replaceState(null,'',u);
-  shown=PAGE;
-  load();
+  day=d;$("day-input").value=d;
+  const u=new URL(location.href);u.searchParams.set("day",d);history.replaceState(null,"",u);
+  loadDay();
 }
+function shiftDay(n){const d=new Date(day+"T12:00:00");d.setDate(d.getDate()+n);setDay(d.toISOString().slice(0,10));}
 
-function shiftDay(n){
-  const d=new Date(day+'T12:00:00');
-  d.setDate(d.getDate()+n);
-  setDay(d.toISOString().slice(0,10));
-}
+$("day-input").value=day;
+$("day-prev").onclick=()=>shiftDay(-1);
+$("day-next").onclick=()=>shiftDay(1);
+$("day-input").onchange=e=>setDay(e.target.value);
 
-$('day-input').value=day;
-$('day-prev').onclick=()=>shiftDay(-1);
-$('day-next').onclick=()=>shiftDay(1);
-$('day-input').onchange=e=>setDay(e.target.value);
-
-document.querySelectorAll('.filter').forEach(btn=>{
+document.querySelectorAll(".tab").forEach(btn=>{
   btn.onclick=()=>{
-    document.querySelectorAll('.filter').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    filter=btn.dataset.f;
-    shown=PAGE;
-    renderTimeline();
+    document.querySelectorAll(".tab").forEach(b=>b.classList.remove("on"));
+    btn.classList.add("on");
+    $("view-day").hidden=btn.dataset.tab!=="day";
+    $("view-system").hidden=btn.dataset.tab!=="system";
+    $("view-config").hidden=btn.dataset.tab!=="config";
+    if(btn.dataset.tab==="system")loadSystem();
+    if(btn.dataset.tab==="config")loadConfigForm();
   };
 });
 
-$('load-more').onclick=()=>{shown+=PAGE;renderTimeline();};
+document.querySelectorAll(".filter").forEach(btn=>{
+  btn.onclick=()=>{
+    document.querySelectorAll(".filter").forEach(b=>b.classList.remove("on"));
+    btn.classList.add("on");
+    filter=btn.dataset.f;
+    loadDay();
+  };
+});
 
-function filteredItems(){
-  return allItems.filter(i=>{
-    if(filter==='frames')return i.type==='frame';
-    if(filter==='speech')return i.type==='audio'&&i.speech;
-    if(filter==='quiet')return i.type==='audio'&&!i.speech;
-    if(filter==='all')return i.type==='frame'||(i.type==='audio'&&i.speech);
-    return true;
-  });
-}
+function renderFeed(items){
+  const list=items.filter(i=>{
+    if(filter==="frames")return i.type==="frame";
+    if(filter==="speech")return i.type==="audio"&&i.speech;
+    return i.type==="frame"||(i.type==="audio"&&i.speech);
+  }).sort((a,b)=>b.at.localeCompare(a.at));
 
-function escapeHtml(s){
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+  if(!list.length){$("feed").innerHTML='<div class="empty">Nada neste filtro para este dia.</div>';return;}
 
-function localTime(iso){
-  try{
-    return new Date(iso).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  }catch{return iso.slice(11,19);}
-}
-
-function renderItem(i){
-  const t=localTime(i.at);
-  if(i.type==='frame'){
-    const pending=!i.caption;
-    const cap=i.caption
-      ?`<p class="caption">${escapeHtml(i.caption)}</p>`
-      :`<p class="caption pending">Waiting for vision model…</p>`;
-    return `<article class="entry">
-      <div class="entry-time">${t}</div>
-      <div class="entry-card">
-        <div class="entry-head">
-          <span class="badge frame">Frame</span>
-          ${pending?'<span class="badge pending">queued</span>':''}
-          <span class="entry-reason">${escapeHtml(i.reason||'')}</span>
-        </div>
-        <div class="entry-body">
-          <img class="frame-img" src="/api/frame/${i.frame_id}" alt="Frame ${i.frame_id}" loading="lazy" data-full="/api/frame/${i.frame_id}"/>
-          ${cap}
-        </div>
-      </div>
-    </article>`;
-  }
-  if(i.type==='audio'){
-    let txt;
-    if(i.text){
-      txt=`<blockquote class="transcript">“${escapeHtml(i.text)}”</blockquote>`;
-    }else if(!i.processed){
-      txt=`<p class="transcript pending">In Whisper queue…</p>`;
-    }else{
-      txt=`<p class="transcript pending">No words detected in this second</p>`;
+  $("feed").innerHTML=list.map(i=>{
+    if(i.type==="frame"){
+      return `<article class="item"><div class="item-head"><span class="tag">Frame</span><span>${time(i.at)}</span><span>${esc(i.reason||"")}</span>${i.processed?"":'<span class="tag">fila</span>'}</div>
+        <div class="item-body"><img src="/api/frame/${i.frame_id}" alt="" loading="lazy" data-id="${i.frame_id}"/>
+        <p class="muted">${i.caption?esc(i.caption):"Aguardando caption…"}</p></div></article>`;
     }
-    const player=i.has_pcm
-      ?`<audio controls preload="none" src="/api/audio/${i.chunk_id}"></audio>`
-      :`<p class="transcript pending">PCM expirado — só transcrição disponível</p>`;
-    return `<article class="entry">
-      <div class="entry-time">${t}</div>
-      <div class="entry-card">
-        <div class="entry-head">
-          <span class="badge audio">${i.speech?'Speech':'Quiet'}</span>
-        </div>
-        <div class="entry-body">
-          ${player}
-          ${txt}
-        </div>
-      </div>
-    </article>`;
-  }
-  return '';
-}
+    const txt=i.text?`<blockquote>${esc(i.text)}</blockquote>`:(i.processed?"<p class=\"muted\">Sem fala detectada</p>":"<p class=\"muted\">Na fila Whisper…</p>");
+    const aud=i.has_pcm?`<audio controls preload="none" src="/api/audio/${i.chunk_id}"></audio>`:"<p class=\"muted\">PCM expirado</p>";
+    return `<article class="item"><div class="item-head"><span class="tag audio">Áudio</span><span>${time(i.at)}</span><span>energy ${(i.energy??0).toFixed(4)}</span></div>
+      <div class="item-body">${aud}${txt}</div></article>`;
+  }).join("");
 
-function renderTimeline(){
-  const items=filteredItems().slice().sort((a,b)=>b.at.localeCompare(a.at));
-  const slice=items.slice(0,shown);
-  const el=$('timeline');
-  if(!slice.length){
-    el.innerHTML='<div class="empty">No captures for this filter.<br>ESP pushes → brain stores → feed fills up.</div>';
-    $('load-more').hidden=true;
-    return;
-  }
-  el.innerHTML=slice.map(renderItem).join('');
-  $('load-more').hidden=items.length<=shown;
-  el.querySelectorAll('.frame-img').forEach(img=>{
-    img.onclick=()=>{
-      $('lightbox-img').src=img.dataset.full;
-      $('lightbox').classList.add('open');
-    };
+  $("feed").querySelectorAll("img").forEach(img=>{
+    img.onclick=()=>{$("lb-img").src=img.src;$("lightbox").classList.add("open");};
   });
 }
 
-$('lightbox-close').onclick=()=>$('lightbox').classList.remove('open');
-$('lightbox').onclick=e=>{if(e.target.id==='lightbox')$('lightbox').classList.remove('open');};
-
-async function load(){
-  const [tl,q,d]=await Promise.all([
-    fetch('/api/timeline?day='+day).then(r=>r.json()),
-    fetch('/api/queue').then(r=>r.json()),
-    fetch('/api/digest?day='+day).then(r=>r.json()).catch(()=>({})),
-  ]);
-  allItems=tl.items||[];
-  const frames=allItems.filter(i=>i.type==='frame').length;
-  const speech=allItems.filter(i=>i.type==='audio'&&i.speech).length;
-  const quiet=allItems.filter(i=>i.type==='audio'&&!i.speech).length;
-  $('counts').textContent=`${frames} frames · ${speech} speech · ${quiet} quiet`;
-  const pending=q.pending||{};
-  const pa=pending.audio||0;
-  const pf=pending.frames||0;
-  $('status').innerHTML=
-    (pa+pf>0?`<span class="pill warn">${pa} audio · ${pf} frames in queue</span>`:'')+
-    `<span class="pill ok">brain :__PORT__</span>`;
-  $('digest').textContent=d.prose||'';
-  $('digest').className=d.prose?'chronicle-body':'chronicle-body chronicle-empty';
-  if(!d.prose)$('digest').textContent='Collecting the day… the chronicle writes itself as witness data arrives.';
-  $('digest-meta').textContent=d.updated_at
-    ?`Updated ${localTime(d.updated_at)} · auto`
-    :'Auto-updates when new data arrives';
-  renderTimeline();
+async function loadPills(){
+  const [q,h]=await Promise.all([fetch("/api/queue").then(r=>r.json()),fetch("/api/health").then(r=>r.json())]);
+  const pa=q.pending?.audio||0,pf=q.pending?.frames||0;
+  $("pills").innerHTML=
+    (pa+pf?`<span class="pill warn">${pa} áudio · ${pf} frames</span>`:"")+
+    `<span class="pill ok">${h.memory_chunks??0} mem</span>`+
+    `<span class="pill">:${location.port||"__PORT__"}</span>`;
 }
 
-load();
-setInterval(load,10000);
-
-const settingsOverlay=$('settings-overlay');
-$('open-settings').onclick=()=>{settingsOverlay.classList.add('open');loadSettings();};
-$('close-settings').onclick=()=>settingsOverlay.classList.remove('open');
-settingsOverlay.onclick=e=>{if(e.target===settingsOverlay)settingsOverlay.classList.remove('open');};
-$('reload-settings').onclick=loadSettings;
-
-async function loadSettings(){
-  const [cfg,dev]=await Promise.all([
-    fetch('/api/config').then(r=>r.json()),
-    fetch('/api/devices').then(r=>r.json()),
+async function loadDay(){
+  const [tl,d]=await Promise.all([
+    fetch("/api/timeline?day="+day).then(r=>r.json()),
+    fetch("/api/digest?day="+day).then(r=>r.json()).catch(()=>({})),
   ]);
-  $('cfg-locale').value=cfg.locale;
-  $('cfg-speech').value=cfg.audio.speechEnergyThreshold;
-  $('cfg-lm-url').value=cfg.lm.url;
-  $('cfg-lm-model').value=cfg.lm.model||cfg.lm.modelFast||'';
-  $('cfg-lm-model-deep').value=cfg.lm.modelDeep||'';
-  $('cfg-whisper-model').value=cfg.audio.whisperModel;
-  $('cfg-whisper-device').value=cfg.audio.whisperDevice||'cuda';
-  const rt=cfg.runtime||{};
-  $('cfg-whisper-runtime').textContent=
-    `Whisper ativo: ${rt.whisperDeviceEffective||'?'} · CUDA: ${rt.cudaAvailable?'sim':'não'}`;
-  $('cfg-pipeline-enabled').value=String(cfg.pipeline?.enabled!==false);
-  $('cfg-digest-auto').value=String(cfg.digest?.auto!==false);
-  $('cfg-retention').value=cfg.audio.retentionDays??7;
-  $('cfg-ep-gap').value=cfg.episodes.gapMin;
-  $('cfg-frame-int').value=cfg.frames.captureIntervalMs;
-  $('cfg-jpeg').value=cfg.frames.jpegQuality;
-  $('cfg-frame-size').value=cfg.frames.size;
-  $('cfg-wifi').value=cfg.node.wifiRetryMs;
-  $('cfg-backoff').value=cfg.node.pushBackoffMaxMs;
-  $('cfg-status').value=cfg.node.statusIntervalMs;
-  $('cfg-meta').textContent=`v${cfg.version||'?'} · ${cfg.configPath||'defaults'}`;
+  const items=tl.items||[];
+  const fr=items.filter(i=>i.type==="frame").length;
+  const sp=items.filter(i=>i.type==="audio"&&i.speech).length;
+  $("feed-stats").textContent=`${fr} frames · ${sp} chunks de fala`;
+  $("digest").textContent=d.prose||"Sem crônica ainda — dados chegam do ESP e o digest roda automaticamente.";
+  $("digest-meta").textContent=d.updated_at?`Atualizado ${time(d.updated_at)}`:"";
+  renderFeed(items);
+  loadPills();
+}
+
+$("btn-digest").onclick=async()=>{
+  $("btn-digest").disabled=true;
+  try{
+    const r=await fetch("/api/digest/run?day="+day,{method:"POST"}).then(x=>x.json());
+    toast(r.skipped?"Digest já atualizado":"Digest gerado");
+    loadDay();
+  }catch(e){toast("Erro: "+e.message);}
+  $("btn-digest").disabled=false;
+};
+
+async function loadSystem(){
+  const [h,dev,mem]=await Promise.all([
+    fetch("/api/health").then(r=>r.json()),
+    fetch("/api/devices").then(r=>r.json()),
+    fetch("/api/memory?day="+day).then(r=>r.json()),
+  ]);
+  $("health-grid").innerHTML=[
+    ["Dados",h.data_dir],["Pipeline",h.pipeline?"ativo":"pausado"],
+    ["Fila áudio",h.pending?.audio??0],["Fila frames",h.pending?.frames??0],
+    ["Memória chunks",h.memory_chunks??0],["Porta",h.port],
+  ].map(([k,v])=>`<div class="field"><label>${k}</label><div>${esc(v)}</div></div>`).join("");
+
   const lines=(dev.devices||[]).map(d=>{
     const ok=d.node_config_applied===dev.brain_config_version;
-    return `<div class="${ok?'sync-ok':'sync-warn'}">${escapeHtml(d.id)}: applied <code>${escapeHtml(d.node_config_applied||'—')}</code> · brain <code>${escapeHtml(dev.brain_config_version)}</code></div>`;
+    return `<div class="${ok?"ok":"bad"}"><strong>${esc(d.id)}</strong> · visto ${d.last_seen_at?time(d.last_seen_at):"—"} · config ${esc(d.node_config_applied||"—")} ${ok?"✓":"≠ brain"}</div>`;
   });
-  $('sync-status').innerHTML=lines.length?lines.join(''):'No ESP seen yet — push audio/frame to register device.';
+  $("devices").innerHTML=lines.length?lines.join(""):"<p class=\"muted\">Nenhum ESP registrado — envie áudio/frame.</p>";
+
+  $("mem-stats").textContent=`${mem.chunks??0} chunks indexados`;
+  $("mem-profile").textContent=JSON.stringify(mem.profile||[],null,2);
+  if(mem.hits?.length){
+    $("mem-hits").innerHTML=mem.hits.map(h=>`<div class="mem-hit"><strong>${esc(h.day)}</strong> ${esc(h.kind)} score ${h.score?.toFixed?.(2)}<br>${esc(h.text)}</div>`).join("");
+  }
 }
 
-$('settings-form').onsubmit=async e=>{
-  e.preventDefault();
-  const body={
-    locale:$('cfg-locale').value,
-    lm:{url:$('cfg-lm-url').value,model:$('cfg-lm-model').value,modelDeep:$('cfg-lm-model-deep').value||null},
-    audio:{
-      speechEnergyThreshold:Number($('cfg-speech').value),
-      whisperModel:$('cfg-whisper-model').value,
-      whisperDevice:$('cfg-whisper-device').value,
-      retentionDays:Number($('cfg-retention').value),
-    },
-    pipeline:{enabled:$('cfg-pipeline-enabled').value==='true'},
-    digest:{auto:$('cfg-digest-auto').value==='true'},
-    episodes:{gapMin:Number($('cfg-ep-gap').value)},
-    frames:{
-      captureIntervalMs:Number($('cfg-frame-int').value),
-      jpegQuality:Number($('cfg-jpeg').value),
-      size:$('cfg-frame-size').value,
-    },
-    node:{
-      wifiRetryMs:Number($('cfg-wifi').value),
-      pushBackoffMaxMs:Number($('cfg-backoff').value),
-      statusIntervalMs:Number($('cfg-status').value),
-    },
-  };
-  const res=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const json=await res.json();
-  if(json.restartRecommended){
-    $('cfg-meta').textContent='Salvo — reinicie o brain (porta/dataDir). LM/Whisper/locale já aplicam em memória.';
-  }else{
-    $('cfg-meta').textContent=`Salvo v${json.version} — ESP sincroniza no próximo poll.`;
-  }
-  loadSettings();
+$("btn-process").onclick=async()=>{
+  $("btn-process").disabled=true;
+  $("action-msg").textContent="Processando…";
+  try{
+    const r=await fetch("/api/process",{method:"POST"}).then(x=>x.json());
+    const utt=(r.audio||[]).filter(x=>x.text).length;
+    const cap=(r.frames||[]).filter(x=>x.caption).length;
+    $("action-msg").textContent=`Pronto: ${utt} transcrições, ${cap} captions · fila ${r.pending?.audio??0}/${r.pending?.frames??0}`;
+    loadPills();loadDay();
+  }catch(e){$("action-msg").textContent="Erro: "+e.message;}
+  $("btn-process").disabled=false;
 };
+
+$("btn-reindex").onclick=async()=>{
+  $("btn-reindex").disabled=true;
+  try{
+    const r=await fetch("/api/memory/reindex",{method:"POST"}).then(x=>x.json());
+    toast(`Memória: ${r.before} → ${r.after} chunks (${r.days} dias)`);
+    loadSystem();
+  }catch(e){toast("Erro: "+e.message);}
+  $("btn-reindex").disabled=false;
+};
+
+$("mem-search").onclick=async()=>{
+  const q=$("mem-q").value;
+  const r=await fetch("/api/memory?day="+day+"&q="+encodeURIComponent(q)).then(x=>x.json());
+  $("mem-hits").innerHTML=(r.hits||[]).length
+    ?r.hits.map(h=>`<div class="mem-hit"><strong>${esc(h.day)}</strong> ${esc(h.kind)} score ${h.score?.toFixed?.(2)}<br>${esc(h.text)}</div>`).join("")
+    :"<p class=\"muted\">Nenhum hit.</p>";
+};
+$("mem-q").onkeydown=e=>{if(e.key==="Enter")$("mem-search").click();};
+
+function buildConfigForm(){
+  const form=$("cfg-form");
+  form.innerHTML=SECTIONS.map(sec=>`<h3>${sec.title}</h3><div class="grid2">${sec.fields.map(f=>{
+    const id="f-"+f.path.replace(/\./g,"-");
+    if(f.type==="bool"){
+      return `<div class="field"><label for="${id}">${f.label}</label>
+        <select id="${id}" data-path="${f.path}"><option value="true">sim</option><option value="false">não</option></select>
+        ${f.hint?`<div class="hint">${f.hint}</div>`:""}</div>`;
+    }
+    if(f.type==="select"){
+      return `<div class="field"><label for="${id}">${f.label}</label>
+        <select id="${id}" data-path="${f.path}">${f.options.map(o=>`<option value="${o}">${o}</option>`).join("")}</select>
+        ${f.hint?`<div class="hint">${f.hint}</div>`:""}</div>`;
+    }
+    return `<div class="field"><label for="${id}">${f.label}</label>
+      <input id="${id}" data-path="${f.path}" type="${f.type||"text"}" ${f.step?`step="${f.step}"`:""}/>
+      ${f.hint?`<div class="hint">${f.hint}</div>`:""}</div>`;
+  }).join("")}</div>`).join("");
+}
+
+function loadConfigForm(){
+  fetch("/api/config").then(r=>r.json()).then(cfg=>{
+    cfgCache=cfg;
+    $("cfg-info").textContent=`${cfg.configPath||"defaults"} · hash ${cfg.version||"?"}`;
+    const rt=cfg.runtime||{},m=rt.models||{};
+    $("cfg-runtime").textContent=`Whisper: ${rt.whisperDeviceEffective} · CUDA: ${rt.cudaAvailable?"sim":"não"} · modelos: ${m.fast} / ${m.deep} / ${m.whisper}`;
+    document.querySelectorAll("[data-path]").forEach(el=>{
+      const v=get(cfg,el.dataset.path);
+      if(el.tagName==="SELECT"&&el.querySelector('option[value="true"]')){
+        el.value=v===false||v==="false"?"false":"true";
+      }else{
+        el.value=v==null?"":v;
+      }
+    });
+  });
+}
+
+buildConfigForm();
+
+$("cfg-form").onsubmit=async e=>{
+  e.preventDefault();
+  const patch=JSON.parse(JSON.stringify(cfgCache));
+  document.querySelectorAll("[data-path]").forEach(el=>{
+    let v=el.value;
+    if(el.tagName==="SELECT"&&el.querySelector('option[value="true"]')){
+      v=v==="true";
+    }else if(el.type==="number"){
+      v=v===""?null:Number(v);
+    }else if(v===""){
+      v=null;
+    }
+    set(patch,el.dataset.path,v);
+  });
+  delete patch.configPath;delete patch.version;delete patch.runtime;
+  const r=await fetch("/api/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(patch)}).then(x=>x.json());
+  $("cfg-save-msg").textContent=r.restartRecommended?"Salvo — reinicie brain (porta/dataDir).":"Salvo — ESP sincroniza no próximo poll.";
+  cfgCache=r.config||patch;
+  toast("Config salva");
+};
+
+$("cfg-reload").onclick=loadConfigForm;
+
+$("lb-close").onclick=()=>$("lightbox").classList.remove("open");
+$("lightbox").onclick=e=>{if(e.target.id==="lightbox")$("lightbox").classList.remove("open");};
+
+loadDay();
+setInterval(()=>{loadPills();if(!$("view-day").hidden)loadDay();},12000);
 </script>
 </body>
 </html>

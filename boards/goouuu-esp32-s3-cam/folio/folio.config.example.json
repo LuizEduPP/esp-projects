@@ -4,7 +4,7 @@
   "dataDir": null,
   "lm": {
     "url": "http://127.0.0.1:1234/v1/chat/completions",
-    "model": "mistralai/ministral-3-3b",
+    "model": "google/gemma-4-e2b",
     "modelDeep": null
   },
   "frames": {

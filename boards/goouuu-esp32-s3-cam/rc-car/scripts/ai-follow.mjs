@@ -9,7 +9,7 @@ import { createServer } from "node:http";
 const CFG = {
   esp: process.env.ESP_URL ?? "http://192.168.1.101",
   lm: process.env.LM_URL ?? "http://127.0.0.1:1234/v1/chat/completions",
-  model: process.env.LM_MODEL ?? "mistralai/ministral-3-3b",
+  model: process.env.LM_MODEL ?? "google/gemma-4-e2b",
   intervalMs: Number(process.env.INTERVAL_MS ?? "800"),
   keepaliveMs: Number(process.env.KEEPALIVE_MS ?? "250"),
   viewPort: Number(process.env.VIEW_PORT ?? "8765"),

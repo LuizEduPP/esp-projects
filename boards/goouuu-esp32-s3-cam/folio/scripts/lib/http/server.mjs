@@ -4,6 +4,8 @@ import { networkInterfaces } from "node:os";
 import { resolve } from "node:path";
 import { CFG, nodeConfigPayload, publicConfig, updateConfig } from "../config/index.mjs";
 import { runDigestForDay } from "../services/index.mjs";
+import { runPendingQueueOnce } from "../services/pipeline/index.mjs";
+import { reindexMemoriesFromDigests } from "../memory/index.mjs";
 import {
   getAudioChunk,
   getDigest,
@@ -215,6 +217,31 @@ export function createFolioServer(viewHtml) {
           day,
           prose: result.prose ?? getDigest(db, day)?.prose ?? null,
           skipped: result.skipped ?? false,
+          reason: result.reason ?? null,
+        });
+        return;
+      }
+
+      if (path === "/api/process" && req.method === "POST") {
+        const { audio, frames } = await runPendingQueueOnce();
+        sendJson(res, 200, {
+          ok: true,
+          pending: pendingCounts(openDb()),
+          audio,
+          frames,
+        });
+        return;
+      }
+
+      if (path === "/api/memory/reindex" && req.method === "POST") {
+        const db = openDb();
+        const before = memoryChunkCount(db);
+        const result = await reindexMemoriesFromDigests(db);
+        sendJson(res, 200, {
+          ok: true,
+          before,
+          after: memoryChunkCount(db),
+          ...result,
         });
         return;
       }

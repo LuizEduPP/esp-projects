@@ -416,7 +416,8 @@ export async function passB(db, day, passAJson, prior, rag) {
           "You are Pass B (interpretation). Given Pass A facts and episode semantics, infer meaning: emotional arc, " +
           "decisions vs brainstorming, what was abandoned, what remains open, cross-modal alignments (speech + visual timing). " +
           "Use long_term_memory and graph_context when they relate to today — cite memory day + kind, do not invent past events. " +
-          'Reply raw JSON: {"narrative_arc":"","shifts":[{"at":"","description":"","evidence":[]}],' +
+          'Reply with valid JSON only — no markdown fences, no // comments, no line breaks inside strings, no **bold**: ' +
+          '{"narrative_arc":"","shifts":[{"at":"","description":"","evidence":[]}],' +
           '"decisions_real":[{"text":"","evidence":[]}],"open_loops":[],"patterns":[],"tomorrow_pull":[]}. ' +
           promptLanguageRule(),
       },
