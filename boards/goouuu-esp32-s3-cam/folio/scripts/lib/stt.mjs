@@ -3,9 +3,9 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:f
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
-import { CFG } from "./config/index.mjs";
-import { whisperLanguageCode } from "./locale/index.mjs";
-import { modelId, ModelSlot, whisperRuntime } from "./models/index.mjs";
+import { CFG } from "./config.mjs";
+import { whisperLanguageCode } from "./locale.mjs";
+import { modelId, ModelSlot, whisperRuntime } from "./models.mjs";
 
 const execFileAsync = promisify(execFile);
 

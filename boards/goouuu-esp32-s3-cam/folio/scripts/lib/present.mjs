@@ -1,6 +1,6 @@
-import { CFG } from "../config/index.mjs";
-import { activeLocale } from "../locale/index.mjs";
-import { formatSceneCaption, sceneFingerprint } from "../llm/scene.mjs";
+import { CFG } from "./config.mjs";
+import { activeLocale } from "./locale.mjs";
+import { formatSceneCaption, sceneFingerprint } from "./llm.mjs";
 
 function gapMs(a, b) {
   return Math.abs(new Date(a).getTime() - new Date(b).getTime());

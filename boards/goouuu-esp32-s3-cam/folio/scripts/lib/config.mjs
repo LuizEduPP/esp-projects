@@ -4,14 +4,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { normalizeOpenAiBase } from "../llm/openai-base.mjs";
+import { normalizeOpenAiBase } from "./llm.mjs";
 
 /** esp_camera framesize_t IDs — must match firmware FOLIO_FRAME_SIZE_ID / platformio.ini */
 const FRAME_SIZE_TO_ID = { CIF: 5, QVGA: 6, VGA: 7, SVGA: 8, XGA: 9 };
 
 const EXAMPLE_PATH = join(
   dirname(fileURLToPath(import.meta.url)),
-  "../../../folio.config.example.json",
+  "../../folio.config.example.json",
 );
 
 export const DEFAULT_CONFIG = JSON.parse(readFileSync(EXAMPLE_PATH, "utf8"));

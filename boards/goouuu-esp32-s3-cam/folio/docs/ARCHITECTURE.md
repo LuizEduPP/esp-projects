@@ -16,31 +16,21 @@ Prefer folders over loose files at `lib/` root (exception: consolidated flat mod
 
 ```
 lib/
-├── util.mjs, speaker.mjs, stt.mjs
-├── config/index.mjs
-├── locale/index.mjs
-├── models/index.mjs
-├── present/index.mjs
-├── db/                      # schema + repos (14 files — candidate for merge)
-├── http/index.mjs, server.mjs
-├── llm/                     # client, openai, scene, catalog
-├── memory/                  # indexing, embeddings, retrieval, lexical
-├── perception/              # audio, frame, image, sound, yamnet, scene
-└── services/
-    ├── ingest/index.mjs
-    ├── pipeline/index.mjs
-    └── insights/index.mjs
+├── config.mjs, locale.mjs, models.mjs
+├── db.mjs, llm.mjs, memory.mjs, http.mjs, services.mjs
+├── util.mjs, speaker.mjs, stt.mjs, present.mjs
+└── perception/          # frame, audio, sound, yamnet
 ```
 
 ## Entry-point imports
 
 ```javascript
-import { CFG } from "./lib/config/index.mjs";
-import { openDb } from "./lib/db/index.mjs";
-import { startProcessingLoop, startInsightsLoop } from "./lib/services/index.mjs";
-import { createFolioServer } from "./lib/http/index.mjs";
-import { retrieveMemories } from "./lib/memory/index.mjs";
-import { timelineWithGroups } from "./lib/present/index.mjs";
+import { CFG } from "./lib/config.mjs";
+import { openDb } from "./lib/db.mjs";
+import { startProcessingLoop, startInsightsLoop } from "./lib/services.mjs";
+import { createFolioServer } from "./lib/http.mjs";
+import { retrieveMemories } from "./lib/memory.mjs";
+import { timelineWithGroups } from "./lib/present.mjs";
 ```
 
 ## Data flow

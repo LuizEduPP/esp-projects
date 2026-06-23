@@ -2,29 +2,19 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { resolve } from "node:path";
-import { CFG, nodeConfigPayload, publicConfig, updateConfig } from "../config/index.mjs";
-import { runPendingQueueOnce } from "../services/pipeline/index.mjs";
+import { CFG, nodeConfigPayload, publicConfig, updateConfig } from "./config.mjs";
+import { fetchOpenAiModels } from "./llm.mjs";
 import {
-  getInsightsForApi,
-  needsInsightsRefresh,
-  runDayInsights,
-} from "../services/insights/index.mjs";
-import { fetchOpenAiModels } from "../llm/models-catalog.mjs";
-import { retrieveMemories, reindexAllMemories } from "../memory/index.mjs";
-import { errMsg, pcmToWav, sendBytes, sendJson, today } from "../util.mjs";
+  getInsightsForApi, ingestAudioChunk, ingestEvent, ingestFrame, needsInsightsRefresh,
+  runDayInsights, runPendingQueueOnce,
+} from "./services.mjs";
+import { reindexAllMemories, retrieveMemories } from "./memory.mjs";
+import { errMsg, pcmToWav, sendBytes, sendJson, today } from "./util.mjs";
 import {
-  getAudioChunk,
-  getFrame,
-  listDevices,
-  listEntities,
-  memoryChunkCount,
-  openDb,
-  pendingCounts,
-  timelineForDay,
-  touchDevice,
-} from "../db/index.mjs";
-import { ingestAudioChunk, ingestFrame, ingestEvent } from "../services/index.mjs";
-import { timelineWithGroups } from "../present/index.mjs";
+  getAudioChunk, getFrame, listDevices, listEntities, memoryChunkCount, openDb,
+  pendingCounts, timelineForDay, touchDevice,
+} from "./db.mjs";
+import { timelineWithGroups } from "./present.mjs";
 
 const UI_MIME = {
   "/ui/app.css": "text/css; charset=utf-8",

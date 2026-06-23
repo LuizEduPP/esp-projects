@@ -1,7 +1,15 @@
-import { CFG } from "../config/index.mjs";
+import { CFG } from "../config.mjs";
 import { pcmFingerprint } from "../speaker.mjs";
 import { classifySoundYamnet } from "./yamnet.mjs";
-import { SoundKind } from "./types.mjs";
+
+export const SoundKind = Object.freeze({
+  SPEECH: "speech",
+  BARK: "bark",
+  DOOR: "door",
+  KNOCK: "knock",
+  APPLIANCE: "appliance",
+  UNKNOWN: "unknown",
+});
 
 function soundLabel(kind) {
   return CFG.perceptionSoundLabels?.[kind] ?? kind;

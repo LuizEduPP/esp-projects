@@ -1,8 +1,8 @@
 /**
  * Model slot routing — maps logical roles to configured model IDs.
  */
-import { CFG } from "../config/index.mjs";
-import { openAiUrl } from "../llm/openai.mjs";
+import { CFG } from "./config.mjs";
+import { openAiUrl } from "./llm.mjs";
 
 export const ModelSlot = Object.freeze({
   FAST: "fast",

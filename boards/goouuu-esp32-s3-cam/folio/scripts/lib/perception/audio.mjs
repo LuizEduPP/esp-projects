@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
-import { CFG } from "../config/index.mjs";
+import { CFG } from "../config.mjs";
 import {
   bumpSttAttempts,
   deleteAudioChunk,
@@ -7,12 +7,12 @@ import {
   insertUtterance,
   markAudioProcessed,
   updateAudioClassification,
-} from "../db/index.mjs";
+} from "../db.mjs";
 import { identifySpeaker } from "../speaker.mjs";
 import { isSpeechChunk, transcribeWav } from "../stt.mjs";
 import { writeWav } from "../util.mjs";
 import { classifySound, isInterestingSound, speechLabel } from "./sound.mjs";
-import { SoundKind } from "./types.mjs";
+import { SoundKind } from "./sound.mjs";
 
 function deleteChunkFile(path) {
   if (!path) {

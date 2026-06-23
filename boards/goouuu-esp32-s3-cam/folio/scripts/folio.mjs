@@ -3,11 +3,11 @@
  * folio — CLI for brain-side tasks.
  * Usage: folio.mjs <process|enroll> [options]
  */
-import { openDb, pendingCounts, upsertEntity, upsertSpeaker } from "./lib/db/index.mjs";
+import { openDb, pendingCounts, upsertEntity, upsertSpeaker } from "./lib/db.mjs";
 import { enrollFingerprint } from "./lib/speaker.mjs";
-import { runDayInsights } from "./lib/services/insights/index.mjs";
-import { runPendingQueueOnce } from "./lib/services/index.mjs";
-import { reindexAllMemories } from "./lib/memory/index.mjs";
+import { runDayInsights } from "./lib/services.mjs";
+import { runPendingQueueOnce } from "./lib/services.mjs";
+import { reindexAllMemories } from "./lib/memory.mjs";
 import { errMsg } from "./lib/util.mjs";
 import { readFileSync } from "node:fs";
 

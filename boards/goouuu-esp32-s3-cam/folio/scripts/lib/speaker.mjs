@@ -1,5 +1,5 @@
-import { speakersWithFingerprint } from "./db/speakers.mjs";
-import { CFG } from "./config/index.mjs";
+import { speakersWithFingerprint } from "./db.mjs";
+import { CFG } from "./config.mjs";
 
 
 function pcmSamples(pcmBuffer) {

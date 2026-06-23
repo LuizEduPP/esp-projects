@@ -5,10 +5,10 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CFG, isCudaAvailable } from "./lib/config/index.mjs";
-import { createFolioServer, logServerStartup } from "./lib/http/index.mjs";
-import { activeLocale, promptLanguageName, whisperLanguageCode } from "./lib/locale/index.mjs";
-import { startInsightsLoop, startRetentionLoop, startProcessingLoop } from "./lib/services/index.mjs";
+import { CFG, isCudaAvailable } from "./lib/config.mjs";
+import { createFolioServer, logServerStartup } from "./lib/http.mjs";
+import { activeLocale, promptLanguageName, whisperLanguageCode } from "./lib/locale.mjs";
+import { startInsightsLoop, startRetentionLoop, startProcessingLoop } from "./lib/services.mjs";
 
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "ui");
 
@@ -22,6 +22,16 @@ function loadUi() {
 
 function main() {
   const server = createFolioServer(loadUi());
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(
+        `[brain] port ${CFG.port} already in use — stop the other folio-brain ` +
+          `(fuser -k ${CFG.port}/tcp) or change port in config`,
+      );
+      process.exit(1);
+    }
+    throw err;
+  });
   server.listen(CFG.port, "0.0.0.0", () => {
     logServerStartup();
     console.log(

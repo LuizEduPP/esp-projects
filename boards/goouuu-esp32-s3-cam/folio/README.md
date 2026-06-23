@@ -107,10 +107,10 @@ scripts/
 ├── folio.mjs            # CLI: insights | process | enroll | memory reindex
 ├── ui/index.html
 └── lib/
+    ├── config.mjs, locale.mjs, models.mjs, present.mjs
+    ├── db.mjs, llm.mjs, memory.mjs, http.mjs, services.mjs
     ├── util.mjs, speaker.mjs, stt.mjs
-    ├── config/, locale/, models/, present/
-    ├── db/, http/, llm/, memory/, perception/
-    └── services/            # ingest/, pipeline/, insights/
+    └── perception/            # audio, frame, image, sound, yamnet
 ```
 
 ## Offline spool (microSD card — slot onboard)

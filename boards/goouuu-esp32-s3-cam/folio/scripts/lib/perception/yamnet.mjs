@@ -1,8 +1,7 @@
 import { createWriteStream, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { CFG, PATHS } from "../config/index.mjs";
-import { SoundKind } from "./types.mjs";
+import { CFG, PATHS } from "../config.mjs";
 
 let sessionPromise = null;
 let labelNames = null;
@@ -133,7 +132,7 @@ function kindFromClassName(name) {
       }
     }
   }
-  return SoundKind.UNKNOWN;
+  return "unknown";
 }
 
 export function resetYamnetSession() {
@@ -173,17 +172,17 @@ export async function classifySoundYamnet(pcmBuffer, energy) {
   const top = ranked.find((r) => r.score >= minScore) ?? ranked[0];
   if (!top || top.score < minScore) {
     return {
-      kind: SoundKind.UNKNOWN,
-      label: soundLabel(SoundKind.UNKNOWN),
+      kind: "unknown",
+      label: soundLabel("unknown"),
       confidence: top?.score ?? 0,
       yamnet: ranked.slice(0, 3),
     };
   }
 
-  if (energy >= CFG.speechEnergyThreshold && kindFromClassName(top.name) === SoundKind.UNKNOWN) {
+  if (energy >= CFG.speechEnergyThreshold && kindFromClassName(top.name) === "unknown") {
     return {
-      kind: SoundKind.SPEECH,
-      label: soundLabel(SoundKind.SPEECH),
+      kind: "speech",
+      label: soundLabel("speech"),
       confidence: Math.max(top.score, 0.5),
       yamnet: ranked.slice(0, 3),
     };
