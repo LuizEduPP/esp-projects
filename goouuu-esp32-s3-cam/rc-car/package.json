@@ -9,6 +9,7 @@
     "fw:monitor": "cd firmware && ../scripts/pio.sh device monitor -b 115200 --filter direct",
     "fw:test": "cd firmware && ../scripts/pio.sh run -t upload && ../scripts/pio.sh device monitor -b 115200",
     "ai:follow": "node scripts/ai-follow.mjs",
-    "motor:diag": "node scripts/motor-diag.mjs"
+    "motor:diag": "node scripts/motor-diag.mjs",
+    "motor:forever": "DRIVE_FOREVER=1 node scripts/motor-diag.mjs --forever"
   }
 }

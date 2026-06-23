@@ -83,6 +83,16 @@ static int jsonInt(const String &body, const char *key) {
   return pos < 0 ? 0 : body.substring(pos + tok.length()).toInt();
 }
 
+static bool jsonBool(const String &body, const char *key) {
+  const String tok = String("\"") + key + "\":";
+  const int pos = body.indexOf(tok);
+  if (pos < 0) {
+    return false;
+  }
+  const String rest = body.substring(pos + tok.length());
+  return rest.startsWith("true");
+}
+
 static void handleControl() {
   logReq("/control");
   gControlCount++;
@@ -94,11 +104,14 @@ static void handleControl() {
   Serial.printf("[http] body: %s\n", body.c_str());
   const int l = jsonInt(body, "left");
   const int r = jsonInt(body, "right");
+  const bool hold = jsonBool(body, "hold");
   if (body.indexOf("\"left\"") < 0 || body.indexOf("\"right\"") < 0) {
     Serial.println("[http] AVISO JSON sem left/right — usando 0");
   }
-  Serial.printf("[http] parsed L=%d R=%d (control #%lu)\n", l, r, gControlCount);
-  motorSetTagged(l, r, "http");
+  Serial.printf("[http] parsed L=%d R=%d hold=%s (control #%lu)\n", l, r,
+                hold ? "true" : "false", gControlCount);
+  motorSetHold(hold);
+  motorSetTagged(l, r, hold ? "hold" : "http");
   cors();
   String resp = "{\"ok\":true,\"left\":";
   resp += l;

@@ -18,6 +18,7 @@ static const uint8_t kGpio[] = {
 
 static bool gReady = false;
 static bool gRunning = false;
+static bool gHold = false;
 static bool gTimeoutWarned = false;
 static int gLeft = 0;
 static int gRight = 0;
@@ -135,6 +136,12 @@ void motorSet(int left, int right) {
   motorSetTagged(left, right, "set");
 }
 
+void motorSetHold(bool hold) {
+  gHold = hold;
+  Serial.printf("[motor] HOLD %s — timeout %s\n", hold ? "ON" : "OFF",
+                hold ? "desligado" : "ativo");
+}
+
 void motorSetTagged(int left, int right, const char *tag) {
   if (!gReady) {
     motorBegin();
@@ -176,6 +183,9 @@ void motorSetTagged(int left, int right, const char *tag) {
 }
 
 void motorPoll() {
+  if (gHold) {
+    return;
+  }
   if (!gReady || gLastCmdMs == 0) {
     return;
   }
@@ -214,15 +224,16 @@ void motorLogHeartbeat() {
   lastBeat = now;
 
   const unsigned long age = gLastCmdMs ? now - gLastCmdMs : 0;
-  Serial.printf("[status] uptime=%lus heap=%u motor=%s L=%d R=%d (%s) age=%lums sets=%lu tag=%s\n",
-                now / 1000, ESP.getFreeHeap(), gRunning ? "ON" : "OFF", gLeft, gRight,
-                dirLabel(gLeft, gRight), age, gSetCount, gLastTag);
+  Serial.printf("[status] uptime=%lus heap=%u motor=%s hold=%s L=%d R=%d (%s) age=%lums sets=%lu tag=%s\n",
+                now / 1000, ESP.getFreeHeap(), gRunning ? "ON" : "OFF", gHold ? "ON" : "OFF",
+                gLeft, gRight, dirLabel(gLeft, gRight), age, gSetCount, gLastTag);
 }
 
 String motorDiagJson() {
   String j = "{";
   j += "\"ready\":" + String(gReady ? "true" : "false");
   j += ",\"running\":" + String(gRunning ? "true" : "false");
+  j += ",\"hold\":" + String(gHold ? "true" : "false");
   j += ",\"left\":" + String(gLeft);
   j += ",\"right\":" + String(gRight);
   j += ",\"dir\":\"" + String(dirLabel(gLeft, gRight)) + "\"";

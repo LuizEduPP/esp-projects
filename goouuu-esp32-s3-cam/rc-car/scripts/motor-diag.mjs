@@ -38,6 +38,60 @@ async function post(path, body) {
   return { status: res.status, text, json: tryJson(text) };
 }
 
+/** Fase 1: frente. Fase 2: gira. Nunca para até Ctrl+C. */
+async function driveForever() {
+  const speed = Number(process.env.SPEED ?? "255");
+  const fwdMs = Number(process.env.FWD_MS ?? "15000");
+  const intervalMs = Number(process.env.INTERVAL_MS ?? "200");
+  const spin = process.env.SPIN ?? "left";
+
+  const spinMotors =
+    spin === "right"
+      ? { left: 0, right: speed }
+      : spin === "pivot"
+        ? { left: speed, right: -speed }
+        : { left: speed, right: 0 };
+
+  log(`=== DRIVE FOREVER === ESP=${ESP}`);
+  log(`Fase 1: FRENTE L=${speed} R=${speed} por ${fwdMs / 1000}s`);
+  log(`Fase 2: GIRA (${spin}) L=${spinMotors.left} R=${spinMotors.right} — para sempre`);
+  log("Ctrl+C para parar (envia stop ao ESP)");
+
+  const send = async (left, right, hold = true) => {
+    await post("/control", { left, right, hold });
+  };
+
+  process.on("SIGINT", async () => {
+    log("SIGINT — parando motores...");
+    try {
+      await post("/control", { left: 0, right: 0, hold: false });
+    } catch {
+      /* ignore */
+    }
+    process.exit(0);
+  });
+
+  const r = await get("/status");
+  if (r.status !== 200) {
+    log("FALHOU: ESP inacessivel");
+    process.exit(1);
+  }
+  logMotor(r.json?.motor ?? r.json, "status");
+
+  log("--- FASE 1: FRENTE ---");
+  const endFwd = Date.now() + fwdMs;
+  while (Date.now() < endFwd) {
+    await send(speed, speed);
+    await sleep(intervalMs);
+  }
+
+  log("--- FASE 2: GIRANDO (sem parar) ---");
+  for (;;) {
+    await send(spinMotors.left, spinMotors.right);
+    await sleep(intervalMs);
+  }
+}
+
 function tryJson(text) {
   try {
     return JSON.parse(text);
@@ -161,8 +215,15 @@ function saveLog() {
   writeFileSync(LOG_FILE, lines.join("\n") + "\n");
 }
 
-run().catch((e) => {
-  log(`ERRO FATAL: ${e.message}`);
-  saveLog();
-  process.exit(1);
-});
+if (process.env.DRIVE_FOREVER === "1" || process.argv.includes("--forever")) {
+  driveForever().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+} else {
+  run().catch((e) => {
+    log(`ERRO FATAL: ${e.message}`);
+    saveLog();
+    process.exit(1);
+  });
+}
