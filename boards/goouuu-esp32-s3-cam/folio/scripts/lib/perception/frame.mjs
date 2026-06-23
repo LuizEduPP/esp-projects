@@ -39,30 +39,6 @@ function decodeJpeg(buf) {
   return jpeg.decode(buf, { useTArray: true, formatAsRGBA: true });
 }
 
-function jpegQuality(buf) {
-  try {
-    const { data, width, height } = decodeJpeg(buf);
-    if (!data?.length || !width || !height) {
-      return { brightness: 0.5, width: 0, height: 0, dark: false, bright: false };
-    }
-    let sum = 0;
-    const pixels = width * height;
-    for (let i = 0; i < data.length; i += 4) {
-      sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-    }
-    const brightness = sum / pixels / 255;
-    return {
-      brightness,
-      width,
-      height,
-      dark: brightness < 0.28,
-      bright: brightness > 0.82,
-    };
-  } catch {
-    return { brightness: 0.5, width: 0, height: 0, dark: false, bright: false };
-  }
-}
-
 function greyThumb(buf, size = GREY_SAMPLES) {
   const { data, width, height } = decodeJpeg(buf);
   return greyFromRgba(data, width, height, size, size);
@@ -95,35 +71,270 @@ function clamp(v) {
   return Math.max(0, Math.min(255, Math.round(v)));
 }
 
-function enhanceJpeg(buf, { target = 0.42, maxGain = 2.2 } = {}) {
+function lumaAt(data, i) {
+  return 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+}
+
+function visionOpts() {
+  return CFG.perceptionVision ?? {};
+}
+
+function analyzeRgba(data, width, height, v = visionOpts()) {
+  const pixels = width * height;
+  if (!data?.length || !pixels) {
+    return {
+      brightness: 0.5,
+      width: 0,
+      height: 0,
+      spread: 0,
+      contrast: 0,
+      dark: false,
+      bright: false,
+      flat: false,
+      nearlyBlack: false,
+      pLow: 0,
+      pHigh: 255,
+    };
+  }
+
+  const lumas = new Uint8Array(pixels);
+  let sum = 0;
+  for (let p = 0, i = 0; p < pixels; p++, i += 4) {
+    const y = lumaAt(data, i);
+    lumas[p] = y;
+    sum += y;
+  }
+
+  const sorted = Uint8Array.from(lumas);
+  sorted.sort();
+  const pLow = sorted[Math.floor(pixels * 0.02)] ?? 0;
+  const pHigh = sorted[Math.floor(pixels * 0.98)] ?? 255;
+  const brightness = sum / pixels / 255;
+  const spread = (pHigh - pLow) / 255;
+
+  let varSum = 0;
+  for (let p = 0; p < pixels; p++) {
+    const d = lumas[p] / 255 - brightness;
+    varSum += d * d;
+  }
+  const contrast = Math.sqrt(varSum / pixels);
+
+  const darkThreshold = v.darkThreshold ?? 0.28;
+  const brightThreshold = v.brightThreshold ?? 0.82;
+  const lowContrast = v.lowContrast ?? 0.16;
+
+  return {
+    brightness,
+    width,
+    height,
+    spread,
+    contrast,
+    pLow,
+    pHigh,
+    dark: brightness < darkThreshold,
+    bright: brightness > brightThreshold,
+    flat: spread < lowContrast,
+    nearlyBlack: brightness < 0.06,
+  };
+}
+
+function jpegQuality(buf) {
   try {
-    const decoded = decodeJpeg(buf);
-    const { data, width, height } = decoded;
-    const q = jpegQuality(buf);
-    if (!q.dark && !q.bright) {
-      return buf;
-    }
-
-    let gain = 1;
-    if (q.dark) {
-      gain = Math.min(maxGain, target / Math.max(q.brightness, 0.06));
-    } else if (q.bright) {
-      gain = Math.max(0.65, target / q.brightness);
-    }
-
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = clamp(data[i] * gain);
-      data[i + 1] = clamp(data[i + 1] * gain);
-      data[i + 2] = clamp(data[i + 2] * gain);
-    }
-
-    return Buffer.from(jpeg.encode({ data, width, height }, 82).data);
+    const { data, width, height } = decodeJpeg(buf);
+    return analyzeRgba(data, width, height);
   } catch {
-    return buf;
+    return analyzeRgba(null, 0, 0);
   }
 }
 
-function enrichScene(scene, { motion, quality } = {}) {
+function encodeJpeg(data, width, height, quality) {
+  return Buffer.from(jpeg.encode({ data, width, height }, quality).data);
+}
+
+function stretchContrast(data, pLow, pHigh) {
+  if (pHigh - pLow < 8) {
+    return false;
+  }
+  const scale = 255 / (pHigh - pLow);
+  for (let i = 0; i < data.length; i += 4) {
+    const y = lumaAt(data, i);
+    const y2 = clamp((y - pLow) * scale);
+    const f = y > 0.5 ? y2 / y : 1;
+    data[i] = clamp(data[i] * f);
+    data[i + 1] = clamp(data[i + 1] * f);
+    data[i + 2] = clamp(data[i + 2] * f);
+  }
+  return true;
+}
+
+function applyGamma(data, gamma) {
+  if (gamma >= 0.995) {
+    return false;
+  }
+  const inv = 1 / gamma;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = clamp(255 * (data[i] / 255) ** inv);
+    data[i + 1] = clamp(255 * (data[i + 1] / 255) ** inv);
+    data[i + 2] = clamp(255 * (data[i + 2] / 255) ** inv);
+  }
+  return true;
+}
+
+function applyGain(data, gain) {
+  if (Math.abs(gain - 1) < 0.03) {
+    return false;
+  }
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = clamp(data[i] * gain);
+    data[i + 1] = clamp(data[i + 1] * gain);
+    data[i + 2] = clamp(data[i + 2] * gain);
+  }
+  return true;
+}
+
+function applySharpen(data, width, height, amount) {
+  if (amount <= 0 || width < 3 || height < 3) {
+    return false;
+  }
+  const lum = new Float32Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      lum[y * width + x] = lumaAt(data, i);
+    }
+  }
+  const out = Float32Array.from(lum);
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const c = lum[y * width + x];
+      const blur =
+        lum[(y - 1) * width + x] +
+        lum[(y + 1) * width + x] +
+        lum[y * width + x - 1] +
+        lum[y * width + x + 1];
+      out[y * width + x] = c + amount * (4 * c - blur);
+    }
+  }
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x;
+      const i = p * 4;
+      const y0 = lumaAt(data, i);
+      const delta = out[p] - y0;
+      data[i] = clamp(data[i] + delta);
+      data[i + 1] = clamp(data[i + 1] + delta);
+      data[i + 2] = clamp(data[i + 2] + delta);
+    }
+  }
+  return true;
+}
+
+function needsVisionWork(stats, v) {
+  const target = v.targetBrightness ?? 0.44;
+  return (
+    stats.dark ||
+    stats.bright ||
+    stats.flat ||
+    stats.brightness < target * 0.85 ||
+    stats.brightness > (v.brightThreshold ?? 0.82)
+  );
+}
+
+function prepareVisionJpeg(rawBuf) {
+  const v = visionOpts();
+  if (!CFG.perceptionAutoEnhance) {
+    return { buf: rawBuf, enhanced: false, passes: [], quality: jpegQuality(rawBuf) };
+  }
+
+  let decoded;
+  try {
+    decoded = decodeJpeg(rawBuf);
+  } catch {
+    return { buf: rawBuf, enhanced: false, passes: [], quality: jpegQuality(rawBuf) };
+  }
+
+  const { data, width, height } = decoded;
+  const passes = [];
+  const maxPasses = Math.max(1, Math.min(8, v.maxPasses ?? 4));
+  const target = v.targetBrightness ?? 0.44;
+  const maxGain = v.maxGain ?? 3.2;
+  const gammaMin = v.gammaMin ?? 0.5;
+  const jpegQ = v.jpegQuality ?? 88;
+
+  if (needsVisionWork(analyzeRgba(data, width, height, v), v)) {
+    for (let pass = 0; pass < maxPasses; pass++) {
+      const stats = analyzeRgba(data, width, height, v);
+      let changed = false;
+
+      if (v.contrastStretch !== false && stats.flat) {
+        if (stretchContrast(data, stats.pLow, stats.pHigh)) {
+          passes.push("contrast");
+          changed = true;
+        }
+      }
+
+      const mid = analyzeRgba(data, width, height, v);
+      if (mid.dark || mid.brightness < target * 0.92) {
+        const gamma = Math.min(
+          1,
+          Math.max(gammaMin, (mid.brightness / target) ** 0.85),
+        );
+        if (applyGamma(data, gamma)) {
+          passes.push(`gamma:${gamma.toFixed(2)}`);
+          changed = true;
+        }
+      }
+
+      const afterGamma = analyzeRgba(data, width, height, v);
+      if (afterGamma.dark || afterGamma.brightness < target * 0.9) {
+        const gain = Math.min(maxGain, target / Math.max(afterGamma.brightness, 0.04));
+        if (applyGain(data, gain)) {
+          passes.push(`gain:${gain.toFixed(2)}`);
+          changed = true;
+        }
+      } else if (afterGamma.bright) {
+        const gain = Math.max(0.55, target / afterGamma.brightness);
+        if (applyGain(data, gain)) {
+          passes.push(`gain:${gain.toFixed(2)}`);
+          changed = true;
+        }
+      }
+
+      if (!changed) {
+        break;
+      }
+
+      const done = analyzeRgba(data, width, height, v);
+      if (
+        done.brightness >= target * 0.85 &&
+        done.brightness <= (v.brightThreshold ?? 0.82) &&
+        done.spread >= (v.lowContrast ?? 0.16) * 0.75
+      ) {
+        break;
+      }
+    }
+  }
+
+  if ((v.sharpen ?? 0) > 0 && passes.length > 0) {
+    if (applySharpen(data, width, height, v.sharpen)) {
+      passes.push("sharpen");
+    }
+  }
+
+  const quality = analyzeRgba(data, width, height, v);
+  const buf = encodeJpeg(data, width, height, jpegQ);
+  return {
+    buf,
+    enhanced: passes.length > 0,
+    passes,
+    quality: {
+      ...quality,
+      brightnessBefore: jpegQuality(rawBuf).brightness,
+    },
+  };
+}
+
+function enrichScene(scene, { motion, quality, vision } = {}) {
   const out = { ...scene };
   if (motion) {
     out.motion_score = motion.score;
@@ -132,9 +343,16 @@ function enrichScene(scene, { motion, quality } = {}) {
   if (quality) {
     out.brightness = quality.brightness;
     out.lighting = quality.dark ? "dark" : quality.bright ? "bright" : "normal";
-    if (quality.dark) {
-      out.enhanced = true;
+    if (quality.brightnessBefore != null) {
+      out.brightness_before = quality.brightnessBefore;
     }
+    if (quality.nearlyBlack) {
+      out.lighting = "very_dark";
+    }
+  }
+  if (vision?.enhanced) {
+    out.enhanced = true;
+    out.vision_passes = vision.passes;
   }
   if (Array.isArray(out.objects)) {
     out.object_tags = out.objects
@@ -204,8 +422,11 @@ export async function processFrame(db, frame) {
   }
 
   let visionBuf = buf;
-  if (CFG.perceptionAutoEnhance && quality.dark) {
-    visionBuf = enhanceJpeg(buf);
+  let visionMeta = { enhanced: false, passes: [], quality };
+  if (CFG.perceptionAutoEnhance) {
+    const prepared = prepareVisionJpeg(buf);
+    visionBuf = prepared.buf;
+    visionMeta = prepared;
   }
 
   let previousScene = null;
@@ -220,11 +441,12 @@ export async function processFrame(db, frame) {
   const sceneRaw = await captionFrame(visionBuf.toString("base64"), frame.reason, {
     previousCaption: prev?.caption,
     previousScene,
-    quality,
+    quality: visionMeta.quality ?? quality,
     motion,
+    vision: visionMeta,
   });
 
-  const scene = enrichScene(sceneRaw, { motion, quality });
+  const scene = enrichScene(sceneRaw, { motion, quality: visionMeta.quality ?? quality, vision: visionMeta });
   const caption = scene.unchanged && prev?.caption ? prev.caption : formatSceneCaption(scene);
   const tags = objectsSummary(scene);
   const finalCaption = tags && !caption.includes(tags) ? `${caption} (${tags})` : caption;

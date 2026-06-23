@@ -118,6 +118,18 @@
     "motionMin": 0.035,
     "motionForceMs": 300000,
     "autoEnhance": true,
+    "vision": {
+      "jpegQuality": 88,
+      "darkThreshold": 0.28,
+      "brightThreshold": 0.82,
+      "lowContrast": 0.16,
+      "targetBrightness": 0.44,
+      "maxGain": 3.2,
+      "maxPasses": 4,
+      "contrastStretch": true,
+      "gammaMin": 0.5,
+      "sharpen": 0.12
+    },
     "storeSounds": true,
     "soundMinEnergy": 0.003,
     "soundMinConfidence": 0.55,

@@ -339,8 +339,16 @@ export async function captionFrame(b64, reason, ctx = {}) {
   }
 
   let sceneHints = "";
-  if (quality?.dark) {
-    sceneHints += "Image is underexposed — infer carefully from visible shapes. ";
+  if (quality?.nearlyBlack) {
+    sceneHints +=
+      "Image is nearly black (underexposed camera) — describe only what is clearly visible; do not invent. ";
+  } else if (quality?.dark) {
+    sceneHints += "Image was dark and auto-enhanced — infer carefully from visible shapes. ";
+  } else if (ctx.vision?.enhanced) {
+    sceneHints += "Image was auto-enhanced for visibility. ";
+  }
+  if (quality?.bright) {
+    sceneHints += "Image is overexposed — infer from silhouettes and context. ";
   }
   if (motion?.level === "high") {
     sceneHints += "Significant motion detected. ";

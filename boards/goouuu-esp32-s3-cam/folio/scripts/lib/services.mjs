@@ -2,14 +2,14 @@ import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CFG, PATHS } from "./config.mjs";
 import {
-  alignedMomentsForDay, bumpSttAttempts, deleteAudioChunk, ensureDevice, getDayInsights,
-  insertAudioChunk, insertEvent, insertFrame, insertUtterance, latestWitnessAt, openDb,
-  pendingAudioChunks, pendingCounts, pendingFrames, pruneExpiredPcm, touchDevice, upsertDayInsights,
-  upsertEntity, witnessStats,
+  alignedMomentsForDay, bumpSttAttempts, deleteAudioChunk, ensureDevice, entitiesActiveOnDay,
+  getDayInsights, getSpeaker, insertAudioChunk, insertEvent, insertFrame, insertUtterance,
+  latestWitnessAt, openDb, pendingAudioChunks, pendingCounts, pendingFrames, pruneExpiredPcm,
+  timelineForDay, touchDevice, upsertDayInsights, upsertEntity, witnessStats,
 } from "./db.mjs";
 import { chatJson, fetchOpenAiModels } from "./llm.mjs";
 import { promptLanguageRule } from "./locale.mjs";
-import { indexDayMemories, retrieveMemories } from "./memory.mjs";
+import { indexDayMemories, retrieveContextForDay, retrieveMemories } from "./memory.mjs";
 import { modelId, ModelSlot } from "./models.mjs";
 import { processAudioChunk, processFrame } from "./perception/index.mjs";
 import { isSpeechChunk, pcmEnergy, shouldStoreAudioChunk } from "./stt.mjs";

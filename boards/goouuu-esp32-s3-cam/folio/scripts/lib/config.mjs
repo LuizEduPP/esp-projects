@@ -337,7 +337,7 @@ function migrateConfigSchema(file) {
   }
 
   if (file.perception && typeof file.perception === "object") {
-    for (const key of ["soundLabels", "yamnetKindMap", "heuristic"]) {
+    for (const key of ["soundLabels", "yamnetKindMap", "heuristic", "vision"]) {
       if (!file.perception[key] || typeof file.perception[key] !== "object") {
         file.perception[key] = { ...DEFAULT_CONFIG.perception[key] };
         changed = true;
@@ -678,6 +678,7 @@ function buildCfgFromFile(file = getFileData()) {
     entitiesSoundKindEntity: cfgObject(file, "entities.soundKindEntity"),
     perceptionMotionForceMs: cfgNum(file, "perception.motionForceMs", "FOLIO_MOTION_FORCE_MS"),
     perceptionAutoEnhance: cfgBool(file, "perception.autoEnhance", "FOLIO_AUTO_ENHANCE"),
+    perceptionVision: cfgObject(file, "perception.vision"),
     perceptionStoreSounds: cfgBool(file, "perception.storeSounds", "FOLIO_STORE_SOUNDS"),
     perceptionSoundMinEnergy: cfgNum(file, "perception.soundMinEnergy", "FOLIO_SOUND_MIN_ENERGY"),
     perceptionSoundMinConfidence: cfgNum(

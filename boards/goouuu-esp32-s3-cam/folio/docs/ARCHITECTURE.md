@@ -1,25 +1,15 @@
 # Folio Brain — architecture
 
-`scripts/lib/` is organized by domain. Each folder exposes a public API via `index.mjs`.
+`scripts/lib/` is flat by domain, with `perception/` as the only subfolder.
 
-## Layout rule
-
-```
-lib/<domain>/index.mjs     ← public API
-lib/<domain>/*.mjs         ← implementation
-lib/*.mjs                  ← small shared modules (util, speaker, stt)
-```
-
-Prefer folders over loose files at `lib/` root (exception: consolidated flat modules).
-
-## Tree (current)
+## Layout
 
 ```
 lib/
-├── config.mjs, locale.mjs, models.mjs
+├── config.mjs, locale.mjs, models.mjs, present.mjs
 ├── db.mjs, llm.mjs, memory.mjs, http.mjs, services.mjs
-├── util.mjs, speaker.mjs, stt.mjs, present.mjs
-└── perception/          # frame, audio, sound, yamnet
+├── util.mjs, speaker.mjs, stt.mjs
+└── perception/          # audio, frame, sound, yamnet (+ index.mjs barrel)
 ```
 
 ## Entry-point imports
@@ -36,13 +26,13 @@ import { timelineWithGroups } from "./lib/present.mjs";
 ## Data flow
 
 ```
-ESP32 → services/ingest → db/
+ESP32 → services.mjs (ingest) → db.mjs
               ↓
-       services/pipeline → perception/ + stt/ + llm/
+       services.mjs (pipeline) → perception/ + stt.mjs + llm.mjs
               ↓
-       services/insights → memory/ + llm/
+       services.mjs (insights) → memory.mjs + llm.mjs
               ↓
-       present/ + http/ → UI
+       present.mjs + http.mjs → UI
 ```
 
 ## Config
