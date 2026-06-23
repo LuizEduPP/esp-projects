@@ -24,7 +24,7 @@ import {
   touchDevice,
 } from "../db/index.mjs";
 import { ingestAudioChunk, ingestFrame, ingestEvent } from "../services/index.mjs";
-import { timelineWithGroups } from "../present.mjs";
+import { timelineWithGroups } from "../present/index.mjs";
 
 const UI_MIME = {
   "/ui/app.css": "text/css; charset=utf-8",
@@ -55,7 +55,7 @@ function logAudioIngest(deviceId, body, result) {
   }
 }
 
-async function readBody(req, maxBytes = 512 * 1024) {
+async function readBody(req, maxBytes = CFG.httpBodyMaxBytes) {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
@@ -150,7 +150,7 @@ export function createFolioServer(ui) {
           return;
         }
         noteDevice(req);
-        const body = await readBody(req, 128 * 1024);
+        const body = await readBody(req, CFG.httpIngestAudioMaxBytes);
         const result = ingestAudioChunk(deviceId, body, req.headers["x-folio-meta"]);
         logAudioIngest(deviceId, body, result);
         sendJson(res, 200, { ok: true, ...result });
@@ -164,7 +164,7 @@ export function createFolioServer(ui) {
           return;
         }
         noteDevice(req);
-        const body = await readBody(req, 400 * 1024);
+        const body = await readBody(req, CFG.httpIngestFrameMaxBytes);
         const result = ingestFrame(deviceId, body, req.headers["x-folio-meta"]);
         console.log(`[ingest] frame ${deviceId} id=${result.id} bytes=${body.length} reason=${result.reason}`);
         sendJson(res, 200, { ok: true, ...result });
@@ -178,7 +178,7 @@ export function createFolioServer(ui) {
           return;
         }
         noteDevice(req);
-        const body = JSON.parse((await readBody(req, 16 * 1024)).toString("utf8"));
+        const body = JSON.parse((await readBody(req, CFG.httpIngestEventMaxBytes)).toString("utf8"));
         sendJson(res, 200, ingestEvent(deviceId, body));
         return;
       }
@@ -272,7 +272,7 @@ export function createFolioServer(ui) {
       }
 
       if (path === "/api/config" && req.method === "PUT") {
-        const body = JSON.parse((await readBody(req, 64 * 1024)).toString("utf8"));
+        const body = JSON.parse((await readBody(req, CFG.httpConfigPatchMaxBytes)).toString("utf8"));
         const result = updateConfig(body);
         sendJson(res, 200, result);
         return;

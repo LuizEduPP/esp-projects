@@ -1,3 +1,4 @@
+import { CFG } from "../config/index.mjs";
 import { modelId, ModelSlot } from "../models/index.mjs";
 import { parseJsonLoose } from "../util.mjs";
 import { chatCompletions, messageContent } from "./openai.mjs";
@@ -6,7 +7,7 @@ export async function chatCompletion({
   model,
   messages,
   temperature = 0.2,
-  maxTokens = 2048,
+  maxTokens = CFG.lmChatMaxTokens,
   responseFormat,
 }) {
   const body = {
@@ -26,7 +27,7 @@ export async function chatJson({
   model,
   messages,
   temperature = 0.1,
-  maxTokens = 4096,
+  maxTokens = CFG.lmChatMaxTokensDeep,
   responseFormat,
 }) {
   const text = await chatCompletion({ model, messages, temperature, maxTokens, responseFormat });
@@ -41,7 +42,7 @@ export async function chatJsonLenient({
   model,
   messages,
   temperature = 0.1,
-  maxTokens = 4096,
+  maxTokens = CFG.lmChatMaxTokensDeep,
   fallback,
   responseFormat,
 }) {

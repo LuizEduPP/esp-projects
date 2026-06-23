@@ -9,6 +9,19 @@ import { normalizeOpenAiBase } from "../llm/openai-base.mjs";
 /** esp_camera framesize_t IDs — must match firmware FOLIO_FRAME_SIZE_ID / platformio.ini */
 const FRAME_SIZE_TO_ID = { CIF: 5, QVGA: 6, VGA: 7, SVGA: 8, XGA: 9 };
 
+/** Auto-injected PT list — removed; stopWords must be explicit in user config. */
+const LEGACY_MEMORY_STOP_WORDS = [
+  "a", "o", "e", "de", "da", "do", "das", "dos", "em", "no", "na", "nos", "nas",
+  "um", "uma", "para", "por", "com", "sem", "que", "se", "as", "os",
+];
+
+function isLegacyMemoryStopWords(list) {
+  if (!Array.isArray(list) || list.length !== LEGACY_MEMORY_STOP_WORDS.length) {
+    return false;
+  }
+  return list.every((w, i) => w === LEGACY_MEMORY_STOP_WORDS[i]);
+}
+
 const EXAMPLE_PATH = join(
   dirname(fileURLToPath(import.meta.url)),
   "../../../folio.config.example.json",
@@ -62,7 +75,7 @@ function cfgBool(file, dotPath, envKey) {
   return envBool(getPath(file, dotPath), envKey, getPath(DEFAULT_CONFIG, dotPath));
 }
 
-function cfgStrArray(file, dotPath, envKey) {
+function cfgStrArray(file, dotPath, envKey, { noFallback = false } = {}) {
   const env = process.env[envKey];
   if (env !== undefined && env !== "") {
     return env
@@ -73,6 +86,9 @@ function cfgStrArray(file, dotPath, envKey) {
   const val = getPath(file, dotPath);
   if (Array.isArray(val)) {
     return val.map(String);
+  }
+  if (noFallback) {
+    return [];
   }
   const fallback = getPath(DEFAULT_CONFIG, dotPath);
   return Array.isArray(fallback) ? fallback.map(String) : [];
@@ -304,15 +320,24 @@ function migrateConfigSchema(file) {
       }
     }
     if (!file.memory.lexical || typeof file.memory.lexical !== "object") {
-      file.memory.lexical = { ...DEFAULT_CONFIG.memory.lexical };
+      file.memory.lexical = {
+        minTokenLength: DEFAULT_CONFIG.memory.lexical?.minTokenLength ?? 3,
+      };
       changed = true;
     } else {
       for (const [k, v] of Object.entries(DEFAULT_CONFIG.memory.lexical)) {
+        if (k === "stopWords") {
+          continue;
+        }
         if (file.memory.lexical[k] == null && v != null) {
           file.memory.lexical[k] = v;
           changed = true;
         }
       }
+    }
+    if (isLegacyMemoryStopWords(file.memory.lexical?.stopWords)) {
+      file.memory.lexical.stopWords = [];
+      changed = true;
     }
   }
 
@@ -351,6 +376,54 @@ function migrateConfigSchema(file) {
         changed = true;
       }
     }
+  }
+
+  if (!file.present || typeof file.present !== "object") {
+    file.present = { ...DEFAULT_CONFIG.present };
+    changed = true;
+  } else {
+    if (!file.present.labels || typeof file.present.labels !== "object") {
+      file.present.labels = { ...DEFAULT_CONFIG.present.labels };
+      changed = true;
+    }
+    for (const [k, v] of Object.entries(DEFAULT_CONFIG.present)) {
+      if (k === "labels") {
+        continue;
+      }
+      if (file.present[k] == null && v != null) {
+        file.present[k] = v;
+        changed = true;
+      }
+    }
+  }
+
+  if (!file.http || typeof file.http !== "object") {
+    file.http = { ...DEFAULT_CONFIG.http };
+    changed = true;
+  } else {
+    for (const [k, v] of Object.entries(DEFAULT_CONFIG.http)) {
+      if (file.http[k] == null && v != null) {
+        file.http[k] = v;
+        changed = true;
+      }
+    }
+  }
+
+  if (!file.entities || typeof file.entities !== "object") {
+    file.entities = { ...DEFAULT_CONFIG.entities };
+    changed = true;
+  } else if (!file.entities.soundKindEntity) {
+    file.entities.soundKindEntity = { ...DEFAULT_CONFIG.entities.soundKindEntity };
+    changed = true;
+  }
+
+  if (file.frames && !file.frames.backlogGapMs) {
+    file.frames.backlogGapMs = { ...DEFAULT_CONFIG.frames.backlogGapMs };
+    changed = true;
+  }
+  if (file.frames?.staticSummary == null && DEFAULT_CONFIG.frames.staticSummary) {
+    file.frames.staticSummary = DEFAULT_CONFIG.frames.staticSummary;
+    changed = true;
   }
 
   return changed;
@@ -411,6 +484,10 @@ export function nodeConfigVersion(data = fileData) {
       speechEnergyThreshold: data.audio?.speechEnergyThreshold,
       vad: data.audio?.vad,
     },
+    perception: {
+      motionMin: data.perception?.motionMin,
+      soundMinEnergy: data.perception?.soundMinEnergy,
+    },
     node: data.node,
   };
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex").slice(0, 12);
@@ -445,7 +522,7 @@ export function editableConfig() {
 export const publicConfig = editableConfig;
 
 export function nodeConfigPayload() {
-  const { frames, audio, node } = fileData;
+  const { frames, audio, node, perception } = fileData;
   const size = String(frames.size).toUpperCase();
   return {
     version: nodeConfigVersion(),
@@ -461,9 +538,13 @@ export function nodeConfigPayload() {
       speechEnergyThreshold: audio.speechEnergyThreshold,
       vad: { ...audio.vad },
     },
+    perception: {
+      motionMin: perception?.motionMin,
+      soundMinEnergy: perception?.soundMinEnergy,
+    },
     node: { ...node },
     compileTimeNote:
-      "audio chunkMs/sampleRate and frame sizeId apply only if firmware was built with matching FOLIO_* defaults; interval/jpegQuality/wifi sync at runtime.",
+      "frame sizeId and audio buffer size need matching FOLIO_* at flash time; other fields sync at runtime.",
   };
 }
 
@@ -549,7 +630,13 @@ function buildCfgFromFile(file = getFileData()) {
     pipelineFrameBatch: cfgNum(file, "frames.pipelineBatch", "FOLIO_PIPELINE_FRAME_BATCH"),
     frameJpegQuality: cfgNum(file, "frames.jpegQuality", "FOLIO_JPEG_QUALITY"),
     frameSize: cfgStr(file, "frames.size", "FOLIO_FRAME_SIZE"),
+    frameStaticSummary: cfgStr(file, "frames.staticSummary", "FOLIO_FRAME_STATIC_SUMMARY"),
+    frameBacklogGap: cfgObject(file, "frames.backlogGapMs"),
 
+    lmChatMaxTokens: cfgNum(file, "lm.chatMaxTokens", "FOLIO_LM_CHAT_MAX_TOKENS"),
+    lmChatMaxTokensDeep: cfgNum(file, "lm.chatMaxTokensDeep", "FOLIO_LM_CHAT_MAX_TOKENS_DEEP"),
+
+    audioSttMaxAttempts: cfgNum(file, "audio.sttMaxAttempts", "FOLIO_STT_MAX_ATTEMPTS"),
     audioChunkMs:
       cfgNum(file, "audio.vad.frameMs", "FOLIO_VAD_FRAME_MS") ||
       cfgNum(file, "audio.chunkMs", "FOLIO_AUDIO_CHUNK_MS"),
@@ -583,8 +670,22 @@ function buildCfgFromFile(file = getFileData()) {
       cfgBool(file, "digest.auto", "FOLIO_DIGEST_AUTO"),
     insightsTemperature: cfgNum(file, "insights.temperature", "FOLIO_INSIGHTS_TEMP") ||
       cfgNum(file, "digest.passDTemperature", "FOLIO_DIGEST_PASS_D_TEMP"),
+    insightsMaxTokens: cfgNum(file, "insights.maxTokens", "FOLIO_INSIGHTS_MAX_TOKENS"),
+    insightsSampleUtterances: cfgNum(file, "insights.sampleUtterances", "FOLIO_INSIGHTS_SAMPLE_UTT"),
+    insightsSampleFrames: cfgNum(file, "insights.sampleFrames", "FOLIO_INSIGHTS_SAMPLE_FRAMES"),
 
-    perceptionMotionMin: cfgNum(file, "perception.motionMin", "FOLIO_MOTION_MIN"),
+    httpBodyMaxBytes: cfgNum(file, "http.bodyMaxBytes", "FOLIO_HTTP_BODY_MAX"),
+    httpIngestAudioMaxBytes: cfgNum(file, "http.ingestAudioMaxBytes", "FOLIO_HTTP_INGEST_AUDIO_MAX"),
+    httpIngestFrameMaxBytes: cfgNum(file, "http.ingestFrameMaxBytes", "FOLIO_HTTP_INGEST_FRAME_MAX"),
+    httpIngestEventMaxBytes: cfgNum(file, "http.ingestEventMaxBytes", "FOLIO_HTTP_INGEST_EVENT_MAX"),
+    httpConfigPatchMaxBytes: cfgNum(file, "http.configPatchMaxBytes", "FOLIO_HTTP_CONFIG_PATCH_MAX"),
+
+    presentSpeechGapMs: cfgNum(file, "present.speechGapMs", "FOLIO_PRESENT_SPEECH_GAP_MS"),
+    presentSceneGapMs: cfgNum(file, "present.sceneGapMs", "FOLIO_PRESENT_SCENE_GAP_MS"),
+    presentSoundGapMs: cfgNum(file, "present.soundGapMs", "FOLIO_PRESENT_SOUND_GAP_MS"),
+    presentLabels: cfgObject(file, "present.labels"),
+
+    entitiesSoundKindEntity: cfgObject(file, "entities.soundKindEntity"),
     perceptionMotionForceMs: cfgNum(file, "perception.motionForceMs", "FOLIO_MOTION_FORCE_MS"),
     perceptionAutoEnhance: cfgBool(file, "perception.autoEnhance", "FOLIO_AUTO_ENHANCE"),
     perceptionStoreSounds: cfgBool(file, "perception.storeSounds", "FOLIO_STORE_SOUNDS"),
@@ -607,14 +708,7 @@ function buildCfgFromFile(file = getFileData()) {
     speakerMinMatchScore: cfgNum(file, "speaker.minMatchScore", "FOLIO_SPEAKER_MIN_MATCH"),
     speakerMaxEnrollmentSamples: cfgNum(file, "speaker.maxEnrollmentSamples", "FOLIO_SPEAKER_MAX_SAMPLES"),
 
-    episodeGapMin: cfgNum(file, "episodes.gapMin", "FOLIO_EPISODE_GAP_MIN"),
-    episodeFrameAlignMs: cfgNum(file, "episodes.frameAlignMs", "FOLIO_EPISODE_FRAME_ALIGN_MS"),
-    episodeGraphThemedConfidence: cfgNum(file, "episodes.graphEdge.themed", "FOLIO_EP_GRAPH_THEMED"),
-    episodeGraphDecidedConfidence: cfgNum(file, "episodes.graphEdge.decided", "FOLIO_EP_GRAPH_DECIDED"),
-    episodeGraphOpenConfidence: cfgNum(file, "episodes.graphEdge.open", "FOLIO_EP_GRAPH_OPEN"),
-    episodeGraphRejectedConfidence: cfgNum(file, "episodes.graphEdge.rejected", "FOLIO_EP_GRAPH_REJECTED"),
-
-    workerBacklogHigh: cfgNum(file, "worker.backlogHigh", "FOLIO_WORKER_BACKLOG_HIGH"),
+    perceptionMotionMin: cfgNum(file, "perception.motionMin", "FOLIO_MOTION_MIN"),
     workerBacklogMedium: cfgNum(file, "worker.backlogMedium", "FOLIO_WORKER_BACKLOG_MEDIUM"),
     workerBatchMaxHigh: cfgNum(file, "worker.batchMaxHigh", "FOLIO_WORKER_BATCH_MAX_HIGH"),
     workerBatchMaxMedium: cfgNum(file, "worker.batchMaxMedium", "FOLIO_WORKER_BATCH_MAX_MEDIUM"),
@@ -642,6 +736,7 @@ function buildCfgFromFile(file = getFileData()) {
       file,
       "memory.lexical.stopWords",
       "FOLIO_MEMORY_STOP_WORDS",
+      { noFallback: true },
     ),
     memoryGraphRetrieveLimit: cfgNum(file, "memory.graphRetrieveLimit", "FOLIO_MEMORY_GRAPH_LIMIT"),
     memoryGraphMinScore: cfgNum(file, "memory.graphMinScore", "FOLIO_MEMORY_GRAPH_MIN_SCORE"),
@@ -678,6 +773,7 @@ export const PATHS = {
   frameDir: (day) => join(CFG.dataDir, "frames", day),
   speakerDir: () => join(CFG.dataDir, "speakers"),
   digestDir: () => join(CFG.dataDir, "digests"),
+  modelsDir: () => join(CFG.dataDir, "models"),
 };
 
 export function updateConfig(patch) {

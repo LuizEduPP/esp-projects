@@ -15,14 +15,15 @@ let loggedWhisperMissing = false;
 /** Shorter gap when frames pile up — catch up without hammering LM at steady state. */
 function frameCaptionGapMs(pendingFrameCount) {
   const base = CFG.frameCaptionIntervalMs;
-  if (pendingFrameCount > 20) {
-    return Math.min(base, 3000);
+  const g = CFG.frameBacklogGap ?? {};
+  if (pendingFrameCount > (g.thresholdHigh ?? 20)) {
+    return Math.min(base, g.gapHigh ?? 3000);
   }
-  if (pendingFrameCount > 10) {
-    return Math.min(base, 8000);
+  if (pendingFrameCount > (g.thresholdMedium ?? 10)) {
+    return Math.min(base, g.gapMedium ?? 8000);
   }
-  if (pendingFrameCount > 5) {
-    return Math.min(base, 15000);
+  if (pendingFrameCount > (g.thresholdLow ?? 5)) {
+    return Math.min(base, g.gapLow ?? 15000);
   }
   return base;
 }

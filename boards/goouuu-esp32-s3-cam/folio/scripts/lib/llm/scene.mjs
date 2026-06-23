@@ -111,8 +111,23 @@ export async function captionFrame(b64, reason, ctx = {}) {
   if (!scene.summary) {
     scene.summary = formatSceneCaption(scene);
   }
-  if (Array.isArray(scene.objects) && scene.objects.every((o) => typeof o === "string")) {
-    scene.objects = scene.objects.map((name) => ({ name, count: 1 }));
+  if (Array.isArray(scene.objects)) {
+    scene.objects = scene.objects
+      .map((o) => {
+        if (typeof o === "string") {
+          return { name: o, count: 1 };
+        }
+        if (!o || typeof o !== "object") {
+          return null;
+        }
+        const count = o.count ?? o["count:"] ?? 1;
+        const name = String(o.name ?? o.nome ?? "").trim();
+        if (!name) {
+          return null;
+        }
+        return { name, count: Number(count) || 1 };
+      })
+      .filter(Boolean);
   }
   return scene;
 }

@@ -1,62 +1,62 @@
-# Folio Brain — Arquitetura SOLID
+# Folio Brain — architecture
 
-`scripts/lib/` contém **apenas pastas**. Cada pasta expõe API via `index.mjs`.
+`scripts/lib/` is organized by domain. Each folder exposes a public API via `index.mjs`.
 
-## Regra de layout
+## Layout rule
 
 ```
-lib/<domínio>/index.mjs     ← API pública do domínio
-lib/<domínio>/*.mjs         ← implementação (ou subpastas com index.mjs)
+lib/<domain>/index.mjs     ← public API
+lib/<domain>/*.mjs         ← implementation
+lib/*.mjs                  ← small shared modules (util, speaker, stt)
 ```
 
-Sem `.mjs` solto na raiz de `lib/`.
+Prefer folders over loose files at `lib/` root (exception: consolidated flat modules).
 
-## Árvore
+## Tree (current)
 
 ```
 lib/
+├── util.mjs, speaker.mjs, stt.mjs
 ├── config/index.mjs
 ├── locale/index.mjs
-├── models/index.mjs         # ModelSlot, modelId, endpoints
-├── db/
-│   ├── index.mjs
-│   ├── schema.mjs, connection.mjs
-│   └── *.mjs                # repositórios por entidade
-├── util/
-│   ├── index.mjs
-│   ├── time.mjs, audio.mjs, response.mjs, json.mjs
-├── stt/
-│   ├── index.mjs
-│   ├── whisper-service.mjs, audio-gate.mjs
-├── llm/
-│   ├── index.mjs
-│   ├── client.mjs, vision.mjs
-├── memory/
-│   ├── index.mjs
-│   ├── lexical.mjs, embeddings.mjs, retrieval.mjs, indexing.mjs
-├── services/
-│   ├── index.mjs            # re-exporta ingest, pipeline, digest
-│   ├── ingest/index.mjs
-│   ├── pipeline/index.mjs
-│   └── digest/index.mjs
-└── http/
-    ├── index.mjs
-    └── server.mjs
+├── models/index.mjs
+├── present/index.mjs
+├── db/                      # schema + repos (14 files — candidate for merge)
+├── http/index.mjs, server.mjs
+├── llm/                     # client, openai, scene, catalog
+├── memory/                  # indexing, embeddings, retrieval, lexical
+├── perception/              # audio, frame, image, sound, yamnet, scene
+└── services/
+    ├── ingest/index.mjs
+    ├── pipeline/index.mjs
+    └── insights/index.mjs
 ```
 
-## Imports (entry points)
+## Entry-point imports
 
 ```javascript
 import { CFG } from "./lib/config/index.mjs";
 import { openDb } from "./lib/db/index.mjs";
-import { runDigestForDay, startProcessingLoop } from "./lib/services/index.mjs";
+import { startProcessingLoop, startInsightsLoop } from "./lib/services/index.mjs";
 import { createFolioServer } from "./lib/http/index.mjs";
 import { retrieveMemories } from "./lib/memory/index.mjs";
-import { modelId, ModelSlot } from "./lib/models/index.mjs";
+import { timelineWithGroups } from "./lib/present/index.mjs";
 ```
 
-## Fluxo
+## Data flow
 
 ```
-ESP32 → services/ingest → db/ → services/pipeline → services/digest → memory/
+ESP32 → services/ingest → db/
+              ↓
+       services/pipeline → perception/ + stt/ + llm/
+              ↓
+       services/insights → memory/ + llm/
+              ↓
+       present/ + http/ → UI
 ```
+
+## Config
+
+Single source: `~/.folio/config.json` + `FOLIO_*` env overrides. ESP pulls runtime fields via `GET /api/node/config` (frames, audio energy gates, `perception.motionMin`, node timing).
+
+Sound classification: `perception.soundEngine` = `heuristic` | `yamnet`. Thresholds and labels live in config, not code.

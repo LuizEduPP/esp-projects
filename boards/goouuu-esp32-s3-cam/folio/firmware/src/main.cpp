@@ -210,7 +210,8 @@ static bool audioWorthCapture(const int16_t *pcm, size_t count, uint16_t *outPea
   if (peak == 0 || peak >= 30000) {
     return false;
   }
-  return energy >= FOLIO_SPEECH_ENERGY || energy >= FOLIO_SOUND_ENERGY;
+  const NodeRuntimeConfig &cfg = nodeConfig();
+  return energy >= cfg.speechEnergyThreshold || energy >= cfg.soundMinEnergy;
 }
 
 static void captureAudioChunk() {

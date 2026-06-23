@@ -5,7 +5,9 @@
   "lm": {
     "url": "http://127.0.0.1:1234/v1",
     "model": "mistralai/ministral-3-3b",
-    "modelDeep": null
+    "modelDeep": null,
+    "chatMaxTokens": 2048,
+    "chatMaxTokensDeep": 4096
   },
   "frames": {
     "captureIntervalMs": 60000,
@@ -14,11 +16,21 @@
     "captionTemperature": 0.05,
     "pipelineBatch": 1,
     "jpegQuality": 12,
-    "size": "QVGA"
+    "size": "QVGA",
+    "staticSummary": "Sem movimento relevante.",
+    "backlogGapMs": {
+      "thresholdHigh": 20,
+      "thresholdMedium": 10,
+      "thresholdLow": 5,
+      "gapHigh": 3000,
+      "gapMedium": 8000,
+      "gapLow": 15000
+    }
   },
   "audio": {
     "sampleRate": 16000,
     "speechEnergyThreshold": 0.008,
+    "sttMaxAttempts": 3,
     "retentionDays": 7,
     "retentionSweepMs": 21600000,
     "whisperBin": "whisper",
@@ -34,6 +46,13 @@
       "prerollMs": 400
     }
   },
+  "http": {
+    "bodyMaxBytes": 524288,
+    "ingestAudioMaxBytes": 131072,
+    "ingestFrameMaxBytes": 409600,
+    "ingestEventMaxBytes": 16384,
+    "configPatchMaxBytes": 65536
+  },
   "pipeline": {
     "enabled": true,
     "intervalMs": 30000
@@ -47,7 +66,10 @@
   "insights": {
     "auto": true,
     "intervalMs": 300000,
-    "temperature": 0.25
+    "temperature": 0.25,
+    "maxTokens": 2048,
+    "sampleUtterances": 24,
+    "sampleFrames": 12
   },
   "memory": {
     "enabled": true,
@@ -59,10 +81,7 @@
     "contextQueryTemplate": "padrões entidades sons fala {day}",
     "lexical": {
       "minTokenLength": 3,
-      "stopWords": [
-        "a", "o", "e", "de", "da", "do", "das", "dos", "em", "no", "na", "nos", "nas",
-        "um", "uma", "para", "por", "com", "sem", "que", "se", "as", "os"
-      ]
+      "stopWords": []
     },
     "rerank": {
       "enabled": false,
@@ -74,6 +93,23 @@
   "speaker": {
     "minMatchScore": 0.82,
     "maxEnrollmentSamples": 8
+  },
+  "entities": {
+    "soundKindEntity": {}
+  },
+  "present": {
+    "speechGapMs": 45000,
+    "sceneGapMs": 480000,
+    "soundGapMs": 20000,
+    "labels": {
+      "speechGroup": "Conversa",
+      "speechSingle": "Fala",
+      "soundPluralSuffix": "s",
+      "soundFallback": "Som",
+      "sceneGroup": "Cena contínua",
+      "sceneSingle": "Cena",
+      "pending": "Aguardando"
+    }
   },
   "perception": {
     "motionMin": 0.035,
@@ -94,8 +130,8 @@
     "yamnetMinScore": 0.2,
     "yamnetModelPath": null,
     "yamnetLabelsPath": null,
-    "yamnetModelUrl": "https://huggingface.co/onnx-community/yamnet/resolve/main/onnx/model.onnx",
-    "yamnetLabelsUrl": "https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv",
+    "yamnetModelUrl": "https://huggingface.co/zeropointnine/yamnet-onnx/resolve/main/yamnet.onnx",
+    "yamnetLabelsUrl": "https://raw.githubusercontent.com/ispysoftware/AgentDVR-Plugins/main/Listen/onnx/yamnet_class_map.csv",
     "yamnetKindMap": {
       "speech": ["Speech", "Conversation", "Narration, monologue", "Child speech, kid speaking"],
       "bark": ["Bark", "Dog", "Canidae, dogs, wolves"],

@@ -62,7 +62,7 @@ export function collectMemoryItems(db, day) {
         kind: item.sound_kind || "sound",
         text: `${item.sound_label || item.sound_kind} (E=${Number(item.energy ?? 0).toFixed(4)})`,
         evidence_json: JSON.stringify({ chunk_id: item.chunk_id, at: item.at }),
-        entity_id: item.sound_kind === "bark" ? "pet:dog" : null,
+        entity_id: CFG.entitiesSoundKindEntity?.[item.sound_kind] ?? null,
         weight: 0.7,
       });
     }

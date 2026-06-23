@@ -37,7 +37,7 @@ function markSkipped(db, frame, motion, quality) {
   const scene = enrichScene(
     {
       unchanged: true,
-      summary: "Sem movimento relevante.",
+      summary: CFG.frameStaticSummary,
       person_present: false,
       people: 0,
       scene: "static",

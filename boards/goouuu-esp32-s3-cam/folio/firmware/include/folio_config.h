@@ -48,3 +48,8 @@
 #ifndef FOLIO_SOUND_ENERGY
 #define FOLIO_SOUND_ENERGY 0.003f
 #endif
+
+/** JPEG motion proxy threshold (0..1) — synced from brain perception.motionMin at runtime. */
+#ifndef FOLIO_MOTION_MIN
+#define FOLIO_MOTION_MIN 0.08f
+#endif

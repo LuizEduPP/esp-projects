@@ -234,11 +234,20 @@ function normalizeNewlinesInStrings(text) {
   );
 }
 
+function repairJsonKeyTypos(text) {
+  // LM typo: "count:" : 1  →  "count": 1
+  return text.replace(/"([^"\\]+?):"\s*(?=:)/g, '"$1"');
+}
+
 function tryParse(raw) {
   if (!raw) {
     return null;
   }
+  const repaired = repairJsonKeyTypos(raw);
   const attempts = [
+    repaired,
+    stripTrailingCommas(stripJsonComments(repaired)),
+    stripTrailingCommas(stripJsonComments(normalizeNewlinesInStrings(repaired))),
     raw,
     stripTrailingCommas(stripJsonComments(raw)),
     stripTrailingCommas(stripJsonComments(normalizeNewlinesInStrings(raw))),
@@ -251,7 +260,7 @@ function tryParse(raw) {
     }
   }
   try {
-    return JSON.parse(repairTruncated(raw));
+    return JSON.parse(repairTruncated(repairJsonKeyTypos(raw)));
   } catch {
     return null;
   }
@@ -288,16 +297,50 @@ function candidateBlocks(text) {
   return [...new Set([...objects, ...arrays].filter(Boolean))];
 }
 
+const JSON_OBJECT_PRIORITY_KEYS = [
+  "summary",
+  "unchanged",
+  "person_present",
+  "people",
+  "scene",
+  "activity",
+  "objects",
+  "tags",
+  "mood",
+  "note",
+  "insights",
+  "entities",
+  "timeline",
+  "stats",
+  "patterns",
+];
+
+function scoreJsonCandidate(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return -1;
+  }
+  const keys = Object.keys(value);
+  if (keys.length <= 3 && keys.every((k) => ["name", "count", "count:", "nome"].includes(k))) {
+    return 0;
+  }
+  let score = keys.length;
+  for (const k of JSON_OBJECT_PRIORITY_KEYS) {
+    if (k in value) {
+      score += 20;
+    }
+  }
+  return score;
+}
+
 /** Best-effort JSON from LLM output (markdown fences, comments, truncation). */
 export function parseJsonLoose(text) {
-  const cleaned = String(text ?? "")
-    .replace(/\*\*/g, "")
-    .replace(/```json/gi, "")
-    .replace(/```/g, "");
-  const blocks = candidateBlocks(cleaned);
+  const blocks = candidateBlocks(String(text ?? "").trim());
+  let best = null;
+  let bestScore = -1;
+  let bestLen = -1;
   let arrayFallback = null;
 
-  for (const block of blocks.reverse()) {
+  for (const block of blocks) {
     const parsed = tryParse(block.replace(/```\s*$/g, "").trim());
     if (parsed === null) {
       continue;
@@ -308,10 +351,16 @@ export function parseJsonLoose(text) {
       }
       continue;
     }
-    return parsed;
+    const score = scoreJsonCandidate(parsed);
+    const len = block.length;
+    if (score > bestScore || (score === bestScore && len > bestLen)) {
+      best = parsed;
+      bestScore = score;
+      bestLen = len;
+    }
   }
 
-  return arrayFallback;
+  return best ?? arrayFallback;
 }
 
 /** Regex fallback for frame caption when JSON is too broken. */

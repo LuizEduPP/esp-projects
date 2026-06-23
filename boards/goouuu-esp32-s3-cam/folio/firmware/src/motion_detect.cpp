@@ -1,10 +1,15 @@
 #include "motion_detect.h"
 
-#ifndef FOLIO_MOTION_MIN
-#define FOLIO_MOTION_MIN 0.08f
-#endif
+#include "folio_config.h"
 
+static float gMotionMin = FOLIO_MOTION_MIN;
 static uint32_t gPrevSig = 0;
+
+void motionSetMin(float minScore) {
+  if (minScore > 0.f && minScore <= 1.f) {
+    gMotionMin = minScore;
+  }
+}
 
 static uint32_t fnv1aSample(const uint8_t *data, size_t len) {
   uint32_t h = 2166136261u;
@@ -41,7 +46,7 @@ float motionScoreJpeg(const uint8_t *jpeg, size_t len, bool *changed) {
   gPrevSig = sig;
   const float score = bits / 32.0f;
   if (changed) {
-    *changed = score >= FOLIO_MOTION_MIN;
+    *changed = score >= gMotionMin;
   }
   return score;
 }

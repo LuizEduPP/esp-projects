@@ -117,7 +117,7 @@ export function enrollFingerprint(db, speakerId, pcmBuffer) {
     samples.push(profile.fingerprint);
   }
   samples.push(fp);
-  const trimmed = samples.slice(-8);
+  const trimmed = samples.slice(-CFG.speakerMaxEnrollmentSamples);
   profile.fingerprint = averageFingerprint(trimmed);
   profile.fingerprint_samples = trimmed;
   db.prepare("UPDATE speakers SET profile_json = ? WHERE id = ?").run(

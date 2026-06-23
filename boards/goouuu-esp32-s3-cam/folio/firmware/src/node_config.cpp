@@ -5,6 +5,7 @@
 #include <esp_camera.h>
 
 #include "folio_config.h"
+#include "motion_detect.h"
 
 #ifndef FOLIO_BRAIN_URL
 #define FOLIO_BRAIN_URL "http://192.168.1.28:8770"
@@ -33,6 +34,37 @@ static long jsonNestedLong(const String &body, const char *section, const char *
   return body.substring(i).toInt();
 }
 
+static float jsonNestedFloat(const String &body, const char *section, const char *key,
+                             float fallback) {
+  const String sec = String("\"") + section + "\":{";
+  int si = body.indexOf(sec);
+  if (si < 0) {
+    return fallback;
+  }
+  const String needle = String("\"") + key + "\":";
+  int i = body.indexOf(needle, si);
+  if (i < 0) {
+    return fallback;
+  }
+  i += needle.length();
+  while (i < (int)body.length() && (body[i] == ' ' || body[i] == '\t')) {
+    i++;
+  }
+  int j = i;
+  while (j < (int)body.length()) {
+    const char c = body[j];
+    if ((c >= '0' && c <= '9') || c == '.' || c == '-' || c == '+' || c == 'e' || c == 'E') {
+      j++;
+      continue;
+    }
+    break;
+  }
+  if (j == i) {
+    return fallback;
+  }
+  return body.substring(i, j).toFloat();
+}
+
 static String jsonString(const String &body, const char *key) {
   const String needle = String("\"") + key + "\":\"";
   int i = body.indexOf(needle);
@@ -57,7 +89,11 @@ static void applyDefaults() {
   gCfg.wifiRetryMs = FOLIO_WIFI_RETRY_MS;
   gCfg.pushBackoffMaxMs = FOLIO_PUSH_BACKOFF_MAX_MS;
   gCfg.statusIntervalMs = FOLIO_STATUS_INTERVAL_MS;
+  gCfg.motionMin = FOLIO_MOTION_MIN;
+  gCfg.soundMinEnergy = FOLIO_SOUND_ENERGY;
+  gCfg.speechEnergyThreshold = FOLIO_SPEECH_ENERGY;
   snprintf(gVersionHeader, sizeof(gVersionHeader), "boot");
+  motionSetMin(gCfg.motionMin);
 }
 
 static void applyCameraQuality(uint8_t q) {
@@ -110,6 +146,13 @@ static bool fetchFromBrain() {
                                                      gCfg.pushBackoffMaxMs);
   gCfg.statusIntervalMs = (uint32_t)jsonNestedLong(body, "node", "statusIntervalMs",
                                                    gCfg.statusIntervalMs);
+  gCfg.speechEnergyThreshold = jsonNestedFloat(body, "audio", "speechEnergyThreshold",
+                                               gCfg.speechEnergyThreshold);
+  gCfg.motionMin =
+      jsonNestedFloat(body, "perception", "motionMin", gCfg.motionMin);
+  gCfg.soundMinEnergy =
+      jsonNestedFloat(body, "perception", "soundMinEnergy", gCfg.soundMinEnergy);
+  motionSetMin(gCfg.motionMin);
 
   if (gCfg.jpegQuality != FOLIO_JPEG_QUALITY) {
     applyCameraQuality(gCfg.jpegQuality);
@@ -126,9 +169,9 @@ static bool fetchFromBrain() {
   }
 
   Serial.printf(
-      "[config] synced v=%s frame=%lums jpegQ=%u wifi=%lums status=%lums\n",
-      gCfg.version, gCfg.frameIntervalMs, gCfg.jpegQuality, gCfg.wifiRetryMs,
-      gCfg.statusIntervalMs);
+      "[config] synced v=%s frame=%lums jpegQ=%u motion=%.3f speechE=%.4f soundE=%.4f\n",
+      gCfg.version, gCfg.frameIntervalMs, gCfg.jpegQuality, gCfg.motionMin,
+      gCfg.speechEnergyThreshold, gCfg.soundMinEnergy);
   return true;
 }
 

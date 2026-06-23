@@ -71,7 +71,7 @@ export function buildDayStats(db, day) {
     activity_by_hour: hours,
     sample_utterances: items
       .filter((i) => i.type === "audio" && i.text)
-      .slice(0, 24)
+      .slice(0, CFG.insightsSampleUtterances)
       .map((i) => ({
         at: i.at,
         speaker: i.speaker_id ? speakerNames[i.speaker_id] : null,
@@ -80,7 +80,7 @@ export function buildDayStats(db, day) {
       })),
     sample_frames: items
       .filter((i) => i.type === "frame" && i.caption)
-      .slice(0, 12)
+      .slice(0, CFG.insightsSampleFrames)
       .map((i) => ({ at: i.at, caption: i.caption.slice(0, 120) })),
   };
 }
@@ -109,7 +109,7 @@ async function generateInsightsJson(db, day, stats, ragHits) {
   return chatJson({
     model: modelId(ModelSlot.DEEP),
     temperature: CFG.insightsTemperature,
-    maxTokens: 2048,
+    maxTokens: CFG.insightsMaxTokens,
     messages: [
       { role: "system", content: system },
       { role: "user", content: user },
@@ -146,20 +146,6 @@ function updatePatternsFromStats(db, day, stats) {
       patterns_json: JSON.stringify({
         last_seen: day,
         utterances_today: count,
-      }),
-    });
-  }
-
-  if ((stats.sounds?.bark ?? 0) > 0) {
-    upsertEntity(db, {
-      id: "pet:dog",
-      kind: "pet",
-      display_name: "Cachorro",
-      speaker_id: null,
-      profile_json: JSON.stringify({ kind: "dog" }),
-      patterns_json: JSON.stringify({
-        last_seen: day,
-        barks_today: stats.sounds.bark,
       }),
     });
   }

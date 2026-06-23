@@ -11,10 +11,8 @@ import {
 import { identifySpeaker } from "../speaker.mjs";
 import { isSpeechChunk, transcribeWav } from "../stt.mjs";
 import { writeWav } from "../util.mjs";
-import { classifySound, isInterestingSound } from "./sound.mjs";
+import { classifySound, isInterestingSound, speechLabel } from "./sound.mjs";
 import { SoundKind } from "./types.mjs";
-
-const MAX_STT_ATTEMPTS = 3;
 
 function deleteChunkFile(path) {
   if (!path) {
@@ -47,7 +45,7 @@ export async function processAudioChunk(db, chunk) {
       return { id: chunk.id, skipped: "quiet" };
     }
 
-    const sound = classifySound(pcm, energy, chunk.duration_ms);
+    const sound = await classifySound(pcm, energy, chunk.duration_ms);
     if (!isInterestingSound(sound)) {
       discardAudioChunk(db, chunk);
       return { id: chunk.id, skipped: "uninteresting" };
@@ -95,7 +93,7 @@ export async function processAudioChunk(db, chunk) {
       });
       updateAudioClassification(db, chunk.id, {
         sound_kind: SoundKind.SPEECH,
-        sound_label: "fala",
+        sound_label: speechLabel(),
         speaker_id: speaker.speaker_id,
         speaker_confidence: speaker.confidence,
       });
@@ -108,7 +106,7 @@ export async function processAudioChunk(db, chunk) {
     }
 
     if (CFG.perceptionStoreSounds) {
-      const sound = classifySound(pcm, energy, chunk.duration_ms);
+      const sound = await classifySound(pcm, energy, chunk.duration_ms);
       if (isInterestingSound(sound)) {
         updateAudioClassification(db, chunk.id, {
           sound_kind: sound.kind,
@@ -126,7 +124,7 @@ export async function processAudioChunk(db, chunk) {
     return { id: chunk.id, skipped: "empty_stt" };
   } catch (err) {
     const attempts = bumpSttAttempts(db, chunk.id);
-    if (attempts >= MAX_STT_ATTEMPTS) {
+    if (attempts >= CFG.audioSttMaxAttempts) {
       discardAudioChunk(db, chunk);
       return { id: chunk.id, skipped: "stt_failed", error: err.message };
     }

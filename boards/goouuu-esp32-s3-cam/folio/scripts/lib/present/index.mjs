@@ -1,6 +1,6 @@
-import { formatSceneCaption, sceneFingerprint } from "./llm/scene.mjs";
-
-const MS = (n) => n;
+import { CFG } from "../config/index.mjs";
+import { activeLocale } from "../locale/index.mjs";
+import { formatSceneCaption, sceneFingerprint } from "../llm/scene.mjs";
 
 function gapMs(a, b) {
   return Math.abs(new Date(a).getTime() - new Date(b).getTime());
@@ -16,17 +16,21 @@ function captionKey(caption) {
 
 function hourLabel(iso) {
   try {
-    return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleTimeString(activeLocale(), { hour: "2-digit", minute: "2-digit" });
   } catch {
     return iso?.slice(11, 16) ?? "";
   }
 }
 
+function presentLabels() {
+  return CFG.presentLabels ?? {};
+}
+
 /** Turn flat witness items into human-readable groups (conversations, scenes, sounds). */
 export function groupTimelineItems(items, opts = {}) {
-  const speechGapMs = opts.speechGapMs ?? MS(45_000);
-  const sceneGapMs = opts.sceneGapMs ?? MS(8 * 60_000);
-  const soundGapMs = opts.soundGapMs ?? MS(20_000);
+  const speechGapMs = opts.speechGapMs ?? CFG.presentSpeechGapMs;
+  const sceneGapMs = opts.sceneGapMs ?? CFG.presentSceneGapMs;
+  const soundGapMs = opts.soundGapMs ?? CFG.presentSoundGapMs;
   const sorted = [...items].sort((a, b) => a.at.localeCompare(b.at));
   const groups = [];
 
@@ -128,6 +132,7 @@ export function groupTimelineItems(items, opts = {}) {
 
 export function timelineWithGroups(items, opts) {
   const groups = groupTimelineItems(items, opts);
+  const labels = presentLabels();
   let lastHour = null;
   const enriched = groups.map((g) => {
     const hour = g.at?.slice(11, 13) ?? "?";
@@ -136,17 +141,17 @@ export function timelineWithGroups(items, opts) {
     const label =
       g.type === "speech"
         ? g.lines.length > 1
-          ? "Conversa"
-          : "Fala"
+          ? labels.speechGroup
+          : labels.speechSingle
         : g.type === "sound"
           ? g.count > 1
-            ? `${g.sound_label}s`
-            : g.sound_label || "Som"
+            ? `${g.sound_label}${labels.soundPluralSuffix ?? ""}`
+            : g.sound_label || labels.soundFallback
         : g.type === "scene"
           ? g.count > 1
-            ? "Cena contínua"
-            : "Cena"
-          : "Aguardando";
+            ? labels.sceneGroup
+            : labels.sceneSingle
+          : labels.pending;
     return { ...g, hour, showHour, hour_label: hourLabel(g.at), kind_label: label };
   });
   return { groups: enriched, count: enriched.length };
