@@ -86,17 +86,17 @@ yarn folio:monitor        # node logs
 
 `yarn folio:brain` restarts automatically when you edit files under `scripts/`. Use `yarn workspace goouuu-s3-cam-folio brain:once` for a single run without watch.
 
-Manual overrides: `yarn folio:digest`, `yarn workspace goouuu-s3-cam-folio brain:process`, `yarn folio:enroll`.
+Manual overrides: `yarn folio:digest`, `yarn folio:process`, `yarn folio:enroll`.
 
 ### Scripts layout
 
 ```
 scripts/
 ├── folio-brain.mjs      # HTTP server + background loops
-├── folio.mjs            # CLI: digest | process | enroll
+├── folio.mjs            # CLI: digest | process | enroll | memory reindex
 ├── ui/index.html
 └── lib/
-    ├── config.mjs       # ~/.folio/config.json + env
+    ├── config.mjs       # ~/.folio/config.json + CFG (defaults from folio.config.example.json)
     ├── db.mjs           # SQLite schema + queries
     ├── http.mjs         # routes (/ingest, /api/*)
     ├── ingest.mjs       # fast path: save PCM/JPEG
@@ -112,7 +112,6 @@ scripts/
     ├── lm.mjs
     ├── whisper.mjs
     ├── locale.mjs
-    └── serve.mjs
 ```
 
 ## Offline spool (SD card)

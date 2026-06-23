@@ -38,7 +38,7 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
 
     const pcm = readFileSync(chunk.path);
     const wavPath = chunk.path.replace(/\.pcm$/, ".wav");
-    writeWav(wavPath, pcm);
+    writeWav(wavPath, pcm, CFG.audioSampleRate);
 
     try {
       const stt = await transcribeWav(wavPath);

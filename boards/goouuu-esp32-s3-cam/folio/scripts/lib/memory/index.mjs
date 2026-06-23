@@ -1,6 +1,7 @@
 import { CFG } from "../config.mjs";
 import { deleteMemoryForDay, insertMemoryChunk } from "../db.mjs";
 import { isoNow } from "../util.mjs";
+import { iterDigestProfileFacts } from "./digest-facts.mjs";
 import { embedText, serializeEmbedding } from "./embed.mjs";
 
 function push(items, kind, day, text, evidence = [], weight = 1) {
@@ -34,18 +35,8 @@ export function collectMemoryItems(day, { episodes, passB, passC, prose, graphNo
   if (passB?.narrative_arc) {
     push(items, "arc", day, passB.narrative_arc, [], 1.3);
   }
-  for (const d of passB?.decisions_real ?? []) {
-    push(items, "decision", day, d.text, d.evidence ?? [], 1.25);
-  }
-  for (const loop of passB?.open_loops ?? []) {
-    push(items, "open_loop", day, loop, [], 1.1);
-  }
-  for (const p of passB?.patterns ?? []) {
-    push(items, "pattern", day, p, [], 0.85);
-  }
-
-  for (const c of passC?.approved_claims ?? []) {
-    push(items, "claim", day, c.text, c.evidence ?? [], 1.2);
+  for (const fact of iterDigestProfileFacts(passB, passC)) {
+    push(items, fact.memoryKind, day, fact.text, fact.evidence ?? [], fact.weight);
   }
 
   if (prose) {

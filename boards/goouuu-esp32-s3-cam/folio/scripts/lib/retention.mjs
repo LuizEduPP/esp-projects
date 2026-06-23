@@ -37,71 +37,45 @@ function deleteChunkRows(db, rows) {
   return rows.length;
 }
 
-/** Drop unprocessed quiet/empty chunks (legacy). */
-export function purgeUnprocessedQuiet(db = openDb()) {
-  const rows = db
+/** Legacy quiet rows + processed chunks without transcripts. */
+export function pruneStaleAudio(db = openDb()) {
+  const quiet = db
     .prepare(
       `SELECT id, path FROM audio_chunks
-       WHERE processed = 0 AND energy < ?`,
+       WHERE energy < ? AND (
+         processed = 0
+         OR (processed = 1 AND path IS NOT NULL AND path != '')
+       )`,
     )
     .all(CFG.speechEnergyThreshold);
-  const files = deleteChunkRows(db, rows);
-  return { files };
-}
 
-/** Remove processed silence files and stale rows. */
-export function pruneQuietAudio(db = openDb()) {
-  const rows = db
-    .prepare(
-      `SELECT id, path FROM audio_chunks
-       WHERE processed = 1 AND energy < ? AND path IS NOT NULL AND path != ''`,
-    )
-    .all(CFG.speechEnergyThreshold);
-  const files = deleteChunkRows(db, rows);
-  return { files, rowsDeleted: files };
-}
-
-/** Drop processed chunks with no transcript (empty STT, legacy silence rows). */
-export function pruneOrphanAudio(db = openDb()) {
-  const rows = db
+  const orphan = db
     .prepare(
       `SELECT c.id, c.path FROM audio_chunks c
        LEFT JOIN utterances u ON u.chunk_id = c.id
        WHERE c.processed = 1 AND u.id IS NULL`,
     )
     .all();
-  const files = deleteChunkRows(db, rows);
-  return { files };
-}
 
-/** Drop old processed audio without utterances (legacy). */
-export function pruneOldAudio(db = openDb()) {
-  const cutoff = new Date(Date.now() - CFG.audioRetentionDays * 86400000).toISOString();
-  const rows = db
-    .prepare(
-      `SELECT c.id, c.path FROM audio_chunks c
-       LEFT JOIN utterances u ON u.chunk_id = c.id
-       WHERE c.processed = 1 AND u.id IS NULL AND c.captured_at < ?`,
-    )
-    .all(cutoff);
-  const files = deleteChunkRows(db, rows);
-  return { files, cutoff };
+  const seen = new Set();
+  const rows = [];
+  for (const row of [...quiet, ...orphan]) {
+    if (!seen.has(row.id)) {
+      seen.add(row.id);
+      rows.push(row);
+    }
+  }
+
+  return { files: deleteChunkRows(db, rows) };
 }
 
 export function runRetentionPass() {
   const db = openDb();
-  const legacy = purgeUnprocessedQuiet(db);
-  const quiet = pruneQuietAudio(db);
-  const orphan = pruneOrphanAudio(db);
-  const old = pruneOldAudio(db);
-  const total = legacy.files + quiet.files + orphan.files + old.files;
-  if (total > 0) {
-    console.log(
-      `[retention] removed ${legacy.files} pending-quiet + ${quiet.files} quiet + ` +
-        `${orphan.files} orphan + ${old.files} stale (keep transcripts ${CFG.audioRetentionDays}d)`,
-    );
+  const { files } = pruneStaleAudio(db);
+  if (files > 0) {
+    console.log(`[retention] removed ${files} stale audio chunks (keep transcripts ${CFG.audioRetentionDays}d)`);
   }
-  return { legacy, quiet, orphan, old };
+  return { files };
 }
 
 const RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000;

@@ -8,7 +8,7 @@ import {
   insertFrame,
   openDb,
 } from "./db.mjs";
-import { isSpeechChunk, shouldStoreAudioChunk } from "./whisper.mjs";
+import { shouldStoreAudioChunk } from "./whisper.mjs";
 import { dayFromIso, isoNow, parseMetaHeader } from "./util.mjs";
 
 export function ingestAudioChunk(deviceId, pcmBuffer, metaHeader) {

@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { CFG, PATHS } from "./config.mjs";
-import { dayBounds, isoNow, priorDay } from "./util.mjs";
+import { dayBounds, dayOffset, isoNow, priorDay } from "./util.mjs";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS devices (
@@ -225,19 +225,6 @@ export function listDevices(db) {
     )
     .all();
 }
-
-export function setBrainConfigVersion(db, version) {
-  db.prepare(
-    `INSERT OR REPLACE INTO profile_facts (key, value, source_day, confidence, updated_at)
-     VALUES ('node:config_version', ?, NULL, 1.0, ?)`,
-  ).run(version, isoNow());
-}
-
-export function getBrainConfigVersion(db) {
-  const row = db.prepare("SELECT value FROM profile_facts WHERE key = 'node:config_version'").get();
-  return row?.value ?? null;
-}
-
 
 export function insertAudioChunk(db, row) {
   const info = db
@@ -524,9 +511,7 @@ export function graphNodesForDay(db, day) {
 }
 
 export function graphNodesBeforeDay(db, beforeDay, lookbackDays = 30) {
-  const d = new Date(`${beforeDay}T12:00:00.000Z`);
-  d.setUTCDate(d.getUTCDate() - lookbackDays);
-  const minDay = d.toISOString().slice(0, 10);
+  const minDay = dayOffset(beforeDay, -lookbackDays);
   return db
     .prepare(`SELECT * FROM graph_nodes WHERE day >= ? AND day < ?`)
     .all(minDay, beforeDay);

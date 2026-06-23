@@ -1,5 +1,6 @@
 import { CFG } from "../config.mjs";
 import { graphNodesBeforeDay, memoryChunksInRange, profileFacts } from "../db.mjs";
+import { dayOffset } from "../util.mjs";
 import { tokenize } from "./lexical.mjs";
 import { embedText, scorePair } from "./embed.mjs";
 
@@ -18,18 +19,12 @@ export function buildMemoryQuery(day, episodes, passAJson = null) {
   return parts.filter(Boolean).join(" · ");
 }
 
-function cutoffDay(day, lookbackDays) {
-  const d = new Date(`${day}T12:00:00.000Z`);
-  d.setUTCDate(d.getUTCDate() - lookbackDays);
-  return d.toISOString().slice(0, 10);
-}
-
 export async function retrieveMemories(db, queryText, { day, limit = CFG.memoryRetrieveLimit } = {}) {
   if (!CFG.memoryEnabled || !queryText?.trim()) {
     return [];
   }
 
-  const minDay = cutoffDay(day, CFG.memoryLookbackDays);
+  const minDay = dayOffset(day, -CFG.memoryLookbackDays);
   const rows = memoryChunksInRange(db, minDay, day);
   if (!rows.length) {
     return [];

@@ -1,22 +1,24 @@
 import { createServer } from "node:http";
+import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
+import { resolve } from "node:path";
 import { CFG, nodeConfigPayload, publicConfig, updateConfig } from "./config.mjs";
 import { runDigestForDay } from "./digest/scheduler.mjs";
 import {
+  getAudioChunk,
   getDigest,
+  getFrame,
   listDevices,
   openDb,
   memoryChunkCount,
   pendingCounts,
   profileFacts,
-  setBrainConfigVersion,
   timelineForDay,
   touchDevice,
 } from "./db.mjs";
 import { ingestAudioChunk, ingestFrame, ingestEvent } from "./ingest.mjs";
-import { serveAudio, serveFrame } from "./serve.mjs";
 import { retrieveMemories } from "./memory/retrieve.mjs";
-import { errMsg, sendBytes, sendJson, today } from "./util.mjs";
+import { errMsg, pcmToWav, sendBytes, sendJson, today } from "./util.mjs";
 
 let quietSkipCount = 0;
 let lastQuietLogAt = 0;
@@ -60,7 +62,7 @@ function deviceIdFromReq(req) {
   return String(req.headers["x-folio-device-id"] ?? "").trim() || null;
 }
 
-function noteDevice(req, res) {
+function noteDevice(req) {
   const deviceId = deviceIdFromReq(req);
   if (!deviceId) {
     return null;
@@ -73,6 +75,33 @@ function noteDevice(req, res) {
     touchDevice(db, deviceId);
   }
   return deviceId;
+}
+
+function assertUnderDataDir(filePath) {
+  const base = resolve(CFG.dataDir);
+  const abs = resolve(filePath);
+  if (abs !== base && !abs.startsWith(`${base}/`)) {
+    throw new Error("path outside data directory");
+  }
+  return abs;
+}
+
+function serveFrame(db, frameId) {
+  const frame = getFrame(db, Number(frameId));
+  if (!frame) {
+    return null;
+  }
+  const body = readFileSync(assertUnderDataDir(frame.path));
+  return { body, contentType: "image/jpeg" };
+}
+
+function serveAudio(db, chunkId) {
+  const chunk = getAudioChunk(db, Number(chunkId));
+  if (!chunk) {
+    return null;
+  }
+  const pcm = readFileSync(assertUnderDataDir(chunk.path));
+  return { body: pcmToWav(pcm, CFG.audioSampleRate), contentType: "audio/wav" };
 }
 
 export function createFolioServer(viewHtml) {
@@ -183,7 +212,6 @@ export function createFolioServer(viewHtml) {
       if (path === "/api/config" && req.method === "PUT") {
         const body = JSON.parse((await readBody(req, 64 * 1024)).toString("utf8"));
         const result = updateConfig(body);
-        setBrainConfigVersion(openDb(), result.version);
         sendJson(res, 200, result);
         return;
       }
@@ -194,7 +222,6 @@ export function createFolioServer(viewHtml) {
           touchDevice(openDb(), deviceId);
         }
         const payload = nodeConfigPayload();
-        setBrainConfigVersion(openDb(), payload.version);
         sendJson(res, 200, payload);
         return;
       }

@@ -1,5 +1,5 @@
 import { CFG } from "../config.mjs";
-import { cosineSimilarity, lexicalScore, termVector } from "./lexical.mjs";
+import { cosineDense, cosineSimilarity, termVector } from "./lexical.mjs";
 
 function embeddingsUrl() {
   if (CFG.memoryEmbeddingsUrl) {
@@ -26,26 +26,6 @@ export function vectorFromJson(raw) {
   }
 }
 
-export function cosineFloat(a, b) {
-  if (!a?.length || !b?.length || a.length !== b.length) {
-    return 0;
-  }
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  if (!normA || !normB) {
-    return 0;
-  }
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
-let embeddingsAvailable = null;
-
 export async function embedText(text) {
   if (!CFG.memoryUseEmbeddings) {
     return { kind: "lexical", vector: [...termVector(text).entries()] };
@@ -69,10 +49,8 @@ export async function embedText(text) {
     if (!Array.isArray(vec)) {
       throw new Error("no embedding vector");
     }
-    embeddingsAvailable = true;
     return { kind: "float", vector: vec };
   } catch {
-    embeddingsAvailable = false;
     return { kind: "lexical", vector: [...termVector(text).entries()] };
   }
 }
@@ -81,21 +59,15 @@ export function scorePair(queryEmbed, docEmbedJson, docText) {
   const stored = vectorFromJson(docEmbedJson);
 
   if (queryEmbed.kind === "float" && Array.isArray(stored)) {
-    return cosineFloat(queryEmbed.vector, stored);
+    return cosineDense(queryEmbed.vector, stored);
   }
 
   const queryMap =
-    queryEmbed.kind === "lexical"
-      ? new Map(queryEmbed.vector)
-      : termVector(docText);
+    queryEmbed.kind === "lexical" ? new Map(queryEmbed.vector) : termVector(docText);
   const docMap = stored instanceof Map ? stored : termVector(docText);
-  return cosineSimilarity(queryMap, docMap) || lexicalScore(queryMap, docText);
+  return cosineSimilarity(queryMap, docMap);
 }
 
 export function serializeEmbedding(embed) {
   return JSON.stringify(embed.vector);
-}
-
-export function embeddingsStatus() {
-  return embeddingsAvailable;
 }

@@ -78,12 +78,15 @@ export async function transcribeWav(wavPath) {
   }
 }
 
+function pcmSamples(pcmBuffer) {
+  if (!pcmBuffer?.length) {
+    return new Int16Array(0);
+  }
+  return new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, pcmBuffer.length / 2);
+}
+
 export function pcmEnergy(pcmBuffer) {
-  const samples = new Int16Array(
-    pcmBuffer.buffer,
-    pcmBuffer.byteOffset,
-    pcmBuffer.length / 2,
-  );
+  const samples = pcmSamples(pcmBuffer);
   if (samples.length === 0) {
     return 0;
   }
@@ -97,14 +100,7 @@ export function pcmEnergy(pcmBuffer) {
 
 /** True when buffer is missing, zero-length, or all-zero samples. */
 export function pcmIsEmpty(pcmBuffer) {
-  if (!pcmBuffer?.length) {
-    return true;
-  }
-  const samples = new Int16Array(
-    pcmBuffer.buffer,
-    pcmBuffer.byteOffset,
-    pcmBuffer.length / 2,
-  );
+  const samples = pcmSamples(pcmBuffer);
   for (let i = 0; i < samples.length; i++) {
     if (samples[i] !== 0) {
       return false;

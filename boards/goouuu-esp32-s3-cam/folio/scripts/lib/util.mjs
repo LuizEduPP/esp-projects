@@ -1,11 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
-const SAMPLE_RATE = 16000;
 const NUM_CHANNELS = 1;
 const BITS_PER_SAMPLE = 16;
 
-export function pcmToWav(pcmBuffer) {
+export function pcmToWav(pcmBuffer, sampleRate = 16000) {
   const dataSize = pcmBuffer.length;
   const header = Buffer.alloc(44);
   header.write("RIFF", 0);
@@ -15,8 +14,8 @@ export function pcmToWav(pcmBuffer) {
   header.writeUInt32LE(16, 16);
   header.writeUInt16LE(1, 20);
   header.writeUInt16LE(NUM_CHANNELS, 22);
-  header.writeUInt32LE(SAMPLE_RATE, 24);
-  header.writeUInt32LE((SAMPLE_RATE * NUM_CHANNELS * BITS_PER_SAMPLE) / 8, 28);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE((sampleRate * NUM_CHANNELS * BITS_PER_SAMPLE) / 8, 28);
   header.writeUInt16LE((NUM_CHANNELS * BITS_PER_SAMPLE) / 8, 32);
   header.writeUInt16LE(BITS_PER_SAMPLE, 34);
   header.write("data", 36);
@@ -24,9 +23,9 @@ export function pcmToWav(pcmBuffer) {
   return Buffer.concat([header, pcmBuffer]);
 }
 
-export function writeWav(path, pcmBuffer) {
+export function writeWav(path, pcmBuffer, sampleRate = 16000) {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, pcmToWav(pcmBuffer));
+  writeFileSync(path, pcmToWav(pcmBuffer, sampleRate));
 }
 
 export function parseMetaHeader(raw) {
@@ -57,8 +56,12 @@ export function dayBounds(day) {
 }
 
 export function priorDay(day) {
+  return dayOffset(day, -1);
+}
+
+export function dayOffset(day, days) {
   const d = new Date(`${day}T12:00:00.000Z`);
-  d.setUTCDate(d.getUTCDate() - 1);
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
