@@ -6,13 +6,13 @@
 <title>Folio</title>
 <style>
 :root{
-  --bg:#141210;--bg2:#1c1916;--bg3:#242019;--line:#322c26;
-  --text:#ece6dc;--muted:#9a9288;--dim:#6d665c;
-  --accent:#c4a574;--accent-dim:#8a7350;
-  --frame:#6b9ec4;--audio:#9ec49a;--warn:#c49a6b;
-  --radius:12px;--shadow:0 8px 32px rgba(0,0,0,.35);
+  --bg:#0f1115;--bg2:#161a21;--bg3:#1c222c;--line:#2a3140;
+  --text:#e8eaed;--muted:#9aa3b2;--dim:#6b7280;
+  --accent:#7cacf8;--accent-dim:#4a7fd4;
+  --frame:#7cacf8;--audio:#6ee7b7;--warn:#fbbf24;
+  --radius:12px;--shadow:0 8px 32px rgba(0,0,0,.4);
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --serif:Georgia,"Iowan Old Style","Palatino Linotype",serif;
+  --serif:"Iowan Old Style",Georgia,"Palatino Linotype",serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
@@ -23,7 +23,7 @@ button,input{font:inherit}
   position:sticky;top:0;z-index:20;
   display:flex;align-items:center;gap:16px;flex-wrap:wrap;
   padding:14px 24px;border-bottom:1px solid var(--line);
-  background:rgba(20,18,16,.92);backdrop-filter:blur(10px);
+  background:rgba(15,17,21,.9);backdrop-filter:blur(10px);
 }
 .brand{display:flex;align-items:baseline;gap:10px}
 .brand h1{font-family:var(--serif);font-size:1.35rem;font-weight:500;letter-spacing:.02em}
@@ -43,8 +43,8 @@ button,input{font:inherit}
   font-size:.72rem;padding:5px 10px;border-radius:999px;
   border:1px solid var(--line);background:var(--bg2);color:var(--muted);
 }
-.pill.warn{border-color:#5a4030;color:var(--warn)}
-.pill.ok{border-color:#304a30;color:var(--audio)}
+.pill.warn{border-color:#5c4818;color:#fcd34d}
+.pill.ok{border-color:#1a4d3a;color:var(--audio)}
 .layout{
   display:grid;grid-template-columns:minmax(280px,380px) 1fr;
   gap:0;max-width:1400px;margin:0 auto;min-height:calc(100vh - 64px);
@@ -60,7 +60,7 @@ button,input{font:inherit}
 .chronicle-meta{font-size:.78rem;color:var(--muted);margin-bottom:20px}
 .chronicle-body{
   font-family:var(--serif);font-size:1.08rem;line-height:1.75;
-  white-space:pre-wrap;color:#e2dcd0;
+  white-space:pre-wrap;color:var(--text);
 }
 .chronicle-empty{color:var(--muted);font-family:var(--serif);font-style:italic}
 .feed{padding:24px 24px 48px;min-width:0}
@@ -74,7 +74,7 @@ button,input{font:inherit}
   border:1px solid var(--line);background:var(--bg2);color:var(--muted);
   padding:6px 12px;border-radius:999px;font-size:.78rem;cursor:pointer;
 }
-.filter.active{border-color:var(--accent);color:var(--accent);background:#2a2418}
+.filter.active{border-color:var(--accent);color:var(--accent);background:#1a2332}
 .feed-stats{font-size:.75rem;color:var(--dim)}
 .timeline{display:flex;flex-direction:column;gap:16px}
 .entry{
@@ -95,20 +95,20 @@ button,input{font:inherit}
   border-bottom:1px solid var(--line);font-size:.75rem;
 }
 .badge{padding:3px 8px;border-radius:6px;font-weight:600;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em}
-.badge.frame{background:#1a2838;color:var(--frame)}
-.badge.audio{background:#1a2a1c;color:var(--audio)}
-.badge.pending{background:#2a2218;color:var(--warn)}
+.badge.frame{background:#1a2438;color:#9ec5fe}
+.badge.audio{background:#142820;color:#86efac}
+.badge.pending{background:#1e2433;color:#fbbf24}
 .entry-reason{margin-left:auto;color:var(--dim)}
 .entry-body{padding:14px}
 .frame-img{
   display:block;width:100%;max-height:420px;object-fit:contain;
-  background:#0a0908;cursor:zoom-in;
+  background:#080a0e;cursor:zoom-in;
 }
-.caption{margin-top:12px;font-size:.92rem;line-height:1.55;color:#ddd6ca}
+.caption{margin-top:12px;font-size:.92rem;line-height:1.55;color:var(--muted)}
 .caption.pending{color:var(--muted);font-style:italic}
 .transcript{
   margin-top:10px;padding:12px 14px;border-left:3px solid var(--accent-dim);
-  font-family:var(--serif);font-size:.95rem;color:#e8e0d4;
+  font-family:var(--serif);font-size:.95rem;color:var(--text);
 }
 .transcript.pending{color:var(--muted);font-style:italic;border-color:var(--line)}
 audio{width:100%;height:40px;border-radius:8px}
@@ -268,9 +268,14 @@ function renderItem(i){
     </article>`;
   }
   if(i.type==='audio'){
-    const txt=i.text
-      ?`<blockquote class="transcript">“${escapeHtml(i.text)}”</blockquote>`
-      :`<p class="transcript pending">Transcript pending…</p>`;
+    let txt;
+    if(i.text){
+      txt=`<blockquote class="transcript">“${escapeHtml(i.text)}”</blockquote>`;
+    }else if(!i.processed){
+      txt=`<p class="transcript pending">In Whisper queue…</p>`;
+    }else{
+      txt=`<p class="transcript pending">No words detected in this second</p>`;
+    }
     return `<article class="entry">
       <div class="entry-time">${t}</div>
       <div class="entry-card">

@@ -92,22 +92,49 @@ The ESP **always** writes captures to the microSD (`/folio/audio`, `/folio/frame
 
 SD_MMC 1-bit pins (GOOUUU v1.3): CLK **39**, CMD **38**, D0 **40**. Insert a FAT32 card before power-on.
 
-## Brain environment variables
+## Configuration
 
-| Var | Default | Description |
-|-----|---------|-------------|
-| `FOLIO_PORT` | `8770` | Brain HTTP port |
-| `FOLIO_DATA_DIR` | `~/.folio` | SQLite + audio + frames |
-| `LM_URL` | `http://127.0.0.1:1234/v1/chat/completions` | LM Studio |
-| `FOLIO_MODEL_FAST` | `mistralai/ministral-3-3b` | Ingest + passes A/C |
-| `FOLIO_MODEL_DEEP` | same | Passes B/D (use a larger model if available) |
-| `FOLIO_WHISPER_BIN` | `whisper` | OpenAI Whisper CLI |
-| `FOLIO_WHISPER_MODEL` | `base` | Whisper model |
-| `FOLIO_EPISODE_GAP_MIN` | `12` | Minutes of silence → new episode |
-| `FOLIO_DIGEST_INTERVAL_MS` | `1800000` | How often brain checks whether to refresh digest |
-| `FOLIO_DIGEST_AUTO` | `1` | Set `0` to disable automatic digest |
-| `FOLIO_LOCALE` | `pt-BR` | **Prompt + digest language** (BCP-47: `en-US`, `es-ES`, `fr-FR`, …) |
-| `FOLIO_WHISPER_LANGUAGE` | *(from locale)* | Whisper `--language` override (e.g. `Portuguese`, `English`) |
+Copy the template and edit:
+
+```bash
+mkdir -p ~/.folio
+cp boards/goouuu-esp32-s3-cam/folio/folio.config.example.json ~/.folio/config.json
+```
+
+**Env vars override** `config.json`. Current values: `GET http://localhost:8770/api/config`
+
+### Brain (`~/.folio/config.json`)
+
+| Key | Env override | Default | Description |
+|-----|----------------|---------|-------------|
+| `locale` | `FOLIO_LOCALE` | `pt-BR` | LM prompts + digest language |
+| `frames.captureIntervalMs` | `FOLIO_FRAME_INTERVAL_MS` | `60000` | Doc only — ESP capture rate |
+| `frames.captionIntervalMs` | `FOLIO_FRAME_CAPTION_MS` | `60000` | Min gap between LM vision calls |
+| `frames.captionMaxTokens` | `FOLIO_FRAME_CAPTION_MAX_TOKENS` | `220` | Tokens per frame caption |
+| `frames.pipelineBatch` | `FOLIO_PIPELINE_FRAME_BATCH` | `1` | Frames per pipeline tick |
+| `frames.jpegQuality` | `FOLIO_JPEG_QUALITY` | `12` | Doc — ESP JPEG quality (lower=better) |
+| `frames.size` | `FOLIO_FRAME_SIZE` | `QVGA` | Doc — `QVGA`, `VGA`, `SVGA` |
+| `audio.chunkMs` | `FOLIO_AUDIO_CHUNK_MS` | `1000` | PCM chunk length |
+| `audio.speechEnergyThreshold` | `FOLIO_SPEECH_ENERGY` | `0.008` | Gate for speech / presence |
+| `audio.whisperModel` | `FOLIO_WHISPER_MODEL` | `base` | Whisper model size |
+| `audio.pipelineBatch` | `FOLIO_PIPELINE_AUDIO_BATCH` | `2` | Chunks per pipeline tick |
+| `pipeline.intervalMs` | `FOLIO_PIPELINE_INTERVAL_MS` | `30000` | Queue worker interval |
+| `digest.intervalMs` | `FOLIO_DIGEST_INTERVAL_MS` | `1800000` | Auto digest check interval |
+| `episodes.gapMin` | `FOLIO_EPISODE_GAP_MIN` | `12` | Silence minutes → new episode |
+| `lm.modelFast` / `modelDeep` | `FOLIO_MODEL_*` | ministral-3-3b | LM Studio models |
+| `lm.url` | `LM_URL` | `127.0.0.1:1234` | LM Studio API |
+
+### ESP (`firmware/platformio.ini` build_flags)
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `FOLIO_FRAME_INTERVAL_MS` | `60000` | JPEG every N ms |
+| `FOLIO_JPEG_QUALITY` | `12` | Camera JPEG quality |
+| `FOLIO_FRAME_SIZE_ID` | `6` | `6`=QVGA, `7`=VGA, `8`=SVGA |
+| `FOLIO_CHUNK_MS` | `1000` | Audio chunk duration |
+| `FOLIO_SAMPLE_RATE` | `16000` | I2S sample rate |
+
+After changing ESP flags: `yarn folio:flash`
 
 ## Local ESP endpoints
 
@@ -133,7 +160,7 @@ Episodes: speech clusters by configurable gap + multimodal semantic extraction.
 
 - **Continuous** capture while the ESP is powered and the brain is running — no pause in firmware
 - To stop: power off the node or exit `yarn folio:brain`
-- Raw audio in `~/.folio/audio/` — configure retention manually
+- Speech PCM kept under `~/.folio/audio/` for `audio.retentionDays` (default 7); quiet chunks are not stored (`audio.storeQuiet: false`)
 
 ## Speaker enrollment (optional)
 

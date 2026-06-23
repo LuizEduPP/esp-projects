@@ -5,9 +5,11 @@ import { promptLanguageRule } from "./locale.mjs";
 import { isoNow } from "./util.mjs";
 import {
   clearEpisodesForDay,
+  framesForDay,
   insertEpisode,
   linkEpisodeFrame,
   linkEpisodeUtterance,
+  utterancesForDay,
 } from "./db.mjs";
 
 const GAP_MS = () => CFG.episodeGapMin * 60 * 1000;
@@ -100,17 +102,8 @@ Use evidence IDs from the input when possible. Facts only from input; infer care
 }
 
 export async function rebuildEpisodesForDay(db, day) {
-  const utterances = db
-    .prepare(
-      `SELECT * FROM utterances WHERE started_at >= ? AND started_at < ? ORDER BY started_at`,
-    )
-    .all(`${day}T00:00:00.000Z`, `${day}T23:59:59.999Z`);
-
-  const frames = db
-    .prepare(
-      `SELECT * FROM frames WHERE captured_at >= ? AND captured_at < ? ORDER BY captured_at`,
-    )
-    .all(`${day}T00:00:00.000Z`, `${day}T23:59:59.999Z`);
+  const utterances = utterancesForDay(db, day);
+  const frames = framesForDay(db, day);
 
   clearEpisodesForDay(db, day);
   const clusters = clusterUtterances(utterances, day);

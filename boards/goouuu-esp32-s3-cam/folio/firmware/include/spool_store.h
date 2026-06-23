@@ -7,6 +7,9 @@
 
 bool spoolBegin();
 bool spoolOk();
+/** Re-mount if needed; returns false when no SD (push-only mode). */
+bool spoolEnsure();
+void spoolTick();
 
 bool spoolSaveAudio(uint32_t seq, const int16_t *pcm, const char *meta);
 bool spoolSaveFrame(uint32_t id, const uint8_t *jpeg, size_t len, const char *meta);

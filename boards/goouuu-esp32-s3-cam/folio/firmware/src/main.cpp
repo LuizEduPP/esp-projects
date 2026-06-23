@@ -5,6 +5,7 @@
 #include <esp_camera.h>
 
 #include "audio_capture.h"
+#include "folio_config.h"
 #include "pins.h"
 #include "spool_store.h"
 
@@ -21,16 +22,16 @@
 #define FOLIO_DEVICE_ID "folio-s3-01"
 #endif
 
-static const uint32_t FRAME_INTERVAL_MS = 60000;
-static const uint32_t WIFI_RETRY_MS = 5000;
-static const uint32_t PUSH_BACKOFF_MAX_MS = 30000;
+static const uint32_t FRAME_INTERVAL_MS = FOLIO_FRAME_INTERVAL_MS;
+static const uint32_t WIFI_RETRY_MS = FOLIO_WIFI_RETRY_MS;
+static const uint32_t PUSH_BACKOFF_MAX_MS = FOLIO_PUSH_BACKOFF_MAX_MS;
+static const uint32_t STATUS_INTERVAL_MS = FOLIO_STATUS_INTERVAL_MS;
 
 static WebServer gServer(80);
 static portMUX_TYPE gCamMux = portMUX_INITIALIZER_UNLOCKED;
 static bool gCamOk = false;
 static bool gAudioOk = false;
 static bool gWifiOk = false;
-static bool gSpoolOk = false;
 static uint32_t gAudioSeq = 0;
 static uint32_t gFrameSeq = 0;
 static uint32_t gAudioPushOk = 0;
@@ -76,11 +77,11 @@ static bool cameraBegin() {
   c.pin_pwdn = CAM_PIN_PWDN;
   c.pin_reset = CAM_PIN_RESET;
   c.xclk_freq_hz = 20000000;
-  c.frame_size = FRAMESIZE_QVGA;
+  c.frame_size = (framesize_t)FOLIO_FRAME_SIZE_ID;
   c.pixel_format = PIXFORMAT_JPEG;
   c.grab_mode = CAMERA_GRAB_LATEST;
   c.fb_location = CAMERA_FB_IN_PSRAM;
-  c.jpeg_quality = 12;
+  c.jpeg_quality = FOLIO_JPEG_QUALITY;
   c.fb_count = 2;
   return esp_camera_init(&c) == ESP_OK;
 }
@@ -139,7 +140,7 @@ static bool trySendAudio(uint32_t seq, const int16_t *pcm, const char *meta) {
   if (ok) {
     onPushOk();
     gAudioPushOk++;
-    if (gSpoolOk) {
+    if (spoolOk()) {
       spoolDeleteAudio(seq);
     }
     if (seq < 3 || seq % 30 == 0) {
@@ -163,7 +164,7 @@ static bool trySendFrame(uint32_t id, const uint8_t *jpeg, size_t len, const cha
   if (ok) {
     onPushOk();
     gFramePushOk++;
-    if (gSpoolOk) {
+    if (spoolOk()) {
       spoolDeleteFrame(id);
     }
     Serial.printf("[push] frame id=%lu ok=%lu spool=%lu\n", id, gFramePushOk,
@@ -190,7 +191,7 @@ static void captureAudioChunk() {
   char meta[96];
   snprintf(meta, sizeof(meta), "seq=%lu;ts_ms=%lu;rate=%d", seq, millis(), FOLIO_SAMPLE_RATE);
 
-  if (gSpoolOk) {
+  if (spoolOk()) {
     if (!spoolSaveAudio(seq, gPcmBuf, meta)) {
       Serial.printf("[spool] audio seq=%lu save failed\n", seq);
     }
@@ -215,7 +216,7 @@ static void captureFrameChunk(const char *reason) {
   char meta[128];
   snprintf(meta, sizeof(meta), "reason=%s;ts_ms=%lu", reason, millis());
 
-  if (gSpoolOk) {
+  if (spoolOk()) {
     if (!spoolSaveFrame(id, fb->buf, fb->len, meta)) {
       Serial.printf("[spool] frame id=%lu save failed\n", id);
     }
@@ -230,7 +231,10 @@ static void captureFrameChunk(const char *reason) {
 }
 
 static void drainSpoolOnce() {
-  if (!gWifiOk || !gSpoolOk || !canPushNow()) {
+  if (!gWifiOk || !canPushNow()) {
+    return;
+  }
+  if (!spoolOk()) {
     return;
   }
 
@@ -312,11 +316,11 @@ static void handleHealth() {
   j += ",\"brain\":\"";
   j += FOLIO_BRAIN_URL;
   j += "\",\"spool\":";
-  j += gSpoolOk ? "true" : "false";
+  j += spoolOk() ? "true" : "false";
   j += ",\"spool_audio\":";
-  j += gSpoolOk ? spoolPendingAudio() : 0;
+  j += spoolOk() ? spoolPendingAudio() : 0;
   j += ",\"spool_frames\":";
-  j += gSpoolOk ? spoolPendingFrames() : 0;
+  j += spoolOk() ? spoolPendingFrames() : 0;
   j += ",\"camera\":";
   j += gCamOk ? "true" : "false";
   j += ",\"audio\":";
@@ -343,14 +347,18 @@ void setup() {
   Serial.printf("[boot] device=%s brain=%s\n", FOLIO_DEVICE_ID, FOLIO_BRAIN_URL);
   Serial.printf("[boot] heap=%u psram=%u\n", ESP.getFreeHeap(), ESP.getFreePsram());
 
-  gSpoolOk = spoolBegin();
-  Serial.printf("[boot] sd spool %s pending audio=%lu frames=%lu\n", gSpoolOk ? "OK" : "FALHOU",
-                gSpoolOk ? spoolPendingAudio() : 0, gSpoolOk ? spoolPendingFrames() : 0);
+  spoolBegin();
+  Serial.printf("[boot] sd spool %s pending audio=%lu frames=%lu\n",
+                spoolOk() ? "OK" : "off (push-only)",
+                spoolOk() ? spoolPendingAudio() : 0, spoolOk() ? spoolPendingFrames() : 0);
 
   gAudioOk = audioBegin();
   gCamOk = cameraBegin();
   Serial.printf("[boot] audio %s | camera %s\n", gAudioOk ? "OK" : "FALHOU",
                 gCamOk ? "OK" : "FALHOU");
+  Serial.printf("[boot] frame every %ums jpegQ=%d size_id=%d\n", FOLIO_FRAME_INTERVAL_MS,
+                FOLIO_JPEG_QUALITY, FOLIO_FRAME_SIZE_ID);
+  Serial.printf("[boot] audio %dHz chunk %dms\n", FOLIO_SAMPLE_RATE, FOLIO_CHUNK_MS);
 
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
@@ -382,16 +390,17 @@ void setup() {
 void loop() {
   gServer.handleClient();
   ensureWifi();
+  spoolTick();
 
   const unsigned long now = millis();
 
   static unsigned long lastHeartbeat = 0;
-  if (now - lastHeartbeat >= 15000) {
+  if (now - lastHeartbeat >= STATUS_INTERVAL_MS) {
     lastHeartbeat = now;
     Serial.printf(
         "[status] up=%lums wifi=%s spool a=%lu f=%lu push ok=%lu/%lu heap=%u backoff=%lums\n",
         now - gBootMs, gWifiOk ? "up" : "down",
-        gSpoolOk ? spoolPendingAudio() : 0, gSpoolOk ? spoolPendingFrames() : 0,
+        spoolOk() ? spoolPendingAudio() : 0, spoolOk() ? spoolPendingFrames() : 0,
         gAudioPushOk, gFramePushOk, ESP.getFreeHeap(), gPushBackoffMs);
   }
 

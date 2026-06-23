@@ -1,6 +1,28 @@
 import { CFG } from "./config.mjs";
 
-/** Whisper CLI --language values */
+/** Whisper CLI --language (ISO 639-1 codes). */
+const WHISPER_CODE_BY_LOCALE = {
+  "pt-BR": "pt",
+  "pt-PT": "pt",
+  pt: "pt",
+  "en-US": "en",
+  "en-GB": "en",
+  en: "en",
+  "es-ES": "es",
+  es: "es",
+  "fr-FR": "fr",
+  fr: "fr",
+  "de-DE": "de",
+  de: "de",
+  "it-IT": "it",
+  it: "it",
+  "ja-JP": "ja",
+  ja: "ja",
+  "zh-CN": "zh",
+  zh: "zh",
+};
+
+/** @deprecated use whisperLanguageCode — kept for logs */
 const WHISPER_BY_LOCALE = {
   "pt-BR": "Portuguese",
   "pt-PT": "Portuguese",
@@ -52,8 +74,26 @@ export function activeLocale() {
   return CFG.defaultLocale || "pt-BR";
 }
 
-export function whisperLanguage() {
+export function whisperLanguageCode() {
   if (CFG.whisperLanguage) {
+    const w = CFG.whisperLanguage.toLowerCase();
+    if (w.length <= 3) {
+      return w;
+    }
+    const fromName = Object.entries(WHISPER_BY_LOCALE).find(([, name]) =>
+      name.toLowerCase().startsWith(w),
+    );
+    if (fromName) {
+      return WHISPER_CODE_BY_LOCALE[fromName[0]] ?? fromName[0];
+    }
+    return CFG.whisperLanguage;
+  }
+  const loc = activeLocale();
+  return WHISPER_CODE_BY_LOCALE[loc] ?? WHISPER_CODE_BY_LOCALE[baseLocale(loc)] ?? "en";
+}
+
+export function whisperLanguage() {
+  if (CFG.whisperLanguage && CFG.whisperLanguage.length > 3) {
     return CFG.whisperLanguage;
   }
   const loc = activeLocale();

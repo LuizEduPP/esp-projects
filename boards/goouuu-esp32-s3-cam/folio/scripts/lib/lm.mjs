@@ -42,8 +42,8 @@ export async function captionFrame(b64, reason) {
 
   return chatJson({
     model: CFG.modelFast,
-    temperature: 0.05,
-    maxTokens: 220,
+    temperature: CFG.frameCaptionTemperature,
+    maxTokens: CFG.frameCaptionMaxTokens,
     messages: [
       {
         role: "user",

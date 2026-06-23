@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { CFG, PATHS } from "./config.mjs";
-import { isoNow } from "./util.mjs";
+import { dayBounds, isoNow, priorDay } from "./util.mjs";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS devices (
@@ -157,6 +157,7 @@ export function openDb() {
   mkdirSync(PATHS.digestDir(), { recursive: true });
   const db = new DatabaseSync(PATHS.db());
   db.exec("PRAGMA journal_mode = WAL;");
+  db.exec("PRAGMA busy_timeout = 5000;");
   db.exec(SCHEMA);
   dbSingleton = db;
   return db;
@@ -214,9 +215,11 @@ export function insertUtterance(db, row) {
 export function pendingAudioChunks(db, limit = 20) {
   return db
     .prepare(
-      `SELECT * FROM audio_chunks WHERE processed = 0 ORDER BY captured_at ASC LIMIT ?`,
+      `SELECT * FROM audio_chunks WHERE processed = 0
+       ORDER BY CASE WHEN energy >= ? THEN 0 ELSE 1 END, captured_at ASC
+       LIMIT ?`,
     )
-    .all(limit);
+    .all(CFG.speechEnergyThreshold, limit);
 }
 
 export function pendingFrames(db, limit = 10) {
@@ -252,6 +255,7 @@ export function getFrame(db, id) {
 }
 
 export function audioChunksForDay(db, day) {
+  const { start, end } = dayBounds(day);
   return db
     .prepare(
       `SELECT c.*, u.text AS utterance_text
@@ -260,29 +264,32 @@ export function audioChunksForDay(db, day) {
        WHERE c.captured_at >= ? AND c.captured_at < ?
        ORDER BY c.captured_at`,
     )
-    .all(`${day}T00:00:00.000Z`, `${day}T23:59:59.999Z`);
+    .all(start, end);
 }
 
 export function utterancesForDay(db, day) {
+  const { start, end } = dayBounds(day);
   return db
     .prepare(
       `SELECT * FROM utterances WHERE started_at >= ? AND started_at < ? ORDER BY started_at`,
     )
-    .all(`${day}T00:00:00.000Z`, `${day}T23:59:59.999Z`);
+    .all(start, end);
 }
 
 export function framesForDay(db, day) {
+  const { start, end } = dayBounds(day);
   return db
     .prepare(
       `SELECT * FROM frames WHERE captured_at >= ? AND captured_at < ? ORDER BY captured_at`,
     )
-    .all(`${day}T00:00:00.000Z`, `${day}T23:59:59.999Z`);
+    .all(start, end);
 }
 
 export function eventsForDay(db, day) {
+  const { start, end } = dayBounds(day);
   return db
     .prepare(`SELECT * FROM events WHERE at >= ? AND at < ? ORDER BY at`)
-    .all(`${day}T00:00:00.000Z`, `${day}T23:59:59.999Z`);
+    .all(start, end);
 }
 
 export function episodesForDay(db, day) {
@@ -343,6 +350,81 @@ export function upsertDayRollup(db, day, compactJson) {
 
 export function profileFacts(db) {
   return db.prepare("SELECT key, value, confidence FROM profile_facts ORDER BY key").all();
+}
+
+export function upsertSpeaker(db, speakerId, displayName, profileJson = null) {
+  db.prepare(
+    `INSERT OR REPLACE INTO speakers (id, display_name, profile_json, embedding_path, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run(
+    speakerId,
+    displayName,
+    JSON.stringify(profileJson ?? { locale: CFG.defaultLocale }),
+    null,
+    isoNow(),
+  );
+}
+
+export function witnessStats(db, day) {
+  const { start, end } = dayBounds(day);
+  const speech = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM audio_chunks
+       WHERE captured_at >= ? AND captured_at < ? AND energy >= ?`,
+    )
+    .get(start, end, CFG.speechEnergyThreshold).n;
+  const frames = db
+    .prepare(`SELECT COUNT(*) AS n FROM frames WHERE captured_at >= ? AND captured_at < ?`)
+    .get(start, end).n;
+  const utterances = db
+    .prepare(`SELECT COUNT(*) AS n FROM utterances WHERE started_at >= ? AND started_at < ?`)
+    .get(start, end).n;
+  return { speech, frames, utterances };
+}
+
+export function latestWitnessAt(db, day) {
+  const { start, end } = dayBounds(day);
+  const row = db
+    .prepare(
+      `SELECT MAX(t) AS m FROM (
+         SELECT MAX(captured_at) AS t FROM audio_chunks WHERE captured_at >= ? AND captured_at < ?
+         UNION ALL
+         SELECT MAX(captured_at) FROM frames WHERE captured_at >= ? AND captured_at < ?
+         UNION ALL
+         SELECT MAX(started_at) FROM utterances WHERE started_at >= ? AND started_at < ?
+       )`,
+    )
+    .get(start, end, start, end, start, end);
+  return row?.m ?? null;
+}
+
+export function alignedMomentsForDay(db, day) {
+  const utterances = utterancesForDay(db, day).map((u) => ({
+    id: `utt:${u.id}`,
+    at: u.started_at,
+    text: u.text,
+  }));
+  const frames = framesForDay(db, day).map((f) => ({
+    id: `frm:${f.id}`,
+    at: f.captured_at,
+    visual: f.caption || f.scene_json,
+  }));
+  return [...utterances, ...frames].sort((a, b) => a.at.localeCompare(b.at));
+}
+
+export function episodeSummariesForDay(db, day) {
+  return episodesForDay(db, day).map((ep) => ({
+    id: ep.id,
+    label: ep.label,
+    started_at: ep.started_at,
+    ended_at: ep.ended_at,
+    summary: JSON.parse(ep.summary_json || "{}"),
+  }));
+}
+
+export function priorDayRollup(db, day) {
+  const rollup = getDayRollup(db, priorDay(day));
+  return rollup ? JSON.parse(rollup.compact_json) : null;
 }
 
 export function upsertProfileFact(db, key, value, sourceDay, confidence) {
@@ -417,7 +499,7 @@ export function timelineForDay(db, day) {
     id: `aud:${c.id}`,
     chunk_id: c.id,
     energy: c.energy,
-    speech: (c.energy ?? 0) >= 0.008,
+    speech: (c.energy ?? 0) >= CFG.speechEnergyThreshold,
     text: c.utterance_text ?? null,
     processed: !!c.processed,
   }));

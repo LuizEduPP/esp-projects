@@ -47,8 +47,33 @@ export function dayFromIso(iso) {
   return iso.slice(0, 10);
 }
 
+export function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** UTC day window for SQLite range queries. */
+export function dayBounds(day) {
+  return { start: `${day}T00:00:00.000Z`, end: `${day}T23:59:59.999Z` };
+}
+
+export function priorDay(day) {
+  const d = new Date(`${day}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export function isoNow() {
   return new Date().toISOString();
+}
+
+export function sendJson(res, status, body) {
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(body));
+}
+
+export function sendBytes(res, status, body, contentType, cache = "private, max-age=3600") {
+  res.writeHead(status, { "Content-Type": contentType, "Cache-Control": cache });
+  res.end(body);
 }
 
 export function parseJsonLoose(text) {

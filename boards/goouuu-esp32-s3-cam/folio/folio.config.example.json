@@ -1,0 +1,48 @@
+{
+  "locale": "pt-BR",
+  "port": 8770,
+  "dataDir": null,
+  "lm": {
+    "url": "http://127.0.0.1:1234/v1/chat/completions",
+    "modelFast": "mistralai/ministral-3-3b",
+    "modelDeep": "mistralai/ministral-3-3b"
+  },
+  "frames": {
+    "captureIntervalMs": 60000,
+    "captionIntervalMs": 60000,
+    "captionMaxTokens": 220,
+    "captionTemperature": 0.05,
+    "pipelineBatch": 1,
+    "jpegQuality": 12,
+    "size": "QVGA"
+  },
+  "audio": {
+    "chunkMs": 1000,
+    "sampleRate": 16000,
+    "speechEnergyThreshold": 0.008,
+    "whisperBin": "whisper",
+    "whisperModel": "base",
+    "whisperDevice": "cpu",
+    "whisperTimeoutMs": 120000,
+    "whisperLanguage": null,
+    "pipelineBatch": 4,
+    "storeQuiet": false,
+    "retentionDays": 7
+  },
+  "pipeline": {
+    "enabled": true,
+    "intervalMs": 30000
+  },
+  "digest": {
+    "auto": true,
+    "intervalMs": 1800000
+  },
+  "episodes": {
+    "gapMin": 12
+  },
+  "node": {
+    "wifiRetryMs": 5000,
+    "pushBackoffMaxMs": 30000,
+    "statusIntervalMs": 15000
+  }
+}

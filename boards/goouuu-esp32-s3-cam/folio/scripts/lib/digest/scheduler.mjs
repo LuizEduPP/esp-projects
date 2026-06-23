@@ -1,49 +1,14 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CFG, PATHS } from "./config.mjs";
-import { getDigest, openDb } from "./db.mjs";
+import { CFG, PATHS } from "../config.mjs";
+import { getDigest, latestWitnessAt, openDb, witnessStats } from "../db.mjs";
+import { errMsg, today } from "../util.mjs";
 import { runDigestPipeline } from "./passes.mjs";
-import { errMsg } from "./util.mjs";
 
 export function saveDigestMarkdown(day, prose) {
   const mdPath = join(PATHS.digestDir(), `${day}.md`);
   writeFileSync(mdPath, prose ?? "", "utf8");
   return mdPath;
-}
-
-export function witnessStats(db, day) {
-  const start = `${day}T00:00:00.000Z`;
-  const end = `${day}T23:59:59.999Z`;
-  const speech = db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM audio_chunks
-       WHERE captured_at >= ? AND captured_at < ? AND energy >= 0.008`,
-    )
-    .get(start, end).n;
-  const frames = db
-    .prepare(`SELECT COUNT(*) AS n FROM frames WHERE captured_at >= ? AND captured_at < ?`)
-    .get(start, end).n;
-  const utterances = db
-    .prepare(`SELECT COUNT(*) AS n FROM utterances WHERE started_at >= ? AND started_at < ?`)
-    .get(start, end).n;
-  return { speech, frames, utterances };
-}
-
-export function latestWitnessAt(db, day) {
-  const start = `${day}T00:00:00.000Z`;
-  const end = `${day}T23:59:59.999Z`;
-  const row = db
-    .prepare(
-      `SELECT MAX(t) AS m FROM (
-         SELECT MAX(captured_at) AS t FROM audio_chunks WHERE captured_at >= ? AND captured_at < ?
-         UNION ALL
-         SELECT MAX(captured_at) FROM frames WHERE captured_at >= ? AND captured_at < ?
-         UNION ALL
-         SELECT MAX(started_at) FROM utterances WHERE started_at >= ? AND started_at < ?
-       )`,
-    )
-    .get(start, end, start, end, start, end);
-  return row?.m ?? null;
 }
 
 export function needsDigestRefresh(db, day) {
@@ -83,7 +48,7 @@ export async function runDigestForDay(db, day, { force = false } = {}) {
 
 export function startDigestLoop(intervalMs = CFG.digestIntervalMs) {
   let busy = false;
-  let lastDay = new Date().toISOString().slice(0, 10);
+  let lastDay = today();
 
   console.log(`[digest] auto every ${intervalMs}ms — refreshes when new witness data arrives`);
 
@@ -94,16 +59,16 @@ export function startDigestLoop(intervalMs = CFG.digestIntervalMs) {
     busy = true;
     try {
       const db = openDb();
-      const today = new Date().toISOString().slice(0, 10);
+      const currentDay = today();
 
-      if (today !== lastDay) {
+      if (currentDay !== lastDay) {
         const prior = lastDay;
-        lastDay = today;
+        lastDay = currentDay;
         console.log(`[digest] day rollover — finalizing ${prior}`);
         await runDigestForDay(db, prior, { force: true });
       }
 
-      await runDigestForDay(db, today);
+      await runDigestForDay(db, currentDay);
     } catch (err) {
       console.error(`[digest] ${errMsg(err)}`);
     } finally {

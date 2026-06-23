@@ -11,9 +11,9 @@
     "fw:monitor": "cd firmware && bash ../../../../scripts/pio.sh device monitor -b 115200 --filter direct",
     "brain": "node --watch scripts/folio-brain.mjs",
     "brain:once": "node scripts/folio-brain.mjs",
-    "brain:process": "node scripts/folio-process.mjs",
-    "digest": "node scripts/folio-digest.mjs",
-    "digest:today": "node scripts/folio-digest.mjs --today",
-    "enroll": "node scripts/folio-enroll.mjs"
+    "brain:process": "node scripts/folio.mjs process",
+    "digest": "node scripts/folio.mjs digest",
+    "digest:today": "node scripts/folio.mjs digest --today",
+    "enroll": "node scripts/folio.mjs enroll"
   }
 }

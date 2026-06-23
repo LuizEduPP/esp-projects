@@ -1,16 +1,30 @@
 import { execFile } from "node:child_process";
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { CFG } from "./config.mjs";
-import { whisperLanguage } from "./locale.mjs";
+import { whisperLanguageCode } from "./locale.mjs";
 
 const execFileAsync = promisify(execFile);
 
+function findWhisperJson(outDir, wavPath) {
+  const stem = basename(wavPath).replace(/\.wav$/i, "");
+  const direct = join(outDir, `${stem}.json`);
+  if (existsSync(direct)) {
+    return direct;
+  }
+  for (const name of readdirSync(outDir)) {
+    if (name.endsWith(".json")) {
+      return join(outDir, name);
+    }
+  }
+  return null;
+}
+
 export async function transcribeWav(wavPath) {
-  const outBase = join(tmpdir(), `folio-whisper-${Date.now()}`);
-  const outJson = `${outBase}.json`;
+  const outDir = join(tmpdir(), `folio-whisper-${Date.now()}-${process.pid}`);
+  mkdirSync(outDir, { recursive: true });
 
   try {
     await execFileAsync(
@@ -20,16 +34,25 @@ export async function transcribeWav(wavPath) {
         "--model",
         CFG.whisperModel,
         "--language",
-        whisperLanguage(),
+        whisperLanguageCode(),
         "--output_format",
         "json",
-        "--output_file",
-        outBase,
-        "--fp16",
-        "False",
+        "--output_dir",
+        outDir,
+        "--device",
+        CFG.whisperDevice,
       ],
-      { timeout: 120000 },
+      {
+        timeout: CFG.whisperTimeoutMs,
+        env: process.env,
+      },
     );
+
+    const outJson = findWhisperJson(outDir, wavPath);
+    if (!outJson) {
+      throw new Error(`Whisper produced no JSON in ${outDir}`);
+    }
+
     const raw = JSON.parse(readFileSync(outJson, "utf8"));
     const text = String(raw.text ?? "").trim();
     const segments = (raw.segments ?? []).map((s) => ({
@@ -44,10 +67,11 @@ export async function transcribeWav(wavPath) {
         `Whisper CLI not found (${CFG.whisperBin}). Install openai-whisper or set FOLIO_WHISPER_BIN.`,
       );
     }
-    throw err;
+    const detail = err.stderr?.toString?.() || err.stdout?.toString?.() || err.message;
+    throw new Error(`Whisper failed: ${String(detail).split("\n").slice(-3).join(" ").trim()}`);
   } finally {
     try {
-      unlinkSync(outJson);
+      rmSync(outDir, { recursive: true, force: true });
     } catch {
       /* ignore */
     }
@@ -71,31 +95,6 @@ export function pcmEnergy(pcmBuffer) {
   return Math.sqrt(sum / samples.length);
 }
 
-export function isSpeechChunk(energy, threshold = 0.008) {
+export function isSpeechChunk(energy, threshold = CFG.speechEnergyThreshold) {
   return energy >= threshold;
-}
-
-export async function transcribePcmToWav(wavPath) {
-  return transcribeWav(wavPath);
-}
-
-export function writeTempWav(pcmBuffer) {
-  const path = join(tmpdir(), `folio-chunk-${Date.now()}.wav`);
-  const header = Buffer.alloc(44);
-  const dataSize = pcmBuffer.length;
-  header.write("RIFF", 0);
-  header.writeUInt32LE(36 + dataSize, 4);
-  header.write("WAVE", 8);
-  header.write("fmt ", 12);
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20);
-  header.writeUInt16LE(1, 22);
-  header.writeUInt32LE(16000, 24);
-  header.writeUInt32LE(32000, 28);
-  header.writeUInt16LE(2, 32);
-  header.writeUInt16LE(16, 34);
-  header.write("data", 36);
-  header.writeUInt32LE(dataSize, 40);
-  writeFileSync(path, Buffer.concat([header, pcmBuffer]));
-  return path;
 }
