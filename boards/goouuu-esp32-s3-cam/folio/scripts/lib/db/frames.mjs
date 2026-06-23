@@ -29,8 +29,8 @@ export function getFrame(db, id) {
 export function lastProcessedFrame(db) {
   return db
     .prepare(
-      `SELECT id, caption, scene_json, captured_at FROM frames
-       WHERE processed = 1 AND caption IS NOT NULL AND caption != ''
+      `SELECT id, caption, scene_json, captured_at, path, reason FROM frames
+       WHERE processed = 1
        ORDER BY captured_at DESC LIMIT 1`,
     )
     .get();

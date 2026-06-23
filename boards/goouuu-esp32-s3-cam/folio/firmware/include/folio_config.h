@@ -43,3 +43,8 @@
 #ifndef FOLIO_SPEECH_ENERGY
 #define FOLIO_SPEECH_ENERGY 0.008f
 #endif
+
+/** Lower gate for non-speech sounds (latido, porta…) — match brain perception.soundMinEnergy. */
+#ifndef FOLIO_SOUND_ENERGY
+#define FOLIO_SOUND_ENERGY 0.003f
+#endif

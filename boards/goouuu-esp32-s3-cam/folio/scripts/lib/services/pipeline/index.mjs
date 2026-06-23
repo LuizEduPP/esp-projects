@@ -1,26 +1,14 @@
-import { existsSync, readFileSync, unlinkSync } from "node:fs";
+import { existsSync, unlinkSync } from "node:fs";
 import { CFG } from "../../config/index.mjs";
 import {
-  bumpSttAttempts,
   deleteAudioChunk,
-  insertEvent,
-  insertUtterance,
-  markAudioProcessed,
-  markFrameProcessed,
   openDb,
   pendingAudioChunks,
   pendingCounts,
   pendingFrames,
   pruneExpiredPcm,
-  lastProcessedFrame,
-  updateAudioClassification,
 } from "../../db/index.mjs";
-import { captionFrame, formatSceneCaption } from "../../llm/index.mjs";
-import { identifySpeaker } from "../../speaker/identify.mjs";
-import { isSpeechChunk, transcribeWav } from "../../stt/index.mjs";
-import { writeWav } from "../../util/audio.mjs";
-
-const MAX_STT_ATTEMPTS = 3;
+import { processAudioChunk, processFrame } from "../../perception/index.mjs";
 let lastFrameLmAt = 0;
 let loggedWhisperMissing = false;
 
@@ -142,66 +130,10 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
   const results = [];
 
   for (const chunk of chunks) {
-    if (!chunk.path || !existsSync(chunk.path)) {
-      discardAudioChunk(db, chunk);
-      results.push({ id: chunk.id, skipped: "missing_file" });
-      continue;
-    }
-
-    if (!isSpeechChunk(chunk.energy ?? 0)) {
-      discardAudioChunk(db, chunk);
-      results.push({ id: chunk.id, skipped: "quiet" });
-      continue;
-    }
-
-    const pcm = readFileSync(chunk.path);
-    const wavPath = chunk.path.replace(/\.pcm$/, ".wav");
-    writeWav(wavPath, pcm, CFG.audioSampleRate);
-
     try {
-      const speaker = identifySpeaker(db, pcm);
-      const stt = await transcribeWav(wavPath, { chunkId: chunk.id });
-      if (stt.text) {
-        insertUtterance(db, {
-          chunk_id: chunk.id,
-          speaker_id: speaker.speaker_id,
-          started_at: chunk.captured_at,
-          ended_at: chunk.captured_at,
-          text: stt.text,
-          confidence: stt.confidence,
-        });
-        updateAudioClassification(db, chunk.id, {
-          sound_kind: "speech",
-          sound_label: "fala",
-          speaker_id: speaker.speaker_id,
-          speaker_confidence: speaker.confidence,
-        });
-        results.push({
-          id: chunk.id,
-          text: stt.text.slice(0, 80),
-          speaker: speaker.speaker_id,
-        });
-        markAudioProcessed(db, chunk.id);
-      } else {
-        console.log(`[whisper] chunk=${chunk.id} discard — STT returned no text`);
-        discardAudioChunk(db, chunk);
-        results.push({ id: chunk.id, skipped: "empty_stt" });
-      }
+      results.push(await processAudioChunk(db, chunk));
     } catch (err) {
-      const attempts = bumpSttAttempts(db, chunk.id);
-      if (attempts >= MAX_STT_ATTEMPTS) {
-        console.error(`[whisper] chunk=${chunk.id} discard after ${attempts} failures`);
-        discardAudioChunk(db, chunk);
-        results.push({ id: chunk.id, skipped: "stt_failed", error: err.message });
-      } else {
-        results.push({ id: chunk.id, error: err.message, retry: attempts });
-      }
-    } finally {
-      try {
-        unlinkSync(wavPath);
-      } catch {
-        /* ignore */
-      }
+      results.push({ id: chunk.id, error: err.message });
     }
   }
 
@@ -229,62 +161,13 @@ export async function processPendingFrames(limit = CFG.pipelineFrameBatch, { byp
     if (minGap > 0 && Date.now() - lastFrameLmAt < minGap) {
       break;
     }
-
     try {
-      const buf = readFileSync(frame.path);
-      const b64 = buf.toString("base64");
-      const prev = lastProcessedFrame(db);
-      let previousScene = null;
-      if (prev?.scene_json) {
-        try {
-          previousScene = JSON.parse(prev.scene_json);
-        } catch {
-          /* ignore */
-        }
-      }
-
-      const scene = await captionFrame(b64, frame.reason, {
-        previousCaption: prev?.caption,
-        previousScene,
-      });
-
-      const caption = scene.unchanged && prev?.caption
-        ? prev.caption
-        : formatSceneCaption(scene);
-      const sceneJson = scene.unchanged && prev?.scene_json
-        ? prev.scene_json
-        : JSON.stringify(scene);
-
-      markFrameProcessed(db, frame.id, caption, sceneJson);
+      const result = await processFrame(db, frame);
       lastFrameLmAt = Date.now();
-
-      const people = scene.unchanged
-        ? Number(previousScene?.people ?? 0)
-        : Number(scene.people) || 0;
-      const personPresent = scene.unchanged
-        ? previousScene?.person_present === true
-        : scene.person_present === true;
-
-      if (personPresent || people > 0) {
-        insertEvent(db, {
-          device_id: frame.device_id,
-          at: frame.captured_at,
-          kind: "presence",
-          payload_json: JSON.stringify({
-            source: "camera",
-            people,
-            frame_id: frame.id,
-          }),
-        });
-      }
-      results.push({
-        id: frame.id,
-        caption: caption.slice(0, 80),
-        unchanged: !!scene.unchanged,
-      });
+      results.push(result);
     } catch (err) {
       results.push({ id: frame.id, error: err.message });
-      console.warn(`[worker] frame ${frame.id} LM fail: ${err.message}`);
+      console.warn(`[perception] frame ${frame.id}: ${err.message}`);
     }
   }
 
@@ -337,8 +220,9 @@ export function startProcessingLoop(intervalMs = CFG.pipelineIntervalMs) {
 
       const utt = audio.filter((r) => r.text).length;
       const cap = frames.filter((r) => r.caption).length;
-      if (utt > 0 || cap > 0) {
-        console.log(`[worker] done utt=${utt} caption=${cap}`);
+      const snd = audio.filter((r) => r.sound).length;
+      if (utt > 0 || cap > 0 || snd > 0) {
+        console.log(`[worker] done utt=${utt} caption=${cap} sounds=${snd}`);
       }
     } catch (err) {
       console.error(`[worker] ${err.message}`);

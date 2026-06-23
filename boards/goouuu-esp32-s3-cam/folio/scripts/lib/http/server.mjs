@@ -24,7 +24,7 @@ import {
   touchDevice,
 } from "../db/index.mjs";
 import { ingestAudioChunk, ingestFrame, ingestEvent } from "../services/index.mjs";
-import { timelineWithGroups } from "../timeline/present.mjs";
+import { timelineWithGroups } from "../present.mjs";
 
 const UI_MIME = {
   "/ui/app.css": "text/css; charset=utf-8",

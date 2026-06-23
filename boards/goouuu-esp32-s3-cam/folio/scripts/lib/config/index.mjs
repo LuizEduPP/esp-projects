@@ -206,6 +206,18 @@ function migrateConfigSchema(file) {
     changed = true;
   }
 
+  if (!file.perception || typeof file.perception !== "object") {
+    file.perception = { ...DEFAULT_CONFIG.perception };
+    changed = true;
+  } else {
+    for (const [k, v] of Object.entries(DEFAULT_CONFIG.perception)) {
+      if (file.perception[k] == null && v != null) {
+        file.perception[k] = v;
+        changed = true;
+      }
+    }
+  }
+
   if (!file.audio || typeof file.audio !== "object") {
     file.audio = { ...DEFAULT_CONFIG.audio };
     changed = true;
@@ -477,6 +489,17 @@ function buildCfgFromFile(file = getFileData()) {
       cfgBool(file, "digest.auto", "FOLIO_DIGEST_AUTO"),
     insightsTemperature: cfgNum(file, "insights.temperature", "FOLIO_INSIGHTS_TEMP") ||
       cfgNum(file, "digest.passDTemperature", "FOLIO_DIGEST_PASS_D_TEMP"),
+
+    perceptionMotionMin: cfgNum(file, "perception.motionMin", "FOLIO_MOTION_MIN"),
+    perceptionMotionForceMs: cfgNum(file, "perception.motionForceMs", "FOLIO_MOTION_FORCE_MS"),
+    perceptionAutoEnhance: cfgBool(file, "perception.autoEnhance", "FOLIO_AUTO_ENHANCE"),
+    perceptionStoreSounds: cfgBool(file, "perception.storeSounds", "FOLIO_STORE_SOUNDS"),
+    perceptionSoundMinEnergy: cfgNum(file, "perception.soundMinEnergy", "FOLIO_SOUND_MIN_ENERGY"),
+    perceptionSoundMinConfidence: cfgNum(
+      file,
+      "perception.soundMinConfidence",
+      "FOLIO_SOUND_MIN_CONF",
+    ),
 
     episodeGapMin: cfgNum(file, "episodes.gapMin", "FOLIO_EPISODE_GAP_MIN"),
     episodeFrameAlignMs: cfgNum(file, "episodes.frameAlignMs", "FOLIO_EPISODE_FRAME_ALIGN_MS"),

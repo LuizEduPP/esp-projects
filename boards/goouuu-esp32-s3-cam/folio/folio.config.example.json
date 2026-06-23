@@ -64,6 +64,14 @@
       "topK": 14
     }
   },
+  "perception": {
+    "motionMin": 0.035,
+    "motionForceMs": 300000,
+    "autoEnhance": true,
+    "storeSounds": true,
+    "soundMinEnergy": 0.003,
+    "soundMinConfidence": 0.55
+  },
   "node": {
     "wifiRetryMs": 5000,
     "pushBackoffMaxMs": 30000,

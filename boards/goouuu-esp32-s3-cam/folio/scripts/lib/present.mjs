@@ -1,4 +1,4 @@
-import { formatSceneCaption, sceneFingerprint } from "../llm/scene-caption.mjs";
+import { formatSceneCaption, sceneFingerprint } from "./llm/scene.mjs";
 
 const MS = (n) => n;
 
@@ -22,10 +22,11 @@ function hourLabel(iso) {
   }
 }
 
-/** Turn flat witness items into human-readable groups (conversations, scenes). */
+/** Turn flat witness items into human-readable groups (conversations, scenes, sounds). */
 export function groupTimelineItems(items, opts = {}) {
   const speechGapMs = opts.speechGapMs ?? MS(45_000);
   const sceneGapMs = opts.sceneGapMs ?? MS(8 * 60_000);
+  const soundGapMs = opts.soundGapMs ?? MS(20_000);
   const sorted = [...items].sort((a, b) => a.at.localeCompare(b.at));
   const groups = [];
 
@@ -65,6 +66,35 @@ export function groupTimelineItems(items, opts = {}) {
       continue;
     }
 
+    if (
+      item.type === "audio" &&
+      item.sound_kind &&
+      item.sound_kind !== "speech" &&
+      !item.text
+    ) {
+      const last = groups.at(-1);
+      if (
+        last?.type === "sound" &&
+        last.sound_kind === item.sound_kind &&
+        gapMs(last.at_end, item.at) < soundGapMs
+      ) {
+        last.count += 1;
+        last.at_end = item.at;
+        last.chunk_ids.push(item.chunk_id);
+        continue;
+      }
+      groups.push({
+        type: "sound",
+        at: item.at,
+        at_end: item.at,
+        sound_kind: item.sound_kind,
+        sound_label: item.sound_label || item.sound_kind,
+        chunk_ids: [item.chunk_id],
+        count: 1,
+      });
+      continue;
+    }
+
     if (item.type === "frame") {
       const key = captionKey(item.caption);
       const last = groups.at(-1);
@@ -86,6 +116,7 @@ export function groupTimelineItems(items, opts = {}) {
         caption: item.caption ?? null,
         caption_key: key,
         frame_ids: [item.frame_id],
+        reason: item.reason ?? null,
         count: 1,
         processed: !!item.processed,
       });
@@ -107,6 +138,10 @@ export function timelineWithGroups(items, opts) {
         ? g.lines.length > 1
           ? "Conversa"
           : "Fala"
+        : g.type === "sound"
+          ? g.count > 1
+            ? `${g.sound_label}s`
+            : g.sound_label || "Som"
         : g.type === "scene"
           ? g.count > 1
             ? "Cena contínua"

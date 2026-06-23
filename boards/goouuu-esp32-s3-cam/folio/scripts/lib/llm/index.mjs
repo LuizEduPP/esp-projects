@@ -1,5 +1,5 @@
 export { chatCompletion, chatJson, chatJsonLenient, chatWithSlot, chatJsonWithSlot, chatJsonLenientWithSlot, ModelSlot } from "./client.mjs";
-export { captionFrame, formatSceneCaption } from "./vision.mjs";
+export { captionFrame, formatSceneCaption, sceneFingerprint } from "./scene.mjs";
 export { fetchOpenAiModels, fetchLmModels, rerankDocuments } from "./models-catalog.mjs";
 export {
   chatCompletions,

@@ -482,6 +482,33 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .witness-group img.dim { opacity: 0.45; }
 
+.badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  padding: 2px 7px;
+  border-radius: 3px;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+.badge.motion {
+  color: var(--warn);
+  border: 1px solid #5c4818;
+  background: #2a2210;
+}
+
+.badge.sound {
+  color: var(--accent);
+  border: 1px solid #2a3a5c;
+  background: #141a28;
+}
+
+.witness-group.sound audio {
+  width: 100%;
+  max-width: 280px;
+  margin-top: 6px;
+}
+
 .speech-line {
   margin: 6px 0;
   padding-left: 12px;

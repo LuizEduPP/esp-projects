@@ -74,6 +74,14 @@ const SECTIONS = [
     { path: "frames.jpegQuality", label: "JPEG quality", type: "number" },
     { path: "frames.size", label: "Resolução", type: "select", options: ["QVGA", "VGA", "SVGA", "CIF"] },
   ]},
+  { title: "Percepção", hint: "Movimento, brilho, objetos e sons — sem API externa", fields: [
+    { path: "perception.motionMin", label: "Movimento mín.", type: "number", step: "0.001" },
+    { path: "perception.motionForceMs", label: "Forçar análise (ms)", type: "number" },
+    { path: "perception.autoEnhance", label: "Auto brilho", type: "bool" },
+    { path: "perception.storeSounds", label: "Guardar sons", type: "bool" },
+    { path: "perception.soundMinEnergy", label: "Energia som mín.", type: "number", step: "0.001" },
+    { path: "perception.soundMinConfidence", label: "Confiança som mín.", type: "number", step: "0.05" },
+  ]},
   { title: "Pipeline", fields: [
     { path: "pipeline.enabled", label: "Worker", type: "bool" },
     { path: "pipeline.intervalMs", label: "Worker (ms)", type: "number" },
@@ -221,6 +229,7 @@ function renderWitnessGroups(groups) {
   const list = groups.filter((g) => {
     if (filter === "frames") return g.type === "scene" || g.type === "frame_pending";
     if (filter === "speech") return g.type === "speech";
+    if (filter === "sounds") return g.type === "sound";
     return true;
   });
 
@@ -248,11 +257,24 @@ function renderWitnessGroups(groups) {
       </article>`;
     }
 
+    if (g.type === "sound") {
+      const repeat = g.count > 1 ? `<span class="repeat-note">· ${g.count}×</span>` : "";
+      const cid = g.chunk_ids?.[g.chunk_ids.length - 1];
+      const aud = cid
+        ? `<audio controls preload="none" src="/api/audio/${cid}"></audio>`
+        : "";
+      return `${hourMark}<article class="witness-group sound">
+        <header><span class="badge sound">${esc(g.sound_label || "Som")}</span> · ${humanDayMeta(g.at)}${repeat}</header>
+        ${aud}
+      </article>`;
+    }
+
     if (g.type === "scene") {
       const fid = g.frame_ids[g.frame_ids.length - 1];
       const repeat = g.count > 1 ? `<span class="repeat-note">· ${g.count}× sem mudança</span>` : "";
+      const motion = g.reason === "motion" ? `<span class="badge motion">movimento</span> ` : "";
       return `${hourMark}<article class="witness-group scene">
-        <header>Cena · ${humanDayMeta(g.at)}${repeat}</header>
+        <header>${motion}Cena · ${humanDayMeta(g.at)}${repeat}</header>
         <img src="/api/frame/${fid}" alt="" loading="lazy"/>
         <p>${esc(g.caption)}</p>
       </article>`;

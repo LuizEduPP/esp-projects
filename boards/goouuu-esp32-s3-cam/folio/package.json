@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "dependencies": {
+    "jpeg-js": "^0.4.4"
+  },
   "scripts": {
     "fw:setup": "bash ../../../scripts/fw-setup-linux.sh",
     "fw:build": "bash ../../../scripts/pio.sh run -d firmware",

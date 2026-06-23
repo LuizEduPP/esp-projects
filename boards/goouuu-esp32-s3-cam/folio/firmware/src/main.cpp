@@ -3,6 +3,7 @@
 #include <WebServer.h>
 #include <WiFi.h>
 #include <cmath>
+#include <cstring>
 #include <esp_camera.h>
 
 #include "audio_capture.h"
@@ -10,6 +11,7 @@
 #include "node_config.h"
 #include "pins.h"
 #include "spool_store.h"
+#include "motion_detect.h"
 #include "wifi_connect.h"
 
 #ifndef FOLIO_BRAIN_URL
@@ -32,6 +34,7 @@ static uint32_t gFramePushOk = 0;
 static uint32_t gFramePushFail = 0;
 static unsigned long gBootMs = 0;
 static unsigned long gLastFrameMs = 0;
+static unsigned long gLastMotionCaptureMs = 0;
 static unsigned long gPushBackoffUntilMs = 0;
 static uint32_t gPushBackoffMs = 0;
 static uint32_t gPushBackoffMaxMs = FOLIO_PUSH_BACKOFF_MAX_MS;
@@ -195,7 +198,7 @@ static float pcmEnergy(const int16_t *pcm, size_t count) {
   return static_cast<float>(sqrt(sum / count));
 }
 
-static bool speechOk(const int16_t *pcm, size_t count, uint16_t *outPeak, float *outEnergy) {
+static bool audioWorthCapture(const int16_t *pcm, size_t count, uint16_t *outPeak, float *outEnergy) {
   const uint16_t peak = pcmPeak(pcm, count);
   const float energy = pcmEnergy(pcm, count);
   if (outPeak) {
@@ -204,7 +207,10 @@ static bool speechOk(const int16_t *pcm, size_t count, uint16_t *outPeak, float 
   if (outEnergy) {
     *outEnergy = energy;
   }
-  return energy >= FOLIO_SPEECH_ENERGY && peak > 0 && peak < 30000;
+  if (peak == 0 || peak >= 30000) {
+    return false;
+  }
+  return energy >= FOLIO_SPEECH_ENERGY || energy >= FOLIO_SOUND_ENERGY;
 }
 
 static void captureAudioChunk() {
@@ -219,7 +225,7 @@ static void captureAudioChunk() {
   const uint32_t seq = gAudioSeq++;
   uint16_t peak = 0;
   float energy = 0.f;
-  const bool hasSpeech = speechOk(gPcmBuf, FOLIO_CHUNK_SAMPLES, &peak, &energy);
+  const bool worthCapture = audioWorthCapture(gPcmBuf, FOLIO_CHUNK_SAMPLES, &peak, &energy);
   if (seq < 3 || seq % 30 == 0) {
     Serial.printf("[capture] audio seq=%lu peak=%u energy=%.4f\n", seq, peak, energy);
     if (peak == 0) {
@@ -235,9 +241,9 @@ static void captureAudioChunk() {
 
   static uint8_t lowPeakStreak = 0;
 
-  if (!hasSpeech) {
+  if (!worthCapture) {
     if (seq < 5 || seq % 30 == 0) {
-      Serial.println("[capture] quiet — below speech threshold (not spooled/pushed)");
+      Serial.println("[capture] quiet — below energy threshold (not spooled/pushed)");
     }
     if (!audioDoutStuck() && peak < 50) {
       if (++lowPeakStreak >= 30) {
@@ -265,6 +271,43 @@ static void captureAudioChunk() {
   }
 }
 
+static bool persistFrame(camera_fb_t *fb, const char *reason) {
+  if (!fb) {
+    return false;
+  }
+
+  bool motionChanged = false;
+  const float motion = motionScoreJpeg(fb->buf, fb->len, &motionChanged);
+  const unsigned long now = millis();
+
+  if (strcmp(reason, "interval") == 0 && !motionChanged &&
+      now - gLastMotionCaptureMs < 120000UL) {
+    return false;
+  }
+
+  if (motionChanged) {
+    gLastMotionCaptureMs = now;
+    Serial.printf("[capture] motion=%.2f reason=%s\n", motion, reason);
+  }
+
+  const uint32_t id = gFrameSeq++;
+  char meta[128];
+  snprintf(meta, sizeof(meta), "reason=%s;ts_ms=%lu;motion=%.3f", reason, millis(), motion);
+
+  if (!spoolSaveFrame(id, fb->buf, fb->len, meta)) {
+    Serial.printf("[microsd] FAIL frame id=%lu — card required before push\n", id);
+    return false;
+  }
+  Serial.printf("[microsd] frame id=%lu saved pending=%lu\n", id, spoolPendingFrames());
+
+  if (gWifiOk) {
+    trySendFrame(id, fb->buf, fb->len, meta);
+  }
+
+  gLastFrameMs = millis();
+  return true;
+}
+
 static void captureFrameChunk(const char *reason) {
   if (!gCamOk) {
     return;
@@ -274,24 +317,8 @@ static void captureFrameChunk(const char *reason) {
     Serial.println("[capture] frame failed");
     return;
   }
-
-  const uint32_t id = gFrameSeq++;
-  char meta[128];
-  snprintf(meta, sizeof(meta), "reason=%s;ts_ms=%lu", reason, millis());
-
-  if (!spoolSaveFrame(id, fb->buf, fb->len, meta)) {
-    Serial.printf("[microsd] FAIL frame id=%lu — card required before push\n", id);
-    esp_camera_fb_return(fb);
-    return;
-  }
-  Serial.printf("[microsd] frame id=%lu saved pending=%lu\n", id, spoolPendingFrames());
-
-  if (gWifiOk) {
-    trySendFrame(id, fb->buf, fb->len, meta);
-  }
-
+  persistFrame(fb, reason);
   esp_camera_fb_return(fb);
-  gLastFrameMs = millis();
 }
 
 static void drainSpoolOnce() {
@@ -460,8 +487,21 @@ void loop() {
     captureAudioChunk();
   }
 
-  if (gCamOk && now - gLastFrameMs >= cfg.frameIntervalMs) {
-    captureFrameChunk("interval");
+  if (gCamOk) {
+    const unsigned long frameEvery = cfg.frameIntervalMs;
+    if (now - gLastFrameMs >= frameEvery) {
+      captureFrameChunk("interval");
+    } else {
+      camera_fb_t *fb = captureFrame();
+      if (fb) {
+        bool motionChanged = false;
+        motionScoreJpeg(fb->buf, fb->len, &motionChanged);
+        if (motionChanged) {
+          persistFrame(fb, "motion");
+        }
+        esp_camera_fb_return(fb);
+      }
+    }
   }
 
   drainSpoolOnce();
