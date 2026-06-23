@@ -15,6 +15,7 @@ cd esp-projects
 |-------|---------|-------------|------|
 | GOOUUU ESP32-S3-CAM | [**mini-games**](boards/goouuu-esp32-s3-cam/mini-games/) | 12 arcade games on a 128×64 OLED + 5 buttons | [README](boards/goouuu-esp32-s3-cam/mini-games/README.md) |
 | GOOUUU ESP32-S3-CAM | [**rc-car**](boards/goouuu-esp32-s3-cam/rc-car/) | 4WD AI follower — camera + LM Studio | [README](boards/goouuu-esp32-s3-cam/rc-car/README.md) |
+| GOOUUU ESP32-S3-CAM | [**folio**](boards/goouuu-esp32-s3-cam/folio/) | Passive day witness — mic + camera → digest | [README](boards/goouuu-esp32-s3-cam/folio/README.md) |
 | ESP32-2432S028 (CYD) | [**cyd-gb**](boards/esp32-cyd/cyd-gb/) | Game Boy / GBC emulator — touch controls, SD ROMs, saves ([upstream](https://github.com/artanergin44-collab/cyd-gb)) | [README](boards/esp32-cyd/cyd-gb/README.md) |
 | ESP32-2432S028 (CYD) | [**cyd-arcade**](boards/esp32-cyd/cyd-arcade/) | Casual games (Snake, Flappy, Arkanoid, Tetris) — no SD required | [README](boards/esp32-cyd/cyd-arcade/README.md) |
 
@@ -68,6 +69,7 @@ Shortcuts that delegate to workspace `package.json` files:
 | `yarn setup` | Install udev rules (Linux, all boards) |
 | `yarn mini-games:*` | Build / flash / monitor mini-games |
 | `yarn rc-car:*` | Build / flash / monitor rc-car + AI tools |
+| `yarn folio:*` | Build / flash / brain / digest folio |
 | `yarn cyd-gb:*` | Build / flash / install / monitor cyd-gb |
 | `yarn cyd-arcade:*` | Build / flash / install / monitor cyd-arcade |
 
