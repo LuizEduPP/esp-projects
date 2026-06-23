@@ -1,4 +1,4 @@
-/** SQLite schema — single responsibility: DDL only. */
+/** SQLite schema — archive + entities + daily insights + RAG memory. */
 export const DB_SCHEMA = `
 CREATE TABLE IF NOT EXISTS devices (
   id TEXT PRIMARY KEY,
@@ -9,6 +9,27 @@ CREATE TABLE IF NOT EXISTS devices (
   node_config_applied TEXT
 );
 
+CREATE TABLE IF NOT EXISTS speakers (
+  id TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  profile_json TEXT,
+  embedding_path TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS entities (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  speaker_id TEXT,
+  profile_json TEXT,
+  patterns_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (speaker_id) REFERENCES speakers(id)
+);
+CREATE INDEX IF NOT EXISTS idx_entities_kind ON entities(kind);
+
 CREATE TABLE IF NOT EXISTS audio_chunks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   device_id TEXT NOT NULL,
@@ -17,8 +38,15 @@ CREATE TABLE IF NOT EXISTS audio_chunks (
   path TEXT NOT NULL,
   duration_ms INTEGER NOT NULL DEFAULT 1000,
   energy REAL,
+  device_ms INTEGER,
+  stt_attempts INTEGER NOT NULL DEFAULT 0,
   processed INTEGER NOT NULL DEFAULT 0,
-  FOREIGN KEY (device_id) REFERENCES devices(id)
+  sound_kind TEXT,
+  sound_label TEXT,
+  speaker_id TEXT,
+  speaker_confidence REAL,
+  FOREIGN KEY (device_id) REFERENCES devices(id),
+  FOREIGN KEY (speaker_id) REFERENCES speakers(id)
 );
 CREATE INDEX IF NOT EXISTS idx_audio_chunks_day ON audio_chunks(captured_at);
 CREATE INDEX IF NOT EXISTS idx_audio_chunks_processed ON audio_chunks(processed);
@@ -57,91 +85,14 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_at ON events(at);
 
-CREATE TABLE IF NOT EXISTS speakers (
-  id TEXT PRIMARY KEY,
-  display_name TEXT NOT NULL,
-  profile_json TEXT,
-  embedding_path TEXT,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS episodes (
-  id TEXT PRIMARY KEY,
-  day TEXT NOT NULL,
-  started_at TEXT NOT NULL,
-  ended_at TEXT NOT NULL,
-  label TEXT,
-  summary_json TEXT,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_episodes_day ON episodes(day);
-
-CREATE TABLE IF NOT EXISTS episode_utterances (
-  episode_id TEXT NOT NULL,
-  utterance_id INTEGER NOT NULL,
-  PRIMARY KEY (episode_id, utterance_id),
-  FOREIGN KEY (episode_id) REFERENCES episodes(id),
-  FOREIGN KEY (utterance_id) REFERENCES utterances(id)
-);
-
-CREATE TABLE IF NOT EXISTS episode_frames (
-  episode_id TEXT NOT NULL,
-  frame_id INTEGER NOT NULL,
-  PRIMARY KEY (episode_id, frame_id),
-  FOREIGN KEY (episode_id) REFERENCES episodes(id),
-  FOREIGN KEY (frame_id) REFERENCES frames(id)
-);
-
-CREATE TABLE IF NOT EXISTS graph_nodes (
-  id TEXT PRIMARY KEY,
-  day TEXT NOT NULL,
-  kind TEXT NOT NULL,
-  label TEXT NOT NULL,
-  payload_json TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_graph_nodes_day ON graph_nodes(day);
-
-CREATE TABLE IF NOT EXISTS graph_edges (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  day TEXT NOT NULL,
-  from_node TEXT NOT NULL,
-  to_node TEXT NOT NULL,
-  relation TEXT NOT NULL,
-  evidence_json TEXT,
-  confidence REAL,
-  FOREIGN KEY (from_node) REFERENCES graph_nodes(id),
-  FOREIGN KEY (to_node) REFERENCES graph_nodes(id)
-);
-CREATE INDEX IF NOT EXISTS idx_graph_edges_day ON graph_edges(day);
-
-CREATE TABLE IF NOT EXISTS digests (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  day TEXT NOT NULL UNIQUE,
-  pass_a_json TEXT,
-  pass_b_json TEXT,
-  pass_c_json TEXT,
-  prose TEXT,
-  evidence_json TEXT,
-  model_fast TEXT,
-  model_deep TEXT,
+CREATE TABLE IF NOT EXISTS day_insights (
+  day TEXT PRIMARY KEY,
+  stats_json TEXT NOT NULL,
+  insights_json TEXT NOT NULL,
+  entities_json TEXT,
+  model TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS profile_facts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  key TEXT NOT NULL,
-  value TEXT NOT NULL,
-  source_day TEXT,
-  confidence REAL,
-  updated_at TEXT NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_facts_key ON profile_facts(key);
-
-CREATE TABLE IF NOT EXISTS day_rollups (
-  day TEXT PRIMARY KEY,
-  compact_json TEXT NOT NULL,
-  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS memory_chunks (
@@ -151,9 +102,23 @@ CREATE TABLE IF NOT EXISTS memory_chunks (
   text TEXT NOT NULL,
   evidence_json TEXT,
   embedding_json TEXT,
+  entity_id TEXT,
   weight REAL NOT NULL DEFAULT 1.0,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (entity_id) REFERENCES entities(id)
 );
 CREATE INDEX IF NOT EXISTS idx_memory_chunks_day ON memory_chunks(day);
 CREATE INDEX IF NOT EXISTS idx_memory_chunks_kind ON memory_chunks(kind);
 `;
+
+/** Legacy tables removed in migrateSchemaV2. */
+export const LEGACY_TABLES = [
+  "episode_frames",
+  "episode_utterances",
+  "episodes",
+  "graph_edges",
+  "graph_nodes",
+  "digests",
+  "day_rollups",
+  "profile_facts",
+];

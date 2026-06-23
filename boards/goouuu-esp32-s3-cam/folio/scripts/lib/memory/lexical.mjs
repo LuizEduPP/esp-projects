@@ -1,14 +1,19 @@
-import { LEXICAL_MIN_TOKEN_LENGTH, lexicalStopWordSet } from "../locale/index.mjs";
+const LEXICAL_MIN_TOKEN_LENGTH = 3;
+
+const STOP_PT = new Set([
+  "a", "o", "e", "de", "da", "do", "das", "dos", "em", "no", "na", "nos", "nas",
+  "um", "uma", "para", "por", "com", "sem", "que", "se", "as", "os",
+]);
+
+const STOP_EN = new Set(["the", "and", "or", "of", "to", "in", "on", "at", "is", "it"]);
 
 export function tokenize(text) {
-  const stop = lexicalStopWordSet();
   return String(text ?? "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
-    .replace(/[^a-z0-9à-ú]+/gi, " ")
-    .split(/\s+/)
-    .filter((t) => t.length >= LEXICAL_MIN_TOKEN_LENGTH && !stop.has(t));
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= LEXICAL_MIN_TOKEN_LENGTH && !STOP_PT.has(t) && !STOP_EN.has(t));
 }
 
 export function termVector(text) {
@@ -20,64 +25,57 @@ export function termVector(text) {
 }
 
 export function cosineSimilarity(a, b) {
-  if (!a.size || !b.size) {
-    return 0;
-  }
   let dot = 0;
-  let normA = 0;
-  let normB = 0;
+  let na = 0;
+  let nb = 0;
   for (const v of a.values()) {
-    normA += v * v;
+    na += v * v;
   }
   for (const v of b.values()) {
-    normB += v * v;
+    nb += v * v;
   }
-  const smaller = a.size < b.size ? a : b;
-  const larger = a.size < b.size ? b : a;
-  for (const [k, v] of smaller) {
-    const w = larger.get(k);
-    if (w) {
-      dot += v * w;
-    }
+  const keys = a.size < b.size ? a.keys() : b.keys();
+  for (const k of keys) {
+    dot += (a.get(k) ?? 0) * (b.get(k) ?? 0);
   }
-  if (!normA || !normB) {
+  if (!na || !nb) {
     return 0;
   }
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
 export function cosineDense(a, b) {
-  if (!a?.length || !b?.length || a.length !== b.length) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
     return 0;
   }
   let dot = 0;
-  let normA = 0;
-  let normB = 0;
+  let na = 0;
+  let nb = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
   }
-  if (!normA || !normB) {
+  if (!na || !nb) {
     return 0;
   }
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
-export function vectorFromJson(raw) {
-  if (!raw) {
-    return null;
+export function vectorFromJson(json) {
+  if (!json) {
+    return new Map();
   }
   try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && typeof parsed[0] === "number") {
+    const parsed = JSON.parse(json);
+    if (Array.isArray(parsed)) {
       return parsed;
     }
-    if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
-      return new Map(parsed);
+    if (Array.isArray(parsed?.vector)) {
+      return parsed.kind === "lexical" ? new Map(parsed.vector) : parsed.vector;
     }
-    return null;
   } catch {
-    return null;
+    /* ignore */
   }
+  return new Map();
 }

@@ -21,6 +21,7 @@
     "chunkMs": 1000,
     "sampleRate": 16000,
     "speechEnergyThreshold": 0.008,
+    "ambientEnergyThreshold": 0.002,
     "whisperBin": "whisper",
     "whisperModel": "base",
     "whisperDevice": "cuda",
@@ -40,20 +41,10 @@
     "batchMaxHigh": 12,
     "batchMaxMedium": 8
   },
-  "digest": {
+  "insights": {
     "auto": true,
     "intervalMs": 300000,
-    "passDTemperature": 0.42
-  },
-  "episodes": {
-    "gapMin": 12,
-    "frameAlignMs": 60000,
-    "graphEdge": {
-      "themed": 0.8,
-      "decided": 0.7,
-      "open": 0.75,
-      "rejected": 0.9
-    }
+    "temperature": 0.25
   },
   "memory": {
     "enabled": true,

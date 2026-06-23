@@ -1,14 +1,14 @@
-# Folio — passive day witness
+# Folio — passive environment archive
 
-The ESP32 **does not respond**. It listens and sees; the PC processes, stores, and writes an **interpreted chronicle** of your day.
+The ESP32 **does not respond**. It listens and sees; the PC stores **everything** in one SQLite archive (`~/.folio/folio.db`): speech, ambient sounds, frames, who was present — multiple people, dogs, doors, the room.
 
 ## Stack
 
 | Layer | Role |
 |-------|------|
 | **folio-node** (ESP32-S3-CAM + INMP441) | Push 1 s audio + JPEG every 60 s (USB power) |
-| **folio-brain** (PC, Node 22+) | Ingest, presence from camera/audio, Whisper, OpenAI-compatible API, `node:sqlite` |
-| **Digest A→D** | Facts → interpretation → critique → prose |
+| **folio-brain** (PC, Node 22+) | Ingest, Whisper, sound classify, speaker ID, vision captions, RAG memory, daily insights |
+| **Archive UI** | Insights (dia) + witness timeline (frames, fala, sons) |
 
 ## Hardware
 
@@ -66,9 +66,9 @@ Media API (same host): `GET /api/frame/:id`, `GET /api/audio/:id`.
 
 ## Firmware configuration
 
-Edit `firmware/platformio.ini`:
+Edit `firmware/platformio.ini` or copy `firmware/platformio.local.ini.example` → `platformio.local.ini` (gitignored):
 
-- `WIFI_SSID` / `WIFI_PASS`
+- **WiFi** — ESP scans and connects to the **strongest open network** (no password). Optional `WIFI_SSID` / `WIFI_PASS` fallback if no open AP is found.
 - `FOLIO_BRAIN_URL` — PC IP, e.g. `http://192.168.1.100:8770`
 - `FOLIO_DEVICE_ID` — stable node id
 
@@ -76,7 +76,11 @@ Edit `firmware/platformio.ini`:
 
 ```bash
 # From monorepo root
-yarn folio:brain          # terminal 1 — ingest, Whisper, digest, UI (all automatic)
+yarn brain              # ingest + worker + insights auto (~5 min)
+yarn process            # força fila Whisper/captions
+yarn insights           # força insights do dia
+yarn enroll luiz Luiz --pcm sample.pcm   # speaker ID
+yarn memory:reindex     # rebuild RAG index
 
 yarn folio:flash          # terminal 2 — flash ESP (SD card required for offline spool)
 yarn folio:monitor        # node logs

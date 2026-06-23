@@ -12,8 +12,11 @@ import {
   pendingCounts,
   pendingFrames,
   pruneExpiredPcm,
+  updateAudioClassification,
 } from "../../db/index.mjs";
 import { captionFrame } from "../../llm/index.mjs";
+import { identifySpeaker } from "../../speaker/identify.mjs";
+import { classifySoundChunk } from "../../sound/classify.mjs";
 import { isSpeechChunk, transcribeWav } from "../../stt/index.mjs";
 import { writeWav } from "../../util/audio.mjs";
 
@@ -64,15 +67,16 @@ export function pruneStaleAudio(db = openDb()) {
          OR (processed = 1 AND path IS NOT NULL AND path != '')
        )`,
     )
-    .all(CFG.speechEnergyThreshold);
+    .all(CFG.ambientEnergyThreshold);
 
   const orphan = db
     .prepare(
       `SELECT c.id, c.path FROM audio_chunks c
        LEFT JOIN utterances u ON u.chunk_id = c.id
-       WHERE c.processed = 1 AND u.id IS NULL AND c.path != ''`,
+       WHERE c.processed = 1 AND u.id IS NULL AND c.path != ''
+         AND c.energy >= ?`,
     )
-    .all();
+    .all(CFG.speechEnergyThreshold);
 
   const seen = new Set();
   const rows = [];
@@ -130,11 +134,16 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
     }
 
     if (!isSpeechChunk(chunk.energy ?? 0)) {
-      console.log(
-        `[whisper] chunk=${chunk.id} skip silence energy=${(chunk.energy ?? 0).toFixed(4)}`,
-      );
-      discardAudioChunk(db, chunk);
-      results.push({ id: chunk.id, skipped: "silence" });
+      const pcm = readFileSync(chunk.path);
+      const sound = classifySoundChunk(pcm, chunk.energy ?? 0, chunk.duration_ms ?? CFG.audioChunkMs);
+      updateAudioClassification(db, chunk.id, {
+        sound_kind: sound.kind,
+        sound_label: sound.label,
+        speaker_id: null,
+        speaker_confidence: null,
+      });
+      markAudioProcessed(db, chunk.id);
+      results.push({ id: chunk.id, skipped: "ambient", sound: sound.kind });
       continue;
     }
 
@@ -143,17 +152,28 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
     writeWav(wavPath, pcm, CFG.audioSampleRate);
 
     try {
+      const speaker = identifySpeaker(db, pcm);
       const stt = await transcribeWav(wavPath, { chunkId: chunk.id });
       if (stt.text) {
         insertUtterance(db, {
           chunk_id: chunk.id,
-          speaker_id: null,
+          speaker_id: speaker.speaker_id,
           started_at: chunk.captured_at,
           ended_at: chunk.captured_at,
           text: stt.text,
           confidence: stt.confidence,
         });
-        results.push({ id: chunk.id, text: stt.text.slice(0, 80) });
+        updateAudioClassification(db, chunk.id, {
+          sound_kind: "speech",
+          sound_label: "fala",
+          speaker_id: speaker.speaker_id,
+          speaker_confidence: speaker.confidence,
+        });
+        results.push({
+          id: chunk.id,
+          text: stt.text.slice(0, 80),
+          speaker: speaker.speaker_id,
+        });
         markAudioProcessed(db, chunk.id);
       } else {
         console.log(`[whisper] chunk=${chunk.id} discard — STT returned no text`);

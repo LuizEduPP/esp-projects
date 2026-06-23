@@ -4,14 +4,12 @@ let day = new URLSearchParams(location.search).get("day") || new Date().toISOStr
 let filter = "all";
 let cfgCache = null;
 let openAiModels = { chat: [], embed: [], rerank: [], ok: false };
-let witnessIndex = new Map();
+let speakerNames = {};
 
 const PHASE_LABEL = {
-  episodes: "Episódios",
-  pass_a: "Pass A · fatos",
-  pass_b: "Pass B · interpretação",
-  pass_c: "Pass C · crítica",
-  pass_d: "Pass D · crônica",
+  index: "Indexando memória",
+  rag: "RAG",
+  insights: "Gerando insights",
   error: "Erro",
   done: "Pronto",
 };
@@ -26,48 +24,36 @@ const WHISPER_LANG_OPTS = [
 const SECTIONS = [
   { title: "Geral", fields: [
     { path: "locale", label: "Idioma", type: "select", options: LOCALE_OPTS },
-    { path: "port", label: "Porta HTTP", type: "number", hint: "Reinicia brain" },
-    { path: "dataDir", label: "Pasta de dados", type: "text", hint: "Reinicia brain" },
+    { path: "port", label: "Porta HTTP", type: "number" },
+    { path: "dataDir", label: "Pasta de dados", type: "text" },
   ]},
   { title: "OpenAI API", fields: [
-    { path: "openai.baseUrl", label: "Base URL", type: "text", hint: "ex.: http://127.0.0.1:1234/v1" },
-    { path: "openai.apiKey", label: "API key", type: "password", hint: "opcional (servidor local)" },
-    { path: "openai.model", label: "Modelo rápido", type: "lmSelect", pool: "chat" },
-    { path: "openai.modelDeep", label: "Modelo deep", type: "lmSelect", pool: "chat", emptyOption: "(igual ao rápido)" },
+    { path: "openai.baseUrl", label: "Base URL", type: "text" },
+    { path: "openai.apiKey", label: "API key", type: "password" },
+    { path: "openai.model", label: "Modelo visão", type: "lmSelect", pool: "chat" },
+    { path: "openai.modelDeep", label: "Modelo insights", type: "lmSelect", pool: "chat", emptyOption: "(igual visão)" },
   ]},
   { title: "Áudio", fields: [
     { path: "audio.chunkMs", label: "Chunk (ms)", type: "number" },
-    { path: "audio.sampleRate", label: "Sample rate", type: "number" },
     { path: "audio.speechEnergyThreshold", label: "Limiar fala", type: "number", step: "0.001" },
+    { path: "audio.ambientEnergyThreshold", label: "Limiar som", type: "number", step: "0.001" },
     { path: "audio.retentionDays", label: "Retenção PCM (dias)", type: "number" },
-    { path: "audio.pipelineBatch", label: "Batch Whisper", type: "number" },
   ]},
   { title: "Whisper", fields: [
-    { path: "audio.whisperBin", label: "Binário", type: "text" },
     { path: "audio.whisperModel", label: "Modelo", type: "select", options: WHISPER_MODELS },
     { path: "audio.whisperDevice", label: "Device", type: "select", options: ["cuda", "auto", "cpu", "mps"] },
-    { path: "audio.whisperTimeoutMs", label: "Timeout (ms)", type: "number" },
-    { path: "audio.whisperLanguage", label: "Idioma STT", type: "select", options: WHISPER_LANG_OPTS.map((o) => o.v), labels: WHISPER_LANG_OPTS },
   ]},
   { title: "Câmera", fields: [
     { path: "frames.captureIntervalMs", label: "Captura (ms)", type: "number" },
     { path: "frames.captionIntervalMs", label: "Caption (ms)", type: "number" },
-    { path: "frames.jpegQuality", label: "JPEG quality", type: "number" },
-    { path: "frames.size", label: "Resolução", type: "select", options: ["CIF", "QVGA", "VGA", "SVGA", "XGA"] },
   ]},
-  { title: "Pipeline & digest", fields: [
-    { path: "pipeline.enabled", label: "Pipeline", type: "bool" },
+  { title: "Pipeline & insights", fields: [
+    { path: "pipeline.enabled", label: "Worker", type: "bool" },
     { path: "pipeline.intervalMs", label: "Worker (ms)", type: "number" },
-    { path: "digest.auto", label: "Digest auto", type: "bool" },
-    { path: "digest.intervalMs", label: "Digest (ms)", type: "number" },
-    { path: "digest.passDTemperature", label: "Pass D temp", type: "number", step: "0.01" },
-  ]},
-  { title: "Memória", fields: [
-    { path: "memory.enabled", label: "RAG ativa", type: "bool" },
-    { path: "memory.lookbackDays", label: "Lookback", type: "number" },
+    { path: "insights.auto", label: "Insights auto", type: "bool" },
+    { path: "insights.intervalMs", label: "Insights (ms)", type: "number" },
+    { path: "memory.enabled", label: "Memória RAG", type: "bool" },
     { path: "memory.useEmbeddings", label: "Embeddings", type: "bool" },
-    { path: "memory.rerank.enabled", label: "Rerank", type: "bool" },
-    { path: "memory.rerank.model", label: "Modelo rerank", type: "lmSelect", pool: "rerank", emptyOption: "(escolher…)" },
   ]},
 ];
 
@@ -98,14 +84,10 @@ function toast(msg) {
 
 function time(iso) {
   try {
-    return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   } catch {
-    return iso?.slice(11, 19) || "";
+    return iso?.slice(11, 16) || "";
   }
-}
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function setDay(d) {
@@ -140,131 +122,61 @@ function closeDrawer() {
   $("drawer").setAttribute("aria-hidden", "true");
 }
 
-function scrollToEvidence(id) {
-  const el = witnessIndex.get(id);
-  if (!el) return;
-  el.classList.add("highlight");
-  el.scrollIntoView({ behavior: "smooth", block: "center" });
-  setTimeout(() => el.classList.remove("highlight"), 2400);
-}
-
-function linkEvidenceIds(text) {
-  return esc(text).replace(/\b(utt:\d+|frm:\d+)\b/g, (m) =>
-    `<a href="#" data-evidence="${m}">${m}</a>`);
-}
-
-function renderChronicleHtml(prose) {
-  const raw = String(prose ?? "").trim();
-  if (!raw) return { title: "", body: "" };
-
-  const lines = raw.split("\n");
-  let title = "";
-  let rest = raw;
-
-  if (/^folio\s·/i.test(lines[0]?.trim())) {
-    title = lines[0].trim();
-    rest = lines.slice(1).join("\n").trim();
-  }
-
-  const evidenceMatch = rest.match(/\n*(Evid[eê]ncia|Evidence|Preuves|Belege)\s*:\s*(.+)$/is);
-  let bodyText = rest;
-  let evidenceHtml = "";
-
-  if (evidenceMatch) {
-    bodyText = rest.slice(0, evidenceMatch.index).trim();
-    const label = evidenceMatch[1];
-    const ids = evidenceMatch[2].trim();
-    evidenceHtml = `<p class="evidence">${esc(label)}: ${linkEvidenceIds(ids)}</p>`;
-  }
-
-  const paragraphs = bodyText.split(/\n{2,}/).filter(Boolean)
-    .map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`)
-    .join("");
-
-  return { title, body: paragraphs + evidenceHtml };
-}
-
-function showDigestAlert(msg, kind = "warn") {
-  const el = $("digest-alert");
-  if (!msg) {
-    el.hidden = true;
-    el.textContent = "";
-    return;
-  }
-  el.hidden = false;
-  el.textContent = msg;
-  el.className = `digest-alert${kind === "error" ? " error" : ""}`;
-}
-
-function renderChronicle(d, st, items) {
-  const isToday = day === todayStr();
-  const mins = Math.max(1, Math.round((st.interval_ms || 300000) / 60000));
-  const hasWitness = (st.stats && (st.stats.frames + st.stats.utterances + st.stats.speech > 0))
-    || items.some((i) => i.type === "frame" || (i.type === "audio" && i.speech));
-
-  const rt = st.runtime || {};
-  const busy = rt.busy || st.run;
-
+function renderInsights(ins) {
+  const rt = ins.runtime || {};
+  const alert = $("insights-alert");
   if (rt.error) {
-    showDigestAlert(`Digest falhou: ${rt.error}`, "error");
-  } else if (busy) {
-    showDigestAlert(`Gerando crônica — ${PHASE_LABEL[rt.phase] || rt.phase || "…"}`);
+    alert.hidden = false;
+    alert.textContent = `Insights falhou: ${rt.error}`;
+    alert.className = "digest-alert error";
+  } else if (rt.busy) {
+    alert.hidden = false;
+    alert.textContent = PHASE_LABEL[rt.phase] || "Processando…";
+    alert.className = "digest-alert";
   } else {
-    showDigestAlert(null);
+    alert.hidden = true;
   }
 
-  $("chronicle-title").textContent = "";
-  $("chronicle-body").className = "chronicle-body";
+  const mins = Math.round((ins.status?.interval_ms || 300000) / 60000);
+  $("insights-meta").textContent = ins.updated_at
+    ? `Atualizado ${time(ins.updated_at)} · auto ~${mins} min`
+    : (ins.status?.needed ? "Aguardando witness / pipeline" : "Sem witness neste dia");
 
-  const prose = d.prose?.trim();
-  const draft = d.draft?.trim();
-  const displayText = prose || (draft ? `Folio · ${day}\n\n${draft}` : null);
-  const isDraft = !prose && Boolean(draft);
+  const st = ins.stats || {};
+  $("insights-stats").innerHTML = [
+    ["Frames", st.frames ?? 0],
+    ["Falas", st.utterances ?? 0],
+    ["Sons", Object.values(st.sounds || {}).reduce((a, b) => a + b, 0)],
+  ].map(([k, v]) => `<span class="chip">${k} ${v}</span>`).join("");
 
-  if (displayText) {
-    const { title, body } = renderChronicleHtml(displayText);
-    $("chronicle-title").textContent = title || `Folio · ${day}`;
-    $("chronicle-body").innerHTML = body;
-    $("chronicle-body").classList.toggle("is-draft", isDraft || d.is_draft);
-    $("chronicle-body").querySelectorAll("[data-evidence]").forEach((a) => {
-      a.onclick = (e) => {
-        e.preventDefault();
-        scrollToEvidence(a.dataset.evidence);
-      };
-    });
-    $("chronicle-meta").textContent = isDraft
-      ? `Rascunho · ${busy ? PHASE_LABEL[rt.phase] || "processando" : time(d.updated_at) || "agora"}`
-      : (isToday
-        ? `Crônica · ${time(d.updated_at)} · refresh ~${mins} min`
-        : `Arquivo · ${time(d.updated_at)}`);
-    return;
-  }
+  const entities = ins.entities || [];
+  $("insights-entities").innerHTML = entities.length
+    ? entities.map((e) => {
+      let pat = {};
+      try { pat = JSON.parse(e.patterns_json || "{}"); } catch { /* */ }
+      return `<article class="entity-card"><strong>${esc(e.display_name)}</strong>
+        <span class="muted">${esc(e.kind)}</span>
+        <p class="muted">${esc(pat.notes || pat.utterances_today ? `${pat.utterances_today || 0} falas` : pat.barks_today ? `${pat.barks_today} latidos` : "")}</p></article>`;
+    }).join("")
+    : '<p class="muted">Nenhuma entidade detectada ainda — faça enroll de voz.</p>';
 
-  $("chronicle-body").className = "chronicle-body chronicle-empty";
-  $("chronicle-title").textContent = isToday ? "Hoje" : day;
+  const insights = ins.insights || [];
+  $("insights-list").innerHTML = insights.length
+    ? insights.map((t) => `<li>${esc(t)}</li>`).join("")
+    : "<li class='muted'>Insights aparecem quando há witness processado.</li>";
 
-  if (!hasWitness) {
-    $("chronicle-body").textContent = isToday
-      ? "Aguardando witness do ESP — mic e câmera passivos."
-      : "Nenhuma crônica para este dia.";
-    $("chronicle-meta").textContent = isToday ? "Testemunha passiva" : "";
-    return;
-  }
-
-  if (busy) {
-    $("chronicle-body").textContent = `Interpretando o dia (${PHASE_LABEL[rt.phase] || "digest"})…`;
-  } else {
-    $("chronicle-body").textContent = `Witness ok — crônica automática a cada ~${mins} min.`;
-  }
-  $("chronicle-meta").textContent = busy ? "Digest em execução" : `Automático · ~${mins} min`;
+  const patterns = ins.patterns || [];
+  $("patterns-list").innerHTML = patterns.length
+    ? patterns.map((t) => `<li>${esc(t)}</li>`).join("")
+    : "<li class='muted'>—</li>";
 }
 
 function renderWitness(items) {
-  witnessIndex = new Map();
   const list = items.filter((i) => {
     if (filter === "frames") return i.type === "frame";
     if (filter === "speech") return i.type === "audio" && i.speech;
-    return i.type === "frame" || (i.type === "audio" && i.speech);
+    if (filter === "sound") return i.type === "audio" && !i.speech;
+    return i.type === "frame" || i.type === "audio";
   }).sort((a, b) => b.at.localeCompare(a.at));
 
   if (!list.length) {
@@ -274,95 +186,80 @@ function renderWitness(items) {
 
   $("witness-feed").innerHTML = list.map((i) => {
     if (i.type === "frame") {
-      const ev = `frm:${i.frame_id}`;
-      return `<article class="witness-item" data-ev="${ev}" id="ev-${ev}">
-        <time class="witness-time">${time(i.at)}</time>
-        <div><div class="witness-kind">Frame</div>
-        <img src="/api/frame/${i.frame_id}" alt="" loading="lazy"/>
+      return `<article class="witness-item"><time class="witness-time">${time(i.at)}</time>
+        <div><div class="witness-kind">Frame</div><img src="/api/frame/${i.frame_id}" alt="" loading="lazy"/>
         <p class="muted">${i.caption ? esc(i.caption) : "Aguardando caption…"}</p></div></article>`;
     }
-    const ev = i.utterance_id ? `utt:${i.utterance_id}` : `aud:${i.chunk_id}`;
+    const kind = i.speech ? "Fala" : (i.sound_label || "Som");
+    const cls = i.speech ? "speech" : "sound";
+    const who = i.speaker_id ? (speakerNames[i.speaker_id] || i.speaker_id) : null;
     const txt = i.text
-      ? `<blockquote>${esc(i.text)}</blockquote>`
-      : (i.processed ? '<p class="muted">Sem fala</p>' : '<p class="muted">Fila Whisper…</p>');
-    const aud = i.has_pcm
-      ? `<audio controls preload="none" src="/api/audio/${i.chunk_id}"></audio>`
-      : '<p class="muted">PCM expirado</p>';
-    return `<article class="witness-item" data-ev="${ev}" id="ev-${ev}">
-      <time class="witness-time">${time(i.at)}</time>
-      <div><div class="witness-kind speech">Fala</div>${aud}${txt}</div></article>`;
+      ? `<blockquote>${who ? `<strong>${esc(who)}:</strong> ` : ""}${esc(i.text)}</blockquote>`
+      : (i.processed ? `<p class="muted">${esc(i.sound_label || "Sem transcrição")}</p>` : '<p class="muted">Fila…</p>');
+    const aud = i.has_pcm ? `<audio controls preload="none" src="/api/audio/${i.chunk_id}"></audio>` : "";
+    return `<article class="witness-item"><time class="witness-time">${time(i.at)}</time>
+      <div><div class="witness-kind ${cls}">${esc(kind)}</div>${aud}${txt}</div></article>`;
   }).join("");
 
-  $("witness-feed").querySelectorAll(".witness-item").forEach((el) => {
-    witnessIndex.set(el.dataset.ev, el);
-    const utt = el.dataset.ev.match(/^utt:(\d+)$/);
-    if (utt) witnessIndex.set(`utt:${utt[1]}`, el);
-  });
-
   $("witness-feed").querySelectorAll("img").forEach((img) => {
-    img.onclick = () => {
-      $("lb-img").src = img.src;
-      $("lightbox").classList.add("open");
-    };
+    img.onclick = () => { $("lb-img").src = img.src; $("lightbox").classList.add("open"); };
   });
 }
 
-async function loadStatus(st = {}) {
+async function loadStatus(ins = {}) {
   const [q, h] = await Promise.all([
     fetch("/api/queue").then((r) => r.json()),
     fetch("/api/health").then((r) => r.json()),
   ]);
   const pa = q.pending?.audio || 0;
   const pf = q.pending?.frames || 0;
-  const rt = st.runtime || {};
-  const live = rt.busy ? `<span class="chip live">${PHASE_LABEL[rt.phase] || "digest"}</span>` : "";
+  const rt = ins.runtime || {};
+  const live = rt.busy ? `<span class="chip live">${PHASE_LABEL[rt.phase] || "insights"}</span>` : "";
   $("status-chips").innerHTML =
     live +
     (pa + pf ? `<span class="chip warn">${pa} áudio · ${pf} frames</span>` : "") +
-    `<span class="chip ok">${h.memory_chunks ?? 0} mem</span>` +
-    `<span class="chip">:${location.port || "__PORT__"}</span>`;
+    `<span class="chip ok">${h.memory_chunks ?? 0} mem</span>`;
 }
 
 async function loadDay() {
-  const [tl, d, st] = await Promise.all([
+  const [tl, ins, ent] = await Promise.all([
     fetch(`/api/timeline?day=${day}`).then((r) => r.json()),
-    fetch(`/api/digest?day=${day}`).then((r) => r.json()).catch(() => ({})),
-    fetch(`/api/digest/status?day=${day}`).then((r) => r.json()).catch(() => ({})),
+    fetch(`/api/insights?day=${day}`).then((r) => r.json()).catch(() => ({})),
+    fetch("/api/entities").then((r) => r.json()).catch(() => ({ entities: [] })),
   ]);
+
+  speakerNames = {};
+  for (const e of ent.entities || []) {
+    if (e.speaker_id) speakerNames[e.speaker_id] = e.display_name;
+  }
+
   const items = tl.items || [];
   const fr = items.filter((i) => i.type === "frame").length;
   const sp = items.filter((i) => i.type === "audio" && i.speech).length;
-  $("witness-stats").textContent = `${fr} frames · ${sp} fala`;
-  renderChronicle(d, st, items);
+  const snd = items.filter((i) => i.type === "audio" && !i.speech).length;
+  $("witness-stats").textContent = `${fr} frames · ${sp} fala · ${snd} sons`;
+
+  renderInsights(ins);
   renderWitness(items);
-  loadStatus(st);
+  loadStatus(ins);
 }
 
 async function loadSystem() {
-  const [h, dev, mem] = await Promise.all([
+  const [h, dev] = await Promise.all([
     fetch("/api/health").then((r) => r.json()),
     fetch("/api/devices").then((r) => r.json()),
-    fetch(`/api/memory?day=${day}`).then((r) => r.json()),
   ]);
   $("health-grid").innerHTML = [
     ["Dados", h.data_dir], ["Pipeline", h.pipeline ? "ativo" : "pausado"],
-    ["Fila áudio", h.pending?.audio ?? 0], ["Fila frames", h.pending?.frames ?? 0],
-    ["Memória", h.memory_chunks ?? 0], ["Porta", h.port],
+    ["Insights", h.insights ? "auto" : "manual"], ["Memória", h.memory_chunks ?? 0],
+    ["Fila", `${h.pending?.audio ?? 0} / ${h.pending?.frames ?? 0}`],
   ].map(([k, v]) => `<div class="field"><label>${k}</label><div>${esc(v)}</div></div>`).join("");
 
   $("devices").innerHTML = (dev.devices || []).length
-    ? dev.devices.map((d) => {
-      const ok = d.node_config_applied === dev.brain_config_version;
-      return `<div class="${ok ? "ok" : "bad"}"><strong>${esc(d.id)}</strong> · ${d.last_seen_at ? time(d.last_seen_at) : "—"} ${ok ? "✓" : "≠ config"}</div>`;
-    }).join("")
-    : '<p class="muted">Nenhum ESP — envie áudio/frame.</p>';
+    ? dev.devices.map((d) => `<div><strong>${esc(d.id)}</strong> · ${d.last_seen_at ? time(d.last_seen_at) : "—"}</div>`).join("")
+    : '<p class="muted">Nenhum ESP.</p>';
 
-  $("mem-stats").textContent = `${mem.chunks ?? 0} chunks`;
-  if (mem.hits?.length) {
-    $("mem-hits").innerHTML = mem.hits.map((h) =>
-      `<div class="mem-hit"><strong>${esc(h.day)}</strong> ${esc(h.kind)} · ${(h.rerank_score ?? h.score)?.toFixed?.(2)}<br>${esc(h.text)}</div>`,
-    ).join("");
-  }
+  $("mem-stats").textContent = `${h.memory_chunks ?? 0} chunks indexados`;
 }
 
 function buildConfigForm() {
@@ -392,25 +289,21 @@ function fillLmSelects() {
   document.querySelectorAll("[data-lm-pool]").forEach((sel) => {
     const pool = sel.dataset.lmPool;
     const cur = sel.value;
-    const list = openAiModels[pool]?.length ? openAiModels[pool]
-      : (pool === "rerank" ? (openAiModels.all || []).filter((id) => /rerank/i.test(id)) : []);
+    const list = openAiModels[pool] || [];
     let html = sel.dataset.empty ? `<option value="">${sel.dataset.empty}</option>` : "";
     html += list.map((id) => `<option value="${esc(id)}">${esc(id)}</option>`).join("");
-    if (!list.length) html += '<option value="" disabled>(OpenAI API offline)</option>';
+    if (!list.length) html += '<option value="" disabled>(offline)</option>';
     sel.innerHTML = html;
     if (cur) sel.value = cur;
   });
 }
 
 async function refreshOpenAiModels() {
-  $("cfg-openai-status").textContent = "Conectando…";
   const r = await fetch("/api/openai/models").then((x) => x.json());
   if (r.ok) {
     openAiModels = r;
-    $("cfg-openai-status").textContent = `${r.chat.length} chat · ${r.embed.length} embed · ${r.baseUrl || ""}`;
+    $("cfg-openai-status").textContent = `${r.chat.length} modelos`;
     fillLmSelects();
-  } else {
-    $("cfg-openai-status").textContent = `Erro: ${r.error}`;
   }
 }
 
@@ -429,10 +322,7 @@ function applyConfigToForm(cfg) {
 function loadConfigForm() {
   fetch("/api/config").then((r) => r.json()).then(async (cfg) => {
     cfgCache = cfg;
-    $("cfg-info").textContent = `${cfg.configPath || "defaults"} · ${cfg.version || "?"}`;
-    const rt = cfg.runtime || {};
-    const m = rt.models || {};
-    $("cfg-runtime").textContent = `Whisper ${rt.whisperDeviceEffective} · fast=${m.fast} · deep=${m.deep}`;
+    $("cfg-info").textContent = cfg.configPath || "defaults";
     applyConfigToForm(cfg);
     await refreshOpenAiModels();
     applyConfigToForm(cfg);
@@ -456,46 +346,33 @@ document.querySelectorAll(".filter").forEach((btn) => {
 $("btn-drawer").onclick = () => openDrawer("system");
 $("drawer-close").onclick = closeDrawer;
 $("overlay").onclick = closeDrawer;
-
-document.querySelectorAll(".drawer-tab").forEach((btn) => {
-  btn.onclick = () => openDrawer(btn.dataset.panel);
-});
+document.querySelectorAll(".drawer-tab").forEach((b) => { b.onclick = () => openDrawer(b.dataset.panel); });
 
 $("btn-process").onclick = async () => {
   $("btn-process").disabled = true;
   try {
-    const r = await fetch("/api/process", { method: "POST" }).then((x) => x.json());
-    const utt = (r.audio || []).filter((x) => x.text).length;
-    $("action-msg").textContent = `${utt} transcrições · fila ${r.pending?.audio}/${r.pending?.frames}`;
+    await fetch("/api/process", { method: "POST" });
+    toast("Fila processada");
     loadDay();
-  } catch (e) {
-    $("action-msg").textContent = e.message;
-  }
+  } catch (e) { toast(e.message); }
   $("btn-process").disabled = false;
 };
 
 $("btn-reindex").onclick = async () => {
-  $("btn-reindex").disabled = true;
-  try {
-    const r = await fetch("/api/memory/reindex", { method: "POST" }).then((x) => x.json());
-    toast(`Memória: ${r.before} → ${r.after}`);
-    loadSystem();
-  } catch (e) {
-    toast(e.message);
-  }
-  $("btn-reindex").disabled = false;
+  const r = await fetch("/api/memory/reindex", { method: "POST" }).then((x) => x.json());
+  toast(`Memória: ${r.before} → ${r.after}`);
+  loadSystem();
 };
 
 $("mem-search").onclick = async () => {
   const q = $("mem-q").value;
   const r = await fetch(`/api/memory?day=${day}&q=${encodeURIComponent(q)}`).then((x) => x.json());
-  $("mem-hits").innerHTML = (r.hits || []).length
-    ? r.hits.map((h) => `<div class="mem-hit"><strong>${esc(h.day)}</strong> ${esc(h.kind)}<br>${esc(h.text)}</div>`).join("")
-    : '<p class="muted">Nenhum hit.</p>';
+  $("mem-hits").innerHTML = (r.hits || []).map((h) =>
+    `<div class="mem-hit"><strong>${esc(h.day)}</strong> ${esc(h.kind)}<br>${esc(h.text)}</div>`,
+  ).join("") || '<p class="muted">Nenhum hit.</p>';
 };
 
 buildConfigForm();
-
 $("cfg-form").onsubmit = async (e) => {
   e.preventDefault();
   const patch = JSON.parse(JSON.stringify(cfgCache));
@@ -506,23 +383,13 @@ $("cfg-form").onsubmit = async (e) => {
     else if (v === "") v = null;
     set(patch, el.dataset.path, v);
   });
-  delete patch.configPath;
-  delete patch.version;
-  delete patch.runtime;
-  const r = await fetch("/api/config", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(patch),
-  }).then((x) => x.json());
-  $("cfg-save-msg").textContent = r.restartRecommended ? "Salvo — reinicie brain." : "Salvo.";
-  cfgCache = r.config || patch;
+  delete patch.configPath; delete patch.version; delete patch.runtime;
+  await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
   toast("Config salva");
 };
-
 $("cfg-reload").onclick = loadConfigForm;
 $("cfg-openai-refresh").onclick = refreshOpenAiModels;
 $("lb-close").onclick = () => $("lightbox").classList.remove("open");
-$("lightbox").onclick = (e) => { if (e.target.id === "lightbox") $("lightbox").classList.remove("open"); };
 
 loadDay();
 setInterval(loadDay, 5000);

@@ -7,7 +7,6 @@ export async function embedText(text) {
   if (!CFG.memoryUseEmbeddings) {
     return { kind: "lexical", vector: [...termVector(text).entries()] };
   }
-
   try {
     const json = await createEmbeddings({
       model: modelId(ModelSlot.EMBED),
@@ -16,14 +15,13 @@ export async function embedText(text) {
     });
     const vec = json?.data?.[0]?.embedding;
     if (!Array.isArray(vec)) {
-      throw new Error("no embedding vector in OpenAI response");
+      throw new Error("no embedding vector");
     }
     return { kind: "float", vector: vec };
   } catch (err) {
     if (!CFG.memoryFallbackLexical) {
-      throw new Error(`embeddings failed: ${err.message}`);
+      throw err;
     }
-    console.warn(`[memory] embeddings failed, fallback lexical: ${err.message}`);
     return { kind: "lexical", vector: [...termVector(text).entries()] };
   }
 }

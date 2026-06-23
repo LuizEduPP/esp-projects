@@ -10,13 +10,8 @@
 #include "node_config.h"
 #include "pins.h"
 #include "spool_store.h"
+#include "wifi_connect.h"
 
-#ifndef WIFI_SSID
-#define WIFI_SSID "SUA_REDE_WIFI"
-#endif
-#ifndef WIFI_PASS
-#define WIFI_PASS "SUA_SENHA_WIFI"
-#endif
 #ifndef FOLIO_BRAIN_URL
 #define FOLIO_BRAIN_URL "http://192.168.1.28:8770"
 #endif
@@ -37,7 +32,6 @@ static uint32_t gFramePushOk = 0;
 static uint32_t gFramePushFail = 0;
 static unsigned long gBootMs = 0;
 static unsigned long gLastFrameMs = 0;
-static unsigned long gLastWifiTryMs = 0;
 static unsigned long gPushBackoffUntilMs = 0;
 static uint32_t gPushBackoffMs = 0;
 static uint32_t gPushBackoffMaxMs = FOLIO_PUSH_BACKOFF_MAX_MS;
@@ -344,23 +338,8 @@ static void pushEvent(const char *kind, const char *payload) {
 }
 
 static void ensureWifi() {
-  const uint32_t wifiRetryMs = nodeConfig().wifiRetryMs;
-  if (WiFi.status() == WL_CONNECTED) {
-    if (!gWifiOk) {
-      gWifiOk = true;
-      Serial.printf("[wifi] up %s rssi=%d\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
-    }
-    return;
-  }
-
-  gWifiOk = false;
-  const unsigned long now = millis();
-  if (now - gLastWifiTryMs < wifiRetryMs) {
-    return;
-  }
-  gLastWifiTryMs = now;
-  Serial.println("[wifi] reconnecting…");
-  WiFi.reconnect();
+  folioWifiMaintain(nodeConfig().wifiRetryMs);
+  gWifiOk = folioWifiConnected();
 }
 
 static void handleCapture() {
@@ -384,7 +363,9 @@ static void handleHealth() {
   j += WiFi.localIP().toString();
   j += "\",\"wifi\":";
   j += gWifiOk ? "true" : "false";
-  j += ",\"brain\":\"";
+  j += ",\"wifi_ssid\":\"";
+  j += folioWifiSsid();
+  j += "\",\"brain\":\"";
   j += FOLIO_BRAIN_URL;
   j += "\",\"spool\":";
   j += spoolOk() ? "true" : "false";
@@ -434,18 +415,9 @@ void setup() {
                 FOLIO_JPEG_QUALITY, FOLIO_FRAME_SIZE_ID);
   Serial.printf("[boot] audio %dHz chunk %dms\n", FOLIO_SAMPLE_RATE, FOLIO_CHUNK_MS);
 
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
-  Serial.printf("[boot] wifi ssid=%s\n", WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; ++i) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println();
-  gWifiOk = WiFi.status() == WL_CONNECTED;
+  folioWifiBegin();
+  gWifiOk = folioWifiConnected();
   if (gWifiOk) {
-    Serial.printf("[boot] IP %s rssi=%d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
     pushEvent("boot", "{\"ok\":true}");
   } else {
     Serial.println("[boot] wifi offline — microSD captures; push when back");
@@ -459,7 +431,6 @@ void setup() {
   gServer.begin();
 
   gLastFrameMs = millis();
-  gLastWifiTryMs = millis();
   Serial.println("[boot] capture -> microSD always, then push wifi+brain");
   Serial.println("[boot] =====================================");
 }

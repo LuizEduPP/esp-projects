@@ -51,21 +51,23 @@ export function alignedMomentsForDay(db, day) {
 }
 
 export function timelineForDay(db, day) {
-  const audio = audioChunksForDay(db, day)
-    .filter((c) => !c.processed || c.utterance_text)
-    .map((c) => ({
-      type: "audio",
-      at: c.captured_at,
-      id: `aud:${c.id}`,
-      chunk_id: c.id,
-      energy: c.energy,
-      speech: (c.energy ?? 0) >= CFG.speechEnergyThreshold,
-      text: c.utterance_text ?? null,
-      utterance_id: c.utterance_id ?? null,
-      processed: !!c.processed,
-      has_pcm: Boolean(c.path),
-      device_ms: c.device_ms ?? null,
-    }));
+  const audio = audioChunksForDay(db, day).map((c) => ({
+    type: "audio",
+    at: c.captured_at,
+    id: `aud:${c.id}`,
+    chunk_id: c.id,
+    energy: c.energy,
+    speech: (c.energy ?? 0) >= CFG.speechEnergyThreshold,
+    sound_kind: c.sound_kind ?? null,
+    sound_label: c.sound_label ?? null,
+    speaker_id: c.speaker_id ?? null,
+    speaker_confidence: c.speaker_confidence ?? null,
+    text: c.utterance_text ?? null,
+    utterance_id: c.utterance_id ?? null,
+    processed: !!c.processed,
+    has_pcm: Boolean(c.path),
+    device_ms: c.device_ms ?? null,
+  }));
   const frames = framesForDay(db, day).map((f) => ({
     type: "frame",
     at: f.captured_at,

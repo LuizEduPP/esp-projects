@@ -1,57 +1,23 @@
 #!/usr/bin/env node
 /**
  * folio — CLI for brain-side tasks.
- * Usage: folio.mjs <digest|process|enroll> [options]
+ * Usage: folio.mjs <process|enroll> [options]
  */
-import { CFG } from "./lib/config/index.mjs";
-import { getDigest, openDb, memoryChunkCount, pendingCounts, upsertSpeaker } from "./lib/db/index.mjs";
-import { runDigestForDay, runPendingQueueOnce } from "./lib/services/index.mjs";
-import { reindexMemoriesFromDigests } from "./lib/memory/index.mjs";
-import { errMsg, today } from "./lib/util/index.mjs";
+import { openDb, pendingCounts, upsertEntity, upsertSpeaker } from "./lib/db/index.mjs";
+import { enrollFingerprint } from "./lib/speaker/identify.mjs";
+import { runDayInsights } from "./lib/services/insights/index.mjs";
+import { runPendingQueueOnce } from "./lib/services/index.mjs";
+import { reindexAllMemories } from "./lib/memory/index.mjs";
+import { errMsg } from "./lib/util/index.mjs";
+import { readFileSync } from "node:fs";
 
 function usage() {
   console.error(`Usage:
-  folio.mjs digest [--today] [--day YYYY-MM-DD] [--force]
   folio.mjs process
+  folio.mjs insights [--today] [--day YYYY-MM-DD] [--force]
   folio.mjs memory reindex
-  folio.mjs enroll <speaker_id> <display_name>`);
+  folio.mjs enroll <speaker_id> <display_name> [--pcm path/to/sample.pcm]`);
   process.exit(1);
-}
-
-function parseDigestArgs(argv) {
-  let day = null;
-  let force = false;
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--today") {
-      day = today();
-    } else if (argv[i] === "--day" && argv[i + 1]) {
-      day = argv[++i];
-    } else if (argv[i] === "--force") {
-      force = true;
-    }
-  }
-  return { day: day ?? today(), force };
-}
-
-async function cmdDigest(argv) {
-  const { day, force } = parseDigestArgs(argv);
-  console.log(`[digest] day=${day} data=${CFG.dataDir} force=${force}`);
-
-  const db = openDb();
-  const result = await runDigestForDay(db, day, { force });
-  if (result.skipped) {
-    console.log(`[digest] skipped (${result.reason})`);
-    const row = getDigest(db, day);
-    if (row?.prose) {
-      console.log(row.prose);
-    }
-    return;
-  }
-
-  console.log(`\n${"─".repeat(60)}\n`);
-  console.log(result.prose);
-  console.log(`\n${"─".repeat(60)}`);
-  console.log(`saved: ${result.path}`);
 }
 
 async function cmdProcess() {
@@ -65,40 +31,80 @@ async function cmdProcess() {
   const utt = audio.filter((r) => r.text).length;
   const cap = frames.filter((r) => r.caption).length;
   const sttFail = audio.filter((r) => r.skipped === "stt_failed" || r.error).length;
-  const lmWait = before.frames > 0 && frames.length === 0;
 
   console.log(
     `[process] done utterances=${utt} captions=${cap} ` +
       `remaining audio=${after.audio} frames=${after.frames}` +
       (sttFail ? ` stt_issues=${sttFail}` : ""),
   );
-
-  if (lmWait) {
-    console.log(`[process] LM rate limit (${CFG.frameCaptionIntervalMs}ms) — try again later`);
-  }
 }
 
 function cmdEnroll(argv) {
-  const speakerId = argv[0];
-  const displayName = argv[1];
+  let speakerId = null;
+  let displayName = null;
+  let pcmPath = null;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--pcm" && argv[i + 1]) {
+      pcmPath = argv[++i];
+    } else if (!speakerId) {
+      speakerId = argv[i];
+    } else if (!displayName) {
+      displayName = argv[i];
+    }
+  }
   if (!speakerId || !displayName) {
     usage();
   }
 
-  upsertSpeaker(openDb(), speakerId, displayName);
+  const db = openDb();
+  upsertSpeaker(db, speakerId, displayName);
+  upsertEntity(db, {
+    id: `speaker:${speakerId}`,
+    kind: "person",
+    display_name: displayName,
+    speaker_id: speakerId,
+    profile_json: JSON.stringify({ enrolled: true }),
+    patterns_json: JSON.stringify({}),
+  });
+
+  if (pcmPath) {
+    const pcm = readFileSync(pcmPath);
+    enrollFingerprint(db, speakerId, pcm);
+    console.log(`Fingerprint enrolled from ${pcmPath}`);
+  } else {
+    console.log("Tip: pass --pcm sample.pcm to train voice fingerprint");
+  }
+
   console.log(`Speaker enrolled: ${speakerId} (${displayName})`);
+}
+
+async function cmdInsights(argv) {
+  let day = new Date().toISOString().slice(0, 10);
+  let force = false;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--today") {
+      day = new Date().toISOString().slice(0, 10);
+    } else if (argv[i] === "--day" && argv[i + 1]) {
+      day = argv[++i];
+    } else if (argv[i] === "--force") {
+      force = true;
+    }
+  }
+  const db = openDb();
+  const result = await runDayInsights(db, day, { force });
+  if (result.skipped) {
+    console.log(`[insights] skipped (${result.reason})`);
+    return;
+  }
+  console.log(JSON.stringify(result.insights, null, 2));
 }
 
 async function cmdMemory(argv) {
   const sub = argv[0];
   if (sub === "reindex") {
     const db = openDb();
-    const before = memoryChunkCount(db);
-    const result = await reindexMemoriesFromDigests(db);
-    const after = memoryChunkCount(db);
-    console.log(
-      `[memory] reindexed ${result.days} days · ${result.chunks} chunks (total ${before} → ${after})`,
-    );
+    const result = await reindexAllMemories(db);
+    console.log(`[memory] reindexed ${result.days} days · ${result.chunks} chunks`);
     return;
   }
   usage();
@@ -107,11 +113,11 @@ async function cmdMemory(argv) {
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   switch (cmd) {
-    case "digest":
-      await cmdDigest(rest);
-      break;
     case "process":
       await cmdProcess();
+      break;
+    case "insights":
+      await cmdInsights(rest);
       break;
     case "memory":
       await cmdMemory(rest);

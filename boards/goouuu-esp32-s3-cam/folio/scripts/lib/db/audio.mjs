@@ -44,6 +44,23 @@ export function markAudioProcessed(db, id) {
   db.prepare("UPDATE audio_chunks SET processed = 1 WHERE id = ?").run(id);
 }
 
+export function updateAudioClassification(db, id, { sound_kind, sound_label, speaker_id, speaker_confidence }) {
+  db.prepare(
+    `UPDATE audio_chunks SET
+      sound_kind = @sound_kind,
+      sound_label = @sound_label,
+      speaker_id = @speaker_id,
+      speaker_confidence = @speaker_confidence
+     WHERE id = @id`,
+  ).run({
+    id,
+    sound_kind: sound_kind ?? null,
+    sound_label: sound_label ?? null,
+    speaker_id: speaker_id ?? null,
+    speaker_confidence: speaker_confidence ?? null,
+  });
+}
+
 export function bumpSttAttempts(db, id) {
   db.prepare("UPDATE audio_chunks SET stt_attempts = stt_attempts + 1 WHERE id = ?").run(id);
   return db.prepare("SELECT stt_attempts FROM audio_chunks WHERE id = ?").get(id)?.stt_attempts ?? 0;

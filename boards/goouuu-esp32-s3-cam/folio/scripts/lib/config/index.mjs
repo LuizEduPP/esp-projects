@@ -342,6 +342,7 @@ function buildCfgFromFile(file = getFileData()) {
     audioChunkMs: cfgNum(file, "audio.chunkMs", "FOLIO_AUDIO_CHUNK_MS"),
     audioSampleRate: cfgNum(file, "audio.sampleRate", "FOLIO_AUDIO_SAMPLE_RATE"),
     speechEnergyThreshold: cfgNum(file, "audio.speechEnergyThreshold", "FOLIO_SPEECH_ENERGY"),
+    ambientEnergyThreshold: cfgNum(file, "audio.ambientEnergyThreshold", "FOLIO_AMBIENT_ENERGY"),
     whisperBin: resolveWhisperBin(
       cfgStr(file, "audio.whisperBin", "FOLIO_WHISPER_BIN"),
       process.env.FOLIO_WHISPER_BIN,
@@ -360,8 +361,16 @@ function buildCfgFromFile(file = getFileData()) {
     pipelineIntervalMs: cfgNum(file, "pipeline.intervalMs", "FOLIO_PIPELINE_INTERVAL_MS"),
     pipelineEnabled: cfgBool(file, "pipeline.enabled", "FOLIO_PIPELINE"),
 
-    digestIntervalMs: cfgNum(file, "digest.intervalMs", "FOLIO_DIGEST_INTERVAL_MS"),
-    digestAuto: cfgBool(file, "digest.auto", "FOLIO_DIGEST_AUTO"),
+    digestIntervalMs: cfgNum(file, "insights.intervalMs", "FOLIO_INSIGHTS_INTERVAL_MS") ||
+      cfgNum(file, "digest.intervalMs", "FOLIO_DIGEST_INTERVAL_MS"),
+    digestAuto: cfgBool(file, "insights.auto", "FOLIO_INSIGHTS_AUTO") ||
+      cfgBool(file, "digest.auto", "FOLIO_DIGEST_AUTO"),
+    insightsIntervalMs: cfgNum(file, "insights.intervalMs", "FOLIO_INSIGHTS_INTERVAL_MS") ||
+      cfgNum(file, "digest.intervalMs", "FOLIO_DIGEST_INTERVAL_MS"),
+    insightsAuto: cfgBool(file, "insights.auto", "FOLIO_INSIGHTS_AUTO") ||
+      cfgBool(file, "digest.auto", "FOLIO_DIGEST_AUTO"),
+    insightsTemperature: cfgNum(file, "insights.temperature", "FOLIO_INSIGHTS_TEMP") ||
+      cfgNum(file, "digest.passDTemperature", "FOLIO_DIGEST_PASS_D_TEMP"),
 
     episodeGapMin: cfgNum(file, "episodes.gapMin", "FOLIO_EPISODE_GAP_MIN"),
     episodeFrameAlignMs: cfgNum(file, "episodes.frameAlignMs", "FOLIO_EPISODE_FRAME_ALIGN_MS"),

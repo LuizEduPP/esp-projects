@@ -1,10 +1,12 @@
-export { DB_SCHEMA } from "./schema.mjs";
+export { DB_SCHEMA, LEGACY_TABLES } from "./schema.mjs";
 export { openDb, migrateDb } from "./connection.mjs";
 export * from "./devices.mjs";
 export * from "./audio.mjs";
 export * from "./utterances.mjs";
 export * from "./frames.mjs";
 export * from "./events.mjs";
-export * from "./episodes.mjs";
-export * from "./digests.mjs";
+export * from "./speakers.mjs";
+export * from "./entities.mjs";
+export * from "./daily.mjs";
+export * from "./memory.mjs";
 export * from "./timeline.mjs";

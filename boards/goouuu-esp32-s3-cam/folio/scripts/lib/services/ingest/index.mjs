@@ -58,7 +58,7 @@ export function ingestAudioChunk(deviceId, pcmBuffer, metaHeader) {
     });
   }
 
-  return { id, energy, speech: true, device_ms: deviceMs };
+  return { id, energy, speech: isSpeechChunk(energy), device_ms: deviceMs };
 }
 
 export function ingestFrame(deviceId, jpegBuffer, metaHeader) {

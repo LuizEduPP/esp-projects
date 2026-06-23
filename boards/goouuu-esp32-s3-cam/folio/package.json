@@ -12,9 +12,9 @@
     "brain": "node --watch scripts/folio-brain.mjs",
     "brain:prod": "node scripts/folio-brain.mjs",
     "cli": "node scripts/folio.mjs",
-    "digest": "node scripts/folio.mjs digest",
     "process": "node scripts/folio.mjs process",
-    "enroll": "node scripts/folio.mjs enroll",
-    "memory:reindex": "node scripts/folio.mjs memory reindex"
+    "insights": "node scripts/folio.mjs insights --today --force",
+    "memory:reindex": "node scripts/folio.mjs memory reindex",
+    "enroll": "node scripts/folio.mjs enroll"
   }
 }

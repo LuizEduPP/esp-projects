@@ -1,119 +1,33 @@
 import { CFG } from "../config/index.mjs";
-import {
-  graphNodesBeforeDay,
-  memoryChunksInRange,
-  profileFacts,
-} from "../db/index.mjs";
 import { dayOffset } from "../util/time.mjs";
+import { memoryChunksInRange, openDb } from "../db/index.mjs";
 import { embedText, scorePair } from "./embeddings.mjs";
-import { applyRerank } from "./rerank.mjs";
-import { tokenize } from "./lexical.mjs";
 
-export function buildMemoryQuery(day, episodes, passAJson = null) {
-  const parts = [day];
-  for (const ep of episodes) {
-    parts.push(ep.label);
-    const s = ep.summary ?? {};
-    parts.push(...(s.themes ?? []));
-    parts.push(...(s.decisions ?? []).map((d) => d.text));
-    parts.push(...(s.open_questions ?? []));
-  }
-  if (passAJson?.events_notable) {
-    parts.push(...passAJson.events_notable);
-  }
-  return parts.filter(Boolean).join(" · ");
-}
-
-export async function retrieveMemories(db, queryText, { day, limit = CFG.memoryRetrieveLimit } = {}) {
-  if (!CFG.memoryEnabled || !queryText?.trim()) {
+export async function retrieveMemories(db, query, { day, limit = CFG.memoryRetrieveLimit } = {}) {
+  if (!query?.trim()) {
     return [];
   }
 
-  const minDay = dayOffset(day, -CFG.memoryLookbackDays);
-  const rows = memoryChunksInRange(db, minDay, day);
-  if (!rows.length) {
-    return [];
-  }
+  const beforeDay = day ?? new Date().toISOString().slice(0, 10);
+  const minDay = dayOffset(beforeDay, -CFG.memoryLookbackDays);
+  const candidates = memoryChunksInRange(db, minDay, beforeDay);
 
-  const candidateLimit = CFG.memoryRerankEnabled
-    ? Math.max(CFG.memoryRerankCandidateLimit, limit)
-    : limit;
-
-  const queryEmbed = await embedText(queryText);
-  let candidates = rows
-    .map((row) => ({
-      id: row.id,
-      day: row.day,
-      kind: row.kind,
-      text: row.text,
-      evidence: JSON.parse(row.evidence_json || "[]"),
-      score: scorePair(queryEmbed, row.embedding_json, row.text) * (row.weight ?? 1),
+  const queryEmbed = await embedText(query);
+  const scored = candidates
+    .map((c) => ({
+      ...c,
+      score: scorePair(queryEmbed, c.embedding_json, c.text),
     }))
-    .filter((r) => r.score >= CFG.memoryMinScore)
+    .filter((c) => c.score >= CFG.memoryMinScore)
     .sort((a, b) => b.score - a.score)
-    .slice(0, candidateLimit);
+    .slice(0, limit);
 
-  if (CFG.memoryRerankEnabled && candidates.length > 1) {
-    candidates = await applyRerank(queryText, candidates);
-  }
-
-  return candidates.slice(0, limit);
+  return scored;
 }
 
-export function retrieveGraphContext(db, day, queryText, limit = CFG.memoryGraphRetrieveLimit) {
-  const tokens = new Set(tokenize(queryText));
-  if (!tokens.size) {
-    return [];
-  }
-
-  return graphNodesBeforeDay(db, day, CFG.memoryLookbackDays)
-    .map((n) => {
-      const labelTokens = tokenize(n.label);
-      let overlap = 0;
-      for (const t of labelTokens) {
-        if (tokens.has(t)) {
-          overlap++;
-        }
-      }
-      return { ...n, score: overlap / Math.max(labelTokens.length, 1) };
-    })
-    .filter((n) => n.score >= CFG.memoryGraphMinScore)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map((n) => ({
-      day: n.day,
-      kind: n.kind,
-      label: n.label,
-      score: Number(n.score.toFixed(2)),
-    }));
-}
-
-export async function buildRagContext(db, day, { episodes, passAJson }) {
-  const query = buildMemoryQuery(day, episodes, passAJson);
-  const [memories, graph, profile] = await Promise.all([
-    retrieveMemories(db, query, { day }),
-    Promise.resolve(retrieveGraphContext(db, day, query)),
-    Promise.resolve(profileFacts(db).slice(0, CFG.memoryProfileLimit)),
-  ]);
-
-  if (memories.length) {
-    console.log(
-      `[memory] RAG ${memories.length} hits for "${query.slice(0, 60)}…" ` +
-        `(top=${memories[0].day}/${memories[0].kind} score=${memories[0].score.toFixed(2)})`,
-    );
-  }
-
-  return {
-    query,
-    memories: memories.map((m) => ({
-      day: m.day,
-      kind: m.kind,
-      text: m.text,
-      evidence: m.evidence,
-      score: Number(m.score.toFixed(3)),
-      rerank_score: m.rerank_score != null ? Number(m.rerank_score.toFixed(3)) : null,
-    })),
-    graph,
-    profile,
-  };
+export async function retrieveContextForDay(db, day, { query = "", limit = CFG.memoryRetrieveLimit } = {}) {
+  const q =
+    query ||
+    `padrões entidades sons fala ${day}`;
+  return retrieveMemories(db, q, { day, limit });
 }

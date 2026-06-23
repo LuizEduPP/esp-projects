@@ -86,11 +86,72 @@ button, input, select, textarea { font: inherit; color: inherit; }
   color: var(--muted);
 }
 
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+.layout,
+.archive-pane {
   min-height: calc(100vh - 52px);
 }
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+  min-height: calc(100vh - 52px);
+}
+
+.insights-pane {
+  padding: 28px 32px 64px;
+  border-right: 1px solid var(--line);
+  overflow: auto;
+  background: linear-gradient(165deg, #10121a 0%, #0c0d10 55%);
+}
+
+.archive-pane {
+  padding: 20px 24px 64px;
+  overflow: auto;
+}
+
+.pane-head h1, .witness-head h2 {
+  font: 600 1.5rem var(--serif);
+  margin-bottom: 4px;
+}
+
+.subhead {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin: 24px 0 10px;
+}
+
+.insight-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+.insight-list {
+  margin-left: 18px;
+  line-height: 1.6;
+}
+
+.insight-list li { margin-bottom: 8px; }
+
+.entity-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.entity-card {
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  background: var(--panel);
+}
+
+.entity-card strong { display: block; margin-bottom: 4px; }
+
+.chip.live { color: var(--accent); border-color: #2a4060; }
 
 .chronicle-pane {
   padding: 32px 40px 64px;
@@ -266,6 +327,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 .witness-kind.speech { color: var(--ok); }
+.witness-kind.sound { color: var(--warn); }
 
 .witness-item img {
   width: 100%;

@@ -3,24 +3,27 @@ import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { resolve } from "node:path";
 import { CFG, nodeConfigPayload, publicConfig, updateConfig } from "../config/index.mjs";
-import { runDigestForDay, needsDigestRefresh, digestRuntime, digestDraftFromRow } from "../services/digest/index.mjs";
 import { runPendingQueueOnce } from "../services/pipeline/index.mjs";
+import {
+  getInsightsForApi,
+  needsInsightsRefresh,
+  runDayInsights,
+} from "../services/insights/index.mjs";
 import { fetchOpenAiModels } from "../llm/models-catalog.mjs";
+import { retrieveMemories, reindexAllMemories } from "../memory/index.mjs";
 import { errMsg, pcmToWav, sendBytes, sendJson, today } from "../util/index.mjs";
 import {
   getAudioChunk,
-  getDigest,
   getFrame,
   listDevices,
-  openDb,
+  listEntities,
   memoryChunkCount,
+  openDb,
   pendingCounts,
-  profileFacts,
   timelineForDay,
   touchDevice,
 } from "../db/index.mjs";
 import { ingestAudioChunk, ingestFrame, ingestEvent } from "../services/index.mjs";
-import { retrieveMemories, reindexMemoriesFromDigests } from "../memory/index.mjs";
 
 const UI_MIME = {
   "/ui/app.css": "text/css; charset=utf-8",
@@ -213,48 +216,26 @@ export function createFolioServer(ui) {
         return;
       }
 
-      if (path === "/api/digest") {
+      if (path === "/api/insights") {
         const day = qs.get("day") ?? today();
-        const row = getDigest(openDb(), day);
-        const draft = digestDraftFromRow(row);
+        const db = openDb();
         sendJson(res, 200, {
-          ...(row ?? { day, prose: null }),
-          day,
-          draft,
-          is_draft: Boolean(draft && !row?.prose?.trim()),
+          ...getInsightsForApi(db, day),
+          status: { ...needsInsightsRefresh(db, day), interval_ms: CFG.insightsIntervalMs },
         });
         return;
       }
 
-      if (path === "/api/digest/status") {
+      if (path === "/api/insights/run" && req.method === "POST") {
         const day = qs.get("day") ?? today();
         const db = openDb();
-        const check = needsDigestRefresh(db, day);
-        const row = getDigest(db, day);
-        sendJson(res, 200, {
-          day,
-          auto: CFG.digestAuto,
-          interval_ms: CFG.digestIntervalMs,
-          has_prose: Boolean(row?.prose?.trim()),
-          has_draft: Boolean(digestDraftFromRow(row)),
-          updated_at: row?.updated_at ?? null,
-          runtime: { ...digestRuntime },
-          ...check,
-        });
+        const result = await runDayInsights(db, day, { force: true });
+        sendJson(res, 200, { ok: true, ...getInsightsForApi(db, day), result });
         return;
       }
 
-      if (path === "/api/digest/run" && req.method === "POST") {
-        const day = qs.get("day") ?? today();
-        const db = openDb();
-        const result = await runDigestForDay(db, day, { force: true });
-        sendJson(res, 200, {
-          ok: true,
-          day,
-          prose: result.prose ?? getDigest(db, day)?.prose ?? null,
-          skipped: result.skipped ?? false,
-          reason: result.reason ?? null,
-        });
+      if (path === "/api/entities") {
+        sendJson(res, 200, { entities: listEntities(openDb()) });
         return;
       }
 
@@ -272,13 +253,8 @@ export function createFolioServer(ui) {
       if (path === "/api/memory/reindex" && req.method === "POST") {
         const db = openDb();
         const before = memoryChunkCount(db);
-        const result = await reindexMemoriesFromDigests(db);
-        sendJson(res, 200, {
-          ok: true,
-          before,
-          after: memoryChunkCount(db),
-          ...result,
-        });
+        const result = await reindexAllMemories(db);
+        sendJson(res, 200, { ok: true, before, after: memoryChunkCount(db), ...result });
         return;
       }
 
@@ -333,13 +309,7 @@ export function createFolioServer(ui) {
         const day = qs.get("day") ?? today();
         const db = openDb();
         const hits = q.trim() ? await retrieveMemories(db, q, { day }) : [];
-        sendJson(res, 200, {
-          query: q,
-          day,
-          chunks: memoryChunkCount(db),
-          profile: profileFacts(db),
-          hits,
-        });
+        sendJson(res, 200, { query: q, day, chunks: memoryChunkCount(db), hits });
         return;
       }
 
@@ -350,6 +320,7 @@ export function createFolioServer(ui) {
           port: CFG.port,
           pending: pendingCounts(openDb()),
           pipeline: CFG.pipelineEnabled,
+          insights: CFG.insightsAuto,
           memory_chunks: memoryChunkCount(openDb()),
         });
         return;

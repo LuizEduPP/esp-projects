@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * folio-brain — ingest server, background workers, timeline UI.
+ * folio-brain — ingest server, background workers, archive UI.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -8,11 +8,7 @@ import { fileURLToPath } from "node:url";
 import { CFG, isCudaAvailable } from "./lib/config/index.mjs";
 import { createFolioServer, logServerStartup } from "./lib/http/index.mjs";
 import { activeLocale, promptLanguageName, whisperLanguageCode } from "./lib/locale/index.mjs";
-import {
-  startDigestLoop,
-  startRetentionLoop,
-  startProcessingLoop,
-} from "./lib/services/index.mjs";
+import { startInsightsLoop, startRetentionLoop, startProcessingLoop } from "./lib/services/index.mjs";
 
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "ui");
 
@@ -42,21 +38,19 @@ function main() {
       `whisper: ${CFG.whisperBin} model=${CFG.whisperModel} device=${CFG.whisperDevice} ` +
         `lang=${whisperLang} cuda=${isCudaAvailable() ? "yes" : "no"}`,
     );
-    console.log(
-      "[config] hot reload: LM/Whisper/locale apply on save — restart only for port/dataDir",
-    );
+    console.log("[config] hot reload: OpenAI/Whisper/locale apply on save — restart only for port/dataDir");
   });
 
   if (CFG.pipelineEnabled) {
     startProcessingLoop();
   } else {
-    console.log("[worker] disabled (FOLIO_PIPELINE=0) — set pipeline.enabled in config");
+    console.log("[worker] disabled — set pipeline.enabled in config");
   }
 
-  if (CFG.digestAuto) {
-    startDigestLoop();
+  if (CFG.insightsAuto) {
+    startInsightsLoop();
   } else {
-    console.log("[digest] auto disabled (FOLIO_DIGEST_AUTO=0)");
+    console.log("[insights] auto disabled — set insights.auto in config");
   }
 
   startRetentionLoop();
