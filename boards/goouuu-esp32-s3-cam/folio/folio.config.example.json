@@ -2,9 +2,10 @@
   "locale": "pt-BR",
   "port": 8770,
   "dataDir": null,
-  "lm": {
-    "url": "http://127.0.0.1:1234/v1/chat/completions",
-    "model": "google/gemma-4-e2b",
+  "openai": {
+    "baseUrl": "http://127.0.0.1:1234/v1",
+    "apiKey": null,
+    "model": "mistralai/ministral-3-3b",
     "modelDeep": null
   },
   "frames": {
@@ -61,7 +62,6 @@
     "minScore": 0.08,
     "useEmbeddings": false,
     "embeddingModel": null,
-    "embeddingsUrl": null,
     "graphRetrieveLimit": 8,
     "graphMinScore": 0.15,
     "profileLimit": 32,
@@ -70,7 +70,6 @@
     "rerank": {
       "enabled": false,
       "model": null,
-      "url": null,
       "candidateLimit": 40,
       "topK": 14
     }

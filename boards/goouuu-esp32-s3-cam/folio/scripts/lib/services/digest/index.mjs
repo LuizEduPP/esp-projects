@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CFG, PATHS } from "../../config/index.mjs";
-import { chatCompletion, chatJson } from "../../llm/index.mjs";
+import { chatCompletion, chatJson, chatJsonLenient } from "../../llm/index.mjs";
 import {
   chroniclerPassBSystem,
   chroniclerPassCSystem,
@@ -14,6 +14,7 @@ import {
 } from "../../locale/index.mjs";
 import { modelId, ModelSlot } from "../../models/index.mjs";
 import { errMsg, isoNow, today } from "../../util/index.mjs";
+import { parsePassBFallback, parsePassCFallback } from "../../util/json.mjs";
 import {
   alignedMomentsForDay,
   clearEpisodesForDay,
@@ -31,14 +32,82 @@ import {
   openDb,
   priorDayRollup,
   profileFacts,
+  patchDigest,
   upsertDayRollup,
   upsertDigest,
   utterancesForDay,
   witnessStats,
 } from "../../db/index.mjs";
 import { buildRagContext, indexDayMemories } from "../../memory/index.mjs";
+import {
+  buildPassAPayload,
+  compactEpisode,
+  compactMomentsForPass,
+  compactPassJson,
+  sampleEvenly,
+  truncateText,
+} from "./compact.mjs";
 
 const GAP_MS = () => CFG.episodeGapMin * 60 * 1000;
+
+/** Live digest state for UI polling. */
+export const digestRuntime = {
+  busy: false,
+  day: null,
+  phase: null,
+  error: null,
+  at: null,
+};
+
+function setDigestPhase(day, phase) {
+  digestRuntime.busy = true;
+  digestRuntime.day = day;
+  digestRuntime.phase = phase;
+  digestRuntime.error = null;
+  digestRuntime.at = isoNow();
+}
+
+function setDigestError(day, err) {
+  digestRuntime.busy = false;
+  digestRuntime.day = day;
+  digestRuntime.phase = "error";
+  digestRuntime.error = errMsg(err);
+  digestRuntime.at = isoNow();
+}
+
+function clearDigestRuntime() {
+  digestRuntime.busy = false;
+  digestRuntime.phase = "done";
+  digestRuntime.error = null;
+  digestRuntime.at = isoNow();
+}
+
+export function digestDraftFromRow(row) {
+  if (!row) {
+    return null;
+  }
+  if (row.prose?.trim()) {
+    return null;
+  }
+  try {
+    const b = JSON.parse(row.pass_b_json || "{}");
+    const arc = b?.narrative_arc?.trim();
+    if (!arc) {
+      return null;
+    }
+    return arc;
+  } catch {
+    return null;
+  }
+}
+
+function proseFromArc(day, arc) {
+  const text = String(arc ?? "").trim();
+  if (!text) {
+    return "";
+  }
+  return `Folio · ${dateLabelForDay(day)}\n\n${text}`;
+}
 
 function graphNodeId(day, kind, label) {
   const slug = label
@@ -97,14 +166,34 @@ export function clusterUtterances(utterances, day) {
   return episodes;
 }
 
+function episodeSummaryFallback(episode, utterances, frames) {
+  const epUtterances = utterances.filter((u) => episode.utterance_ids.includes(u.id));
+  const first = epUtterances[0];
+  const time = (episode.started_at ?? "").slice(11, 16) || "??:??";
+  const snippet = first?.text?.trim().slice(0, 72);
+  return {
+    label: snippet || `Episódio ${time}`,
+    decisions: [],
+    rejected: [],
+    open_questions: [],
+    themes: [],
+    energy: epUtterances.length ? "fragmented" : "calm",
+    visual_context: frames[0]?.caption || frames[0]?.scene_json || "",
+    implicit_shifts: [],
+    notable_quotes: first
+      ? [{ text: first.text.slice(0, 200), evidence: [`utt:${first.id}`] }]
+      : [],
+  };
+}
+
 export async function extractEpisodeSemantics(episode, utterances, frames) {
   const uttTexts = utterances
     .filter((u) => episode.utterance_ids.includes(u.id))
-    .map((u) => `[${u.started_at}] ${u.text}`)
+    .map((u) => `[${u.started_at}] utt:${u.id} ${u.text}`)
     .join("\n");
 
   const frameTexts = frames
-    .map((f) => `[${f.captured_at}] ${f.caption || f.scene_json || "(no caption)"}`)
+    .map((f) => `[${f.captured_at}] frm:${f.id} ${f.caption || f.scene_json || "(no caption)"}`)
     .join("\n");
 
   const prompt = `You analyze a slice of someone's day from passive room witness data (audio transcript + camera captions).
@@ -122,7 +211,8 @@ Reply raw JSON only:
 }
 Use evidence IDs from the input when possible. Facts only from input; infer carefully. ${promptLanguageRule()}`;
 
-  return chatJson({
+  const fallback = () => episodeSummaryFallback(episode, utterances, frames);
+  const parsed = await chatJsonLenient({
     model: modelId(ModelSlot.FAST),
     messages: [
       {
@@ -131,7 +221,13 @@ Use evidence IDs from the input when possible. Facts only from input; infer care
       },
     ],
     maxTokens: 1200,
+    fallback,
   });
+
+  if (!String(parsed.label ?? "").trim()) {
+    return { ...fallback(), ...parsed, label: fallback().label };
+  }
+  return parsed;
 }
 
 export async function rebuildEpisodesForDay(db, day) {
@@ -146,13 +242,14 @@ export async function rebuildEpisodesForDay(db, day) {
     const epUtterances = utterances.filter((u) => cluster.utterance_ids.includes(u.id));
     const epFrames = frames.filter((f) => alignFrameToEpisode(f.captured_at, [cluster]));
     const summary = await extractEpisodeSemantics(cluster, epUtterances, epFrames);
+    const label = String(summary.label ?? "").trim() || episodeSummaryFallback(cluster, epUtterances, epFrames).label;
 
     insertEpisode(db, {
       id: cluster.id,
       day,
       started_at: cluster.started_at,
       ended_at: cluster.ended_at,
-      label: summary.label,
+      label,
       summary_json: JSON.stringify(summary),
       created_at: isoNow(),
     });
@@ -174,20 +271,38 @@ export function buildGraphFromEpisodes(db, day, episodes) {
   const nodes = new Map();
 
   const ensureNode = (kind, label, payload = {}) => {
-    const key = `${kind}:${label}`;
+    const text = String(label ?? "").trim();
+    if (!text) {
+      return null;
+    }
+    const key = `${kind}:${text}`;
     if (nodes.has(key)) {
       return nodes.get(key);
     }
-    const id = graphNodeId(day, kind, label);
+    const id = graphNodeId(day, kind, text);
     insertGraphNode(db, {
       id,
       day,
       kind,
-      label,
+      label: text,
       payload_json: JSON.stringify(payload),
     });
     nodes.set(key, id);
     return id;
+  };
+
+  const link = (from, to, relation, evidence, confidence) => {
+    if (!from || !to) {
+      return;
+    }
+    insertGraphEdge(db, {
+      day,
+      from_node: from,
+      to_node: to,
+      relation,
+      evidence_json: JSON.stringify(evidence),
+      confidence,
+    });
   };
 
   for (const ep of episodes) {
@@ -198,187 +313,29 @@ export function buildGraphFromEpisodes(db, day, episodes) {
     });
 
     for (const theme of summary.themes ?? []) {
-      const themeNode = ensureNode("theme", theme);
-      insertGraphEdge(db, {
-        day,
-        from_node: epNode,
-        to_node: themeNode,
-        relation: "themed",
-        evidence_json: JSON.stringify([`ep:${ep.id}`]),
-        confidence: CFG.episodeGraphThemedConfidence,
-      });
+      link(epNode, ensureNode("theme", theme), "themed", [`ep:${ep.id}`], CFG.episodeGraphThemedConfidence);
     }
 
     for (const d of summary.decisions ?? []) {
-      const decNode = ensureNode("decision", d.text, { confidence: d.confidence });
-      insertGraphEdge(db, {
-        day,
-        from_node: epNode,
-        to_node: decNode,
-        relation: "decided",
-        evidence_json: JSON.stringify(d.evidence ?? []),
-        confidence: d.confidence ?? CFG.episodeGraphDecidedConfidence,
-      });
+      link(
+        epNode,
+        ensureNode("decision", d.text, { confidence: d.confidence }),
+        "decided",
+        d.evidence ?? [],
+        d.confidence ?? CFG.episodeGraphDecidedConfidence,
+      );
     }
 
     for (const q of summary.open_questions ?? []) {
-      const qNode = ensureNode("question", q);
-      insertGraphEdge(db, {
-        day,
-        from_node: epNode,
-        to_node: qNode,
-        relation: "left_open",
-        evidence_json: JSON.stringify([`ep:${ep.id}`]),
-        confidence: CFG.episodeGraphOpenConfidence,
-      });
+      link(epNode, ensureNode("question", q), "left_open", [`ep:${ep.id}`], CFG.episodeGraphOpenConfidence);
     }
 
     for (const r of summary.rejected ?? []) {
-      const rNode = ensureNode("rejected", r);
-      insertGraphEdge(db, {
-        day,
-        from_node: epNode,
-        to_node: rNode,
-        relation: "rejected",
-        evidence_json: JSON.stringify([`ep:${ep.id}`]),
-        confidence: CFG.episodeGraphRejectedConfidence,
-      });
+      link(epNode, ensureNode("rejected", r), "rejected", [`ep:${ep.id}`], CFG.episodeGraphRejectedConfidence);
     }
   }
 
   return { nodeCount: nodes.size };
-}
-
-const COMPACT_MAX_CHARS = 28_000;
-
-function truncateText(text, max = 240) {
-  const s = String(text ?? "").trim();
-  if (s.length <= max) {
-    return s;
-  }
-  return `${s.slice(0, max - 1)}…`;
-}
-
-function sampleEvenly(items, max) {
-  if (!items?.length || items.length <= max) {
-    return items ?? [];
-  }
-  const out = [];
-  const step = items.length / max;
-  for (let i = 0; i < max; i++) {
-    out.push(items[Math.floor(i * step)]);
-  }
-  return out;
-}
-
-function compactMoment(m) {
-  if (m.text) {
-    return { id: m.id, at: m.at, text: truncateText(m.text, 320) };
-  }
-  return { id: m.id, at: m.at, visual: truncateText(m.visual, 180) };
-}
-
-export function compactEpisode(ep) {
-  const s = ep.summary ?? {};
-  return {
-    id: ep.id,
-    label: truncateText(ep.label, 80),
-    started_at: ep.started_at,
-    ended_at: ep.ended_at,
-    summary: {
-      label: truncateText(s.label, 80),
-      themes: (s.themes ?? []).slice(0, 5).map((t) => truncateText(t, 60)),
-      decisions: (s.decisions ?? []).slice(0, 6).map((d) => ({
-        text: truncateText(d.text, 120),
-        evidence: (d.evidence ?? []).slice(0, 4),
-      })),
-      open_questions: (s.open_questions ?? []).slice(0, 5).map((q) => truncateText(q, 100)),
-      energy: s.energy,
-      visual_context: truncateText(s.visual_context, 120),
-      notable_quotes: (s.notable_quotes ?? []).slice(0, 4).map((q) => ({
-        text: truncateText(q.text, 120),
-        evidence: (q.evidence ?? []).slice(0, 2),
-      })),
-    },
-  };
-}
-
-function compactEvents(events, max = 36) {
-  const notable = events.filter((e) => e.kind === "presence" || e.kind === "frame");
-  return sampleEvenly(notable, max).map((e) => ({
-    id: e.id,
-    at: e.at,
-    kind: e.kind,
-  }));
-}
-
-function compactPassJson(obj, maxDepth = 2) {
-  if (maxDepth <= 0 || obj == null) {
-    return obj;
-  }
-  if (Array.isArray(obj)) {
-    return obj.slice(0, 40).map((v) =>
-      typeof v === "object" ? compactPassJson(v, maxDepth - 1) : truncateText(v, 200),
-    );
-  }
-  if (typeof obj === "object") {
-    const out = {};
-    for (const [k, v] of Object.entries(obj).slice(0, 30)) {
-      if (typeof v === "string") {
-        out[k] = truncateText(v, 400);
-      } else if (typeof v === "object") {
-        out[k] = compactPassJson(v, maxDepth - 1);
-      } else {
-        out[k] = v;
-      }
-    }
-    return out;
-  }
-  return truncateText(obj, 200);
-}
-
-function buildPassAPayload(day, episodes, moments, events, maxChars = COMPACT_MAX_CHARS) {
-  let momentLimit = Math.min(moments.length, 80);
-  let payload = {
-    day,
-    episodes: episodes.map(compactEpisode),
-    moments: sampleEvenly(moments, momentLimit).map(compactMoment),
-    events: compactEvents(events),
-  };
-
-  let text = JSON.stringify(payload, null, 2);
-  while (text.length > maxChars && momentLimit > 12) {
-    momentLimit = Math.max(12, Math.floor(momentLimit * 0.65));
-    payload.moments = sampleEvenly(moments, momentLimit).map(compactMoment);
-    text = JSON.stringify(payload, null, 2);
-  }
-
-  if (text.length > maxChars) {
-    payload.moments = payload.moments.map((m) => ({
-      ...m,
-      text: m.text ? truncateText(m.text, 120) : undefined,
-      visual: m.visual ? truncateText(m.visual, 80) : undefined,
-    }));
-    text = JSON.stringify(payload, null, 2);
-  }
-
-  if (text.length > maxChars) {
-    console.warn(`[digest] pass A input still ${text.length} chars after compaction`);
-  }
-
-  return text;
-}
-
-function compactMomentsForPass(moments, maxChars = 18_000) {
-  let limit = Math.min(moments.length, 60);
-  let compact = sampleEvenly(moments, limit).map(compactMoment);
-  let text = JSON.stringify(compact);
-  while (text.length > maxChars && limit > 8) {
-    limit = Math.max(8, Math.floor(limit * 0.65));
-    compact = sampleEvenly(moments, limit).map(compactMoment);
-    text = JSON.stringify(compact);
-  }
-  return compact;
 }
 
 function buildCrossModalSample(moments, windowMs = CFG.episodeFrameAlignMs, maxPairs = 28) {
@@ -460,8 +417,9 @@ export async function passB(db, day, passAJson, prior, rag, moments) {
   const aligned = compactMomentsForPass(moments);
   const crossModal = buildCrossModalSample(moments);
 
-  return chatJson({
+  return chatJsonLenient({
     model: modelId(ModelSlot.DEEP),
+    temperature: 0.05,
     messages: [
       {
         role: "system",
@@ -475,24 +433,25 @@ export async function passB(db, day, passAJson, prior, rag, moments) {
             pass_a: compactPassJson(passAJson),
             episodes,
             episode_timeline: episodeTimeline(episodes),
-            aligned_moments: aligned,
-            cross_modal_candidates: crossModal,
+            aligned_moments: aligned.slice(0, 24),
+            cross_modal_candidates: crossModal.slice(0, 12),
             profile,
             prior_day: prior ? compactPassJson(prior, 1) : null,
-            long_term_memory: rag?.memories ?? [],
-            graph_context: rag?.graph ?? [],
+            long_term_memory: (rag?.memories ?? []).slice(0, 8),
+            graph_context: (rag?.graph ?? []).slice(0, 6),
           },
           null,
           2,
         ),
       },
     ],
-    maxTokens: 4000,
+    maxTokens: 2200,
+    fallback: (text) => parsePassBFallback(text),
   });
 }
 
 export async function passC(passAJson, passBJson, moments) {
-  return chatJson({
+  return chatJsonLenient({
     model: modelId(ModelSlot.FAST),
     messages: [
       {
@@ -505,14 +464,15 @@ export async function passC(passAJson, passBJson, moments) {
           {
             pass_a: compactPassJson(passAJson),
             pass_b: compactPassJson(passBJson),
-            moments: compactMomentsForPass(moments),
+            moments: compactMomentsForPass(moments).slice(0, 20),
           },
           null,
           2,
         ),
       },
     ],
-    maxTokens: 2500,
+    maxTokens: 1800,
+    fallback: (text) => parsePassCFallback(text, passBJson),
   });
 }
 
@@ -523,7 +483,7 @@ export async function passD(day, passAJson, passBJson, passCJson, prior, rag, { 
   const raw = await chatCompletion({
     model: modelId(ModelSlot.DEEP),
     temperature: CFG.digestPassDTemperature,
-    maxTokens: 3200,
+    maxTokens: 2800,
     messages: [
       {
         role: "system",
@@ -553,10 +513,15 @@ export async function passD(day, passAJson, passBJson, passCJson, prior, rag, { 
     ],
   });
 
-  return sanitizeChronicleProse(raw);
+  const cleaned = sanitizeChronicleProse(raw);
+  if (cleaned.length >= 80) {
+    return cleaned;
+  }
+  return sanitizeChronicleProse(proseFromArc(day, passBJson?.narrative_arc));
 }
 
 export async function runDigestPipeline(db, day, { existingProse = null } = {}) {
+  setDigestPhase(day, "episodes");
   console.log(`[digest] rebuilding episodes for ${day}`);
   const episodes = await rebuildEpisodesForDay(db, day);
   buildGraphFromEpisodes(db, day, episodes);
@@ -565,18 +530,27 @@ export async function runDigestPipeline(db, day, { existingProse = null } = {}) 
   const episodeSummaries = () => episodeSummariesForDay(db, day);
   const moments = alignedMomentsForDay(db, day);
 
+  setDigestPhase(day, "pass_a");
   console.log("[digest] pass A — facts");
   const a = await passA(db, day);
+  patchDigest(db, day, { pass_a_json: JSON.stringify(a) });
 
   const rag = await buildRagContext(db, day, {
     episodes: episodeSummaries(),
     passAJson: a,
   });
 
+  setDigestPhase(day, "pass_b");
   console.log("[digest] pass B — interpretation");
   const b = await passB(db, day, a, prior, rag, moments);
+  patchDigest(db, day, { pass_b_json: JSON.stringify(b) });
+
+  setDigestPhase(day, "pass_c");
   console.log("[digest] pass C — critique");
   const c = await passC(a, b, moments);
+  patchDigest(db, day, { pass_c_json: JSON.stringify(c) });
+
+  setDigestPhase(day, "pass_d");
   console.log(`[digest] pass D — prose${existingProse ? " (incremental)" : ""}`);
   const prose = await passD(day, a, b, c, prior, rag, { existingProse });
 
@@ -661,16 +635,31 @@ export async function runDigestForDay(db, day, { force = false } = {}) {
   }
 
   const existing = getDigest(db, day);
-  const result = await runDigestPipeline(db, day, {
-    existingProse: !force && existing?.prose ? existing.prose : null,
-  });
-  const mdPath = saveDigestMarkdown(day, result.prose);
-  console.log(`[digest] ${day} saved ${mdPath} (${check.reason ?? "forced"})`);
-  return { skipped: false, day, prose: result.prose, path: mdPath };
+  try {
+    const result = await runDigestPipeline(db, day, {
+      existingProse: !force && existing?.prose ? existing.prose : null,
+    });
+    const mdPath = saveDigestMarkdown(day, result.prose);
+    clearDigestRuntime();
+    console.log(`[digest] ${day} saved ${mdPath} (${check.reason ?? "forced"})`);
+    return { skipped: false, day, prose: result.prose, path: mdPath };
+  } catch (err) {
+    setDigestError(day, err);
+    const row = getDigest(db, day);
+    const draft = digestDraftFromRow(row);
+    if (draft) {
+      const fallbackProse = proseFromArc(day, draft);
+      patchDigest(db, day, { prose: fallbackProse });
+      saveDigestMarkdown(day, fallbackProse);
+      console.warn(`[digest] ${day} saved draft from pass B after error: ${errMsg(err)}`);
+      return { skipped: false, day, prose: fallbackProse, draft: true, error: errMsg(err) };
+    }
+    throw err;
+  }
 }
 
 export function startDigestLoop(intervalMs = CFG.digestIntervalMs) {
-  let busy = false;
+  let loopBusy = false;
   let lastDay = today();
   const checkMs = Math.min(intervalMs, 300_000);
 
@@ -679,10 +668,10 @@ export function startDigestLoop(intervalMs = CFG.digestIntervalMs) {
   );
 
   const tick = async () => {
-    if (busy) {
+    if (loopBusy || digestRuntime.busy) {
       return;
     }
-    busy = true;
+    loopBusy = true;
     try {
       const db = openDb();
       const currentDay = today();
@@ -698,7 +687,7 @@ export function startDigestLoop(intervalMs = CFG.digestIntervalMs) {
     } catch (err) {
       console.error(`[digest] ${errMsg(err)}`);
     } finally {
-      busy = false;
+      loopBusy = false;
     }
   };
 

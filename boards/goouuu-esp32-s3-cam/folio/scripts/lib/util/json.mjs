@@ -195,7 +195,11 @@ function candidateBlocks(text) {
 
 /** Best-effort JSON from LLM output (markdown fences, comments, truncation). */
 export function parseJsonLoose(text) {
-  const blocks = candidateBlocks(text);
+  const cleaned = String(text ?? "")
+    .replace(/\*\*/g, "")
+    .replace(/```json/gi, "")
+    .replace(/```/g, "");
+  const blocks = candidateBlocks(cleaned);
   let arrayFallback = null;
 
   for (const block of blocks.reverse()) {
@@ -212,7 +216,54 @@ export function parseJsonLoose(text) {
     return parsed;
   }
 
-  return arrayFallback;
+  return arrayFallback ?? parsePassBFallback(cleaned);
+}
+
+const EMPTY_PASS_B = {
+  narrative_arc: "",
+  day_phases: [],
+  shifts: [],
+  cross_modal: [],
+  decisions_real: [],
+  rejected: [],
+  implicit_threads: [],
+  open_loops: [],
+  patterns: [],
+  tomorrow_pull: [],
+};
+
+/** Salvage Pass B when JSON is truncated or has markdown inside strings. */
+export function parsePassBFallback(text) {
+  const src = String(text ?? "").replace(/\*\*/g, "");
+  const arcMatch =
+    src.match(/"narrative_arc"\s*:\s*"((?:[^"\\]|\\.)*)"/s) ??
+    src.match(/"narrative_arc"\s*:\s*"([\s\S]*?)"\s*,\s*"day_phases"/);
+  const arc = arcMatch?.[1]?.replace(/\\n/g, "\n").replace(/\s+/g, " ").trim();
+  if (!arc) {
+    return null;
+  }
+  return { ...EMPTY_PASS_B, narrative_arc: arc.slice(0, 2000) };
+}
+
+/** Minimal Pass C when critic JSON fails — keeps pipeline alive. */
+export function parsePassCFallback(text, passB = null) {
+  const src = String(text ?? "").replace(/\*\*/g, "").replace(/```json/gi, "").replace(/```/g, "");
+  for (const block of candidateBlocks(src).reverse()) {
+    const parsed = tryParse(block.trim());
+    if (parsed?.approved_claims) {
+      return parsed;
+    }
+  }
+  const arc = passB?.narrative_arc?.trim();
+  if (!arc) {
+    return null;
+  }
+  return {
+    approved_claims: [{ text: arc.slice(0, 800), evidence: [], confidence: 0.55 }],
+    approved_cross_modal: [],
+    rejected_claims: [],
+    evidence_gaps: ["pass C fallback"],
+  };
 }
 
 /** Regex fallback for frame caption when JSON is too broken. */

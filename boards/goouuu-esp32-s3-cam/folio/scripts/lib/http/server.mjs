@@ -3,9 +3,10 @@ import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { resolve } from "node:path";
 import { CFG, nodeConfigPayload, publicConfig, updateConfig } from "../config/index.mjs";
-import { runDigestForDay, needsDigestRefresh } from "../services/digest/index.mjs";
+import { runDigestForDay, needsDigestRefresh, digestRuntime, digestDraftFromRow } from "../services/digest/index.mjs";
 import { runPendingQueueOnce } from "../services/pipeline/index.mjs";
-import { reindexMemoriesFromDigests } from "../memory/index.mjs";
+import { fetchOpenAiModels } from "../llm/models-catalog.mjs";
+import { errMsg, pcmToWav, sendBytes, sendJson, today } from "../util/index.mjs";
 import {
   getAudioChunk,
   getDigest,
@@ -19,9 +20,12 @@ import {
   touchDevice,
 } from "../db/index.mjs";
 import { ingestAudioChunk, ingestFrame, ingestEvent } from "../services/index.mjs";
-import { retrieveMemories } from "../memory/index.mjs";
-import { fetchLmModels } from "../llm/models-catalog.mjs";
-import { errMsg, pcmToWav, sendBytes, sendJson, today } from "../util/index.mjs";
+import { retrieveMemories, reindexMemoriesFromDigests } from "../memory/index.mjs";
+
+const UI_MIME = {
+  "/ui/app.css": "text/css; charset=utf-8",
+  "/ui/app.js": "application/javascript; charset=utf-8",
+};
 
 let quietSkipCount = 0;
 let lastQuietLogAt = 0;
@@ -114,7 +118,7 @@ function serveAudio(db, chunkId) {
   return { body: pcmToWav(pcm, CFG.audioSampleRate), contentType: "audio/wav" };
 }
 
-export function createFolioServer(viewHtml) {
+export function createFolioServer(ui) {
   openDb();
 
   return createServer(async (req, res) => {
@@ -124,7 +128,14 @@ export function createFolioServer(viewHtml) {
     try {
       if (path === "/" || path === "/index.html") {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(viewHtml);
+        res.end(ui.html);
+        return;
+      }
+
+      if (UI_MIME[path]) {
+        const asset = path === "/ui/app.css" ? ui.css : ui.js;
+        res.writeHead(200, { "Content-Type": UI_MIME[path] });
+        res.end(asset ?? "");
         return;
       }
 
@@ -205,7 +216,13 @@ export function createFolioServer(viewHtml) {
       if (path === "/api/digest") {
         const day = qs.get("day") ?? today();
         const row = getDigest(openDb(), day);
-        sendJson(res, 200, row ?? { day, prose: null });
+        const draft = digestDraftFromRow(row);
+        sendJson(res, 200, {
+          ...(row ?? { day, prose: null }),
+          day,
+          draft,
+          is_draft: Boolean(draft && !row?.prose?.trim()),
+        });
         return;
       }
 
@@ -218,8 +235,10 @@ export function createFolioServer(viewHtml) {
           day,
           auto: CFG.digestAuto,
           interval_ms: CFG.digestIntervalMs,
-          has_prose: Boolean(row?.prose),
+          has_prose: Boolean(row?.prose?.trim()),
+          has_draft: Boolean(digestDraftFromRow(row)),
           updated_at: row?.updated_at ?? null,
+          runtime: { ...digestRuntime },
           ...check,
         });
         return;
@@ -268,8 +287,8 @@ export function createFolioServer(viewHtml) {
         return;
       }
 
-      if (path === "/api/lm/models" && req.method === "GET") {
-        sendJson(res, 200, await fetchLmModels());
+      if (path === "/api/openai/models" || path === "/api/lm/models") {
+        sendJson(res, 200, await fetchOpenAiModels());
         return;
       }
 

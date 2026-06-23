@@ -152,7 +152,7 @@ Manual drain: `yarn brain:process`
 
 The brain runs passes A→D **automatically** when new witness data arrives (checked every `FOLIO_DIGEST_INTERVAL_MS`, default 30 min). On day rollover it finalizes yesterday. Prose appears in the UI and `~/.folio/digests/YYYY-MM-DD.md`.
 
-Witness payloads are **compacted** before each LM call (sampled moments, truncated text) to fit typical 16k context. If LM Studio still errors, reload the model with a larger context length.
+Witness payloads are **compacted** before each LLM call (sampled moments, truncated text) to fit typical 16k context. If the server still errors, reload the model with a larger context length.
 
 Manual override: `POST /api/digest/run?day=…` or `node scripts/folio.mjs digest --day …`
 

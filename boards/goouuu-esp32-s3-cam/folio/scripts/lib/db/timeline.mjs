@@ -61,6 +61,7 @@ export function timelineForDay(db, day) {
       energy: c.energy,
       speech: (c.energy ?? 0) >= CFG.speechEnergyThreshold,
       text: c.utterance_text ?? null,
+      utterance_id: c.utterance_id ?? null,
       processed: !!c.processed,
       has_pcm: Boolean(c.path),
       device_ms: c.device_ms ?? null,

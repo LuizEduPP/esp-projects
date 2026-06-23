@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { normalizeOpenAiBase } from "../llm/openai-base.mjs";
 
 /** esp_camera framesize_t IDs — must match firmware FOLIO_FRAME_SIZE_ID / platformio.ini */
 const FRAME_SIZE_TO_ID = { CIF: 5, QVGA: 6, VGA: 7, SVGA: 8, XGA: 9 };
@@ -136,11 +137,39 @@ function resolveWhisperDevice(fileVal, envVal) {
 let configPath = null;
 let fileData = clone(DEFAULT_CONFIG);
 
+function migrateLegacyLmConfig(file) {
+  const lm = file?.lm;
+  if (!lm || typeof lm !== "object") {
+    return false;
+  }
+  if (!file.openai || typeof file.openai !== "object") {
+    file.openai = {};
+  }
+  if (lm.url && file.openai.baseUrl == null) {
+    file.openai.baseUrl = normalizeOpenAiBase(lm.url);
+  }
+  if (lm.model && file.openai.model == null) {
+    file.openai.model = lm.model;
+  }
+  if (lm.modelFast && file.openai.model == null) {
+    file.openai.model = lm.modelFast;
+  }
+  if (lm.modelDeep != null && file.openai.modelDeep == null) {
+    file.openai.modelDeep = lm.modelDeep;
+  }
+  delete file.lm;
+  return true;
+}
+
 function loadFileConfig() {
   for (const path of configPaths()) {
     if (existsSync(path)) {
       configPath = path;
       fileData = deepMerge(clone(DEFAULT_CONFIG), JSON.parse(readFileSync(path, "utf8")));
+      if (migrateLegacyLmConfig(fileData)) {
+        writeFileSync(path, `${JSON.stringify(fileData, null, 2)}\n`, "utf8");
+        console.log(`[config] migrated legacy lm.* → openai.* in ${path}`);
+      }
       return;
     }
   }
@@ -241,6 +270,7 @@ function patchNeedsRestart(patch, prefix = "") {
 
 export function saveConfigPatch(patch) {
   fileData = deepMerge(fileData, patch);
+  migrateLegacyLmConfig(fileData);
   const targetPath = configPath ?? configPaths()[configPaths().length - 1];
   mkdirSync(dirname(targetPath), { recursive: true });
   writeFileSync(targetPath, `${JSON.stringify(fileData, null, 2)}\n`, "utf8");
@@ -254,11 +284,36 @@ export function saveConfigPatch(patch) {
   };
 }
 
+function resolveOpenAiBase(file) {
+  const fromOpenAi =
+    envStr(getPath(file, "openai.baseUrl"), "OPENAI_BASE_URL", null) ||
+    envStr(getPath(file, "openai.baseUrl"), "FOLIO_OPENAI_BASE_URL", null);
+  if (fromOpenAi) {
+    return normalizeOpenAiBase(fromOpenAi);
+  }
+  const legacy = envStr(getPath(file, "lm.url"), "LM_URL", null);
+  if (legacy) {
+    return normalizeOpenAiBase(legacy);
+  }
+  return normalizeOpenAiBase(getPath(DEFAULT_CONFIG, "openai.baseUrl"));
+}
+
+function resolveOpenAiApiKey(file) {
+  const key =
+    envStr(getPath(file, "openai.apiKey"), "OPENAI_API_KEY", "") ||
+    envStr(getPath(file, "openai.apiKey"), "FOLIO_OPENAI_API_KEY", "");
+  return key || null;
+}
+
 function resolveLmModels(file) {
   const model =
+    cfgStr(file, "openai.model", "OPENAI_MODEL") ||
     cfgStr(file, "lm.model", "FOLIO_LM_MODEL") ||
     cfgStr(file, "lm.modelFast", "FOLIO_MODEL_FAST");
-  const deep = cfgStr(file, "lm.modelDeep", "FOLIO_MODEL_DEEP") || model;
+  const deep =
+    cfgStr(file, "openai.modelDeep", "OPENAI_MODEL_DEEP") ||
+    cfgStr(file, "lm.modelDeep", "FOLIO_MODEL_DEEP") ||
+    model;
   return { modelFast: model, modelDeep: deep };
 }
 
@@ -271,7 +326,8 @@ function buildCfgFromFile(file = getFileData()) {
     port: cfgNum(file, "port", "FOLIO_PORT"),
     dataDir,
 
-    lmUrl: cfgStr(file, "lm.url", "LM_URL"),
+    openaiBaseUrl: resolveOpenAiBase(file),
+    openaiApiKey: resolveOpenAiApiKey(file),
     modelFast,
     modelDeep,
 

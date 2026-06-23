@@ -1,7 +1,8 @@
 /**
- * Single source of truth for AI model slots (S — one responsibility: model routing).
+ * Model slot routing — maps logical roles to configured model IDs.
  */
 import { CFG } from "../config/index.mjs";
+import { openAiUrl } from "../llm/openai.mjs";
 
 export const ModelSlot = Object.freeze({
   FAST: "fast",
@@ -28,15 +29,14 @@ export function modelId(slot) {
   }
 }
 
+/** @deprecated use openAiUrl("chat") */
 export function lmChatUrl() {
-  return CFG.lmUrl;
+  return openAiUrl("chat");
 }
 
+/** @deprecated use openAiUrl("embeddings") */
 export function embeddingsUrl() {
-  if (CFG.memoryEmbeddingsUrl) {
-    return CFG.memoryEmbeddingsUrl;
-  }
-  return CFG.lmUrl.replace(/\/chat\/completions\/?$/, "/embeddings");
+  return openAiUrl("embeddings");
 }
 
 export function whisperRuntime() {
@@ -56,5 +56,6 @@ export function modelSummary() {
     embed: CFG.memoryEmbeddingModel || CFG.modelFast,
     rerank: CFG.memoryRerankModel,
     whisperDevice: CFG.whisperDevice,
+    openaiBaseUrl: CFG.openaiBaseUrl,
   };
 }

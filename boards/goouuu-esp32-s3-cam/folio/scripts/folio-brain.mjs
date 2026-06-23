@@ -15,13 +15,17 @@ import {
 } from "./lib/services/index.mjs";
 
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "ui");
-const viewHtml = readFileSync(join(UI_DIR, "index.html"), "utf8").replaceAll(
-  "__PORT__",
-  String(CFG.port),
-);
+
+function loadUi() {
+  return {
+    html: readFileSync(join(UI_DIR, "index.html"), "utf8").replaceAll("__PORT__", String(CFG.port)),
+    css: readFileSync(join(UI_DIR, "app.css"), "utf8"),
+    js: readFileSync(join(UI_DIR, "app.js"), "utf8"),
+  };
+}
 
 function main() {
-  const server = createFolioServer(viewHtml);
+  const server = createFolioServer(loadUi());
   server.listen(CFG.port, "0.0.0.0", () => {
     logServerStartup();
     console.log(

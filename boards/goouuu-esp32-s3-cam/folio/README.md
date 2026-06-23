@@ -7,7 +7,7 @@ The ESP32 **does not respond**. It listens and sees; the PC processes, stores, a
 | Layer | Role |
 |-------|------|
 | **folio-node** (ESP32-S3-CAM + INMP441) | Push 1 s audio + JPEG every 60 s (USB power) |
-| **folio-brain** (PC, Node 22+) | Ingest, presence from camera/audio, Whisper, LM Studio, `node:sqlite` |
+| **folio-brain** (PC, Node 22+) | Ingest, presence from camera/audio, Whisper, OpenAI-compatible API, `node:sqlite` |
 | **Digest A→D** | Facts → interpretation → critique → prose |
 
 ## Hardware
@@ -133,12 +133,13 @@ mkdir -p ~/.folio
 cp boards/goouuu-esp32-s3-cam/folio/folio.config.example.json ~/.folio/config.json
 ```
 
-**Env vars override** `config.json`. Edit in the UI (**Settings**) or via API:
+**Env vars override** `config.json` (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_MODEL_DEEP`; legacy `LM_URL` / `FOLIO_LM_MODEL` still work). Edit in the UI (**Settings**) or via API:
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/config` | Full config + version |
-| PUT | `/api/config` | Save (partial merge) → hot reload LM/Whisper/locale; **restart brain** only for `port` / `dataDir` |
+| PUT | `/api/config` | Save (partial merge) → hot reload OpenAI/Whisper/locale; **restart brain** only for `port` / `dataDir` |
+| GET | `/api/openai/models` | List models from configured base URL (alias: `/api/lm/models`) |
 | GET | `/api/node/config` | ESP pulls this (include `X-Folio-Device-Id`) |
 | GET | `/api/devices` | Sync status per node |
 
@@ -149,7 +150,7 @@ ESP polls `/api/node/config` every `node.statusIntervalMs` and sends `X-Folio-Co
 | Key | Default | Description |
 |-----|---------|-------------|
 | `locale` | `pt-BR` | Language |
-| `lm.url` / `lm.model` / `lm.modelDeep` | LM Studio | Fast = captions; deep = digest passes B/D |
+| `openai.baseUrl` / `openai.apiKey` / `openai.model` / `openai.modelDeep` | OpenAI API | LM Studio, Ollama, vLLM, OpenAI — fast = captions; deep = digest passes B/D |
 | `audio.whisperModel` | `base` | Whisper model |
 | `audio.whisperDevice` | `cuda` | `cpu`, `cuda`, `mps`, `auto` — see UI **runtime** line for effective device |
 | `audio.speechEnergyThreshold` | `0.008` | RMS gate (ESP `FOLIO_SPEECH_ENERGY` must match) |
@@ -221,7 +222,7 @@ Persistent memory lives in `~/.folio/folio.db`:
 | `profile_facts` | Long-term patterns, decisions, open loops, approved claims |
 | `day_rollups` | Yesterday's compact arc (fast continuity) |
 
-After each digest: index today's witness → `memory_chunks`. Before Pass B/D: **RAG** pulls top lexical matches from the last 90 days + graph theme overlap + `profile_facts`. Set `memory.useEmbeddings: true` in config only if LM Studio exposes `/v1/embeddings`.
+After each digest: index today's witness → `memory_chunks`. Before Pass B/D: **RAG** pulls top lexical matches from the last 90 days + graph theme overlap + `profile_facts`. Set `memory.useEmbeddings: true` in config only if your server exposes `/v1/embeddings`.
 
 ```bash
 yarn folio:memory:reindex
@@ -230,7 +231,7 @@ yarn folio:memory:reindex
 curl 'http://localhost:8770/api/memory?q=esp32+lm+studio'
 ```
 
-Optional semantic embeddings: `"memory.useEmbeddings": true` (LM Studio `/v1/embeddings`). Default is lexical cosine (no extra model).
+Optional semantic embeddings: `"memory.useEmbeddings": true` (requires `/v1/embeddings` on the same base URL). Default is lexical cosine (no extra model).
 
 ## Speaker enrollment (optional)
 

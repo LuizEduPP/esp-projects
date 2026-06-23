@@ -13,8 +13,8 @@ export function chroniclerPassBSystem() {
     "ideas explicitly abandoned, cross-modal alignments (what was said while the camera showed X), " +
     "implicit shifts, contradictions, energy changes, and continuity with long_term_memory. " +
     "Cite evidence IDs (utt:N, frm:N, ep:ID). Do not invent past events beyond long_term_memory. " +
-    'Reply valid JSON only — no markdown fences, no // comments: ' +
-    '{"narrative_arc":"","day_phases":[{"period":"morning|afternoon|evening|night","focus":"","energy":""}],' +
+    'Reply valid JSON only — no markdown fences, no // comments, no **bold**, no real line breaks inside strings: ' +
+    '{"narrative_arc":"one paragraph max 500 chars","day_phases":[{"period":"morning|afternoon|evening|night","focus":"","energy":""}],' +
     '"shifts":[{"at":"ISO","description":"","evidence":[]}],' +
     '"cross_modal":[{"at":"ISO","speech":"","visual":"","inference":"","evidence":[]}],' +
     '"decisions_real":[{"text":"","evidence":[],"confidence":0-1}],' +

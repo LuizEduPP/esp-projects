@@ -1,5 +1,6 @@
 import { CFG } from "../config/index.mjs";
-import { embeddingsUrl, modelId, ModelSlot } from "../models/index.mjs";
+import { createEmbeddings } from "../llm/openai.mjs";
+import { modelId, ModelSlot } from "../models/index.mjs";
 import { cosineDense, cosineSimilarity, termVector, vectorFromJson } from "./lexical.mjs";
 
 export async function embedText(text) {
@@ -8,22 +9,14 @@ export async function embedText(text) {
   }
 
   try {
-    const res = await fetch(embeddingsUrl(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: modelId(ModelSlot.EMBED),
-        input: text.slice(0, 2000),
-      }),
-      signal: AbortSignal.timeout(60_000),
+    const json = await createEmbeddings({
+      model: modelId(ModelSlot.EMBED),
+      input: text.slice(0, 8192),
+      encoding_format: "float",
     });
-    if (!res.ok) {
-      throw new Error(`embeddings ${res.status}`);
-    }
-    const json = await res.json();
     const vec = json?.data?.[0]?.embedding;
     if (!Array.isArray(vec)) {
-      throw new Error("no embedding vector");
+      throw new Error("no embedding vector in OpenAI response");
     }
     return { kind: "float", vector: vec };
   } catch (err) {

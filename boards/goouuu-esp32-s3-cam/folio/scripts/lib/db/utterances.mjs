@@ -18,7 +18,7 @@ export function audioChunksForDay(db, day) {
   const { start, end } = dayBounds(day);
   return db
     .prepare(
-      `SELECT c.*, u.text AS utterance_text
+      `SELECT c.*, u.id AS utterance_id, u.text AS utterance_text
        FROM audio_chunks c
        LEFT JOIN utterances u ON u.chunk_id = c.id
        WHERE c.captured_at >= ? AND c.captured_at < ?

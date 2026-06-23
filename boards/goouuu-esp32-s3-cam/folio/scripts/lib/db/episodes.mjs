@@ -15,11 +15,21 @@ export function clearEpisodesForDay(db, day) {
   db.prepare("DELETE FROM graph_nodes WHERE day = ?").run(day);
 }
 
+import { sqlText } from "./sql.mjs";
+
 export function insertEpisode(db, ep) {
   db.prepare(
     `INSERT INTO episodes (id, day, started_at, ended_at, label, summary_json, created_at)
      VALUES (@id, @day, @started_at, @ended_at, @label, @summary_json, @created_at)`,
-  ).run(ep);
+  ).run({
+    id: sqlText(ep.id),
+    day: sqlText(ep.day),
+    started_at: sqlText(ep.started_at),
+    ended_at: sqlText(ep.ended_at),
+    label: sqlText(ep.label, "episode"),
+    summary_json: sqlText(ep.summary_json, "{}"),
+    created_at: sqlText(ep.created_at),
+  });
 }
 
 export function linkEpisodeUtterance(db, episodeId, utteranceId) {
