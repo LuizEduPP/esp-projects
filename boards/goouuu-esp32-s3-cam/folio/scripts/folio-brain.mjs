@@ -5,11 +5,14 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CFG, isCudaAvailable } from "./lib/config.mjs";
-import { startDigestLoop } from "./lib/digest.mjs";
-import { createFolioServer, logServerStartup } from "./lib/http.mjs";
-import { activeLocale, promptLanguageName, whisperLanguageCode } from "./lib/locale.mjs";
-import { startRetentionLoop, startProcessingLoop } from "./lib/worker.mjs";
+import { CFG, isCudaAvailable } from "./lib/config/index.mjs";
+import { createFolioServer, logServerStartup } from "./lib/http/index.mjs";
+import { activeLocale, promptLanguageName, whisperLanguageCode } from "./lib/locale/index.mjs";
+import {
+  startDigestLoop,
+  startRetentionLoop,
+  startProcessingLoop,
+} from "./lib/services/index.mjs";
 
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "ui");
 const viewHtml = readFileSync(join(UI_DIR, "index.html"), "utf8").replaceAll(

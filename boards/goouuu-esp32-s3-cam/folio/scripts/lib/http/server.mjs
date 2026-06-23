@@ -2,8 +2,8 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { resolve } from "node:path";
-import { CFG, nodeConfigPayload, publicConfig, updateConfig } from "./config.mjs";
-import { runDigestForDay } from "./digest.mjs";
+import { CFG, nodeConfigPayload, publicConfig, updateConfig } from "../config/index.mjs";
+import { runDigestForDay } from "../services/index.mjs";
 import {
   getAudioChunk,
   getDigest,
@@ -15,10 +15,10 @@ import {
   profileFacts,
   timelineForDay,
   touchDevice,
-} from "./db.mjs";
-import { ingestAudioChunk, ingestFrame, ingestEvent } from "./ingest.mjs";
-import { retrieveMemories } from "./memory.mjs";
-import { errMsg, pcmToWav, sendBytes, sendJson, today } from "./util.mjs";
+} from "../db/index.mjs";
+import { ingestAudioChunk, ingestFrame, ingestEvent } from "../services/index.mjs";
+import { retrieveMemories } from "../memory/index.mjs";
+import { errMsg, pcmToWav, sendBytes, sendJson, today } from "../util/index.mjs";
 
 let quietSkipCount = 0;
 let lastQuietLogAt = 0;

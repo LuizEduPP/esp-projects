@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CFG, PATHS } from "./config.mjs";
-import { chatCompletion, chatJson } from "./lm.mjs";
-import { dateLabelForDay, evidenceFooterRule, promptLanguageRule } from "./locale.mjs";
-import { errMsg, isoNow, today } from "./util.mjs";
+import { CFG, PATHS } from "../../config/index.mjs";
+import { chatCompletion, chatJson } from "../../llm/index.mjs";
+import { dateLabelForDay, evidenceFooterRule, promptLanguageRule } from "../../locale/index.mjs";
+import { modelId, ModelSlot } from "../../models/index.mjs";
+import { errMsg, isoNow, today } from "../../util/index.mjs";
 import {
   alignedMomentsForDay,
   clearEpisodesForDay,
@@ -26,8 +27,8 @@ import {
   upsertDigest,
   utterancesForDay,
   witnessStats,
-} from "./db.mjs";
-import { buildRagContext, indexDayMemories } from "./memory.mjs";
+} from "../../db/index.mjs";
+import { buildRagContext, indexDayMemories } from "../../memory/index.mjs";
 
 const GAP_MS = () => CFG.episodeGapMin * 60 * 1000;
 
@@ -114,7 +115,7 @@ Reply raw JSON only:
 Use evidence IDs from the input when possible. Facts only from input; infer carefully. ${promptLanguageRule()}`;
 
   return chatJson({
-    model: CFG.modelFast,
+    model: modelId(ModelSlot.FAST),
     messages: [
       {
         role: "user",
@@ -382,7 +383,7 @@ export async function passA(db, day) {
   );
 
   return chatJson({
-    model: CFG.modelFast,
+    model: modelId(ModelSlot.FAST),
     messages: [
       {
         role: "system",
@@ -407,7 +408,7 @@ export async function passB(db, day, passAJson, prior, rag) {
   const profile = rag?.profile?.length ? rag.profile : profileFacts(db).slice(0, CFG.memoryProfileLimit);
 
   return chatJson({
-    model: CFG.modelDeep,
+    model: modelId(ModelSlot.DEEP),
     messages: [
       {
         role: "system",
@@ -442,7 +443,7 @@ export async function passB(db, day, passAJson, prior, rag) {
 
 export async function passC(passAJson, passBJson, moments) {
   return chatJson({
-    model: CFG.modelFast,
+    model: modelId(ModelSlot.FAST),
     messages: [
       {
         role: "system",
@@ -474,7 +475,7 @@ export async function passD(day, passAJson, passBJson, passCJson, prior, rag) {
   const dateLabel = dateLabelForDay(day);
 
   return chatCompletion({
-    model: CFG.modelDeep,
+    model: modelId(ModelSlot.DEEP),
     temperature: CFG.digestPassDTemperature,
     maxTokens: 2800,
     messages: [
@@ -546,8 +547,8 @@ export async function runDigestPipeline(db, day) {
     pass_c_json: JSON.stringify(c),
     prose,
     evidence_json: JSON.stringify(evidence),
-    model_fast: CFG.modelFast,
-    model_deep: CFG.modelDeep,
+    model_fast: modelId(ModelSlot.FAST),
+    model_deep: modelId(ModelSlot.DEEP),
     created_at: now,
     updated_at: now,
   });

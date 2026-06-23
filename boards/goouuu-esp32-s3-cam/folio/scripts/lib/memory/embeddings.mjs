@@ -1,0 +1,53 @@
+import { CFG } from "../config/index.mjs";
+import { embeddingsUrl, modelId, ModelSlot } from "../models/index.mjs";
+import { cosineDense, cosineSimilarity, termVector, vectorFromJson } from "./lexical.mjs";
+
+export async function embedText(text) {
+  if (!CFG.memoryUseEmbeddings) {
+    return { kind: "lexical", vector: [...termVector(text).entries()] };
+  }
+
+  try {
+    const res = await fetch(embeddingsUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: modelId(ModelSlot.EMBED),
+        input: text.slice(0, 2000),
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!res.ok) {
+      throw new Error(`embeddings ${res.status}`);
+    }
+    const json = await res.json();
+    const vec = json?.data?.[0]?.embedding;
+    if (!Array.isArray(vec)) {
+      throw new Error("no embedding vector");
+    }
+    return { kind: "float", vector: vec };
+  } catch (err) {
+    if (!CFG.memoryFallbackLexical) {
+      throw new Error(`embeddings failed: ${err.message}`);
+    }
+    console.warn(`[memory] embeddings failed, fallback lexical: ${err.message}`);
+    return { kind: "lexical", vector: [...termVector(text).entries()] };
+  }
+}
+
+export function scorePair(queryEmbed, docEmbedJson, docText) {
+  const stored = vectorFromJson(docEmbedJson);
+
+  if (queryEmbed.kind === "float" && Array.isArray(stored)) {
+    return cosineDense(queryEmbed.vector, stored);
+  }
+
+  const queryMap =
+    queryEmbed.kind === "lexical" ? new Map(queryEmbed.vector) : termVector(docText);
+  const docMap = stored instanceof Map ? stored : termVector(docText);
+  return cosineSimilarity(queryMap, docMap);
+}
+
+export function serializeEmbedding(embed) {
+  return JSON.stringify(embed.vector);
+}

@@ -1,4 +1,4 @@
-import { CFG } from "./config.mjs";
+import { CFG } from "../config/index.mjs";
 
 const LOCALE_META = {
   "pt-BR": { whisper: "pt", whisperName: "Portuguese", prompt: "Portuguese (Brazil)" },

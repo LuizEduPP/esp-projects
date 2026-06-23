@@ -1,0 +1,83 @@
+import { LEXICAL_MIN_TOKEN_LENGTH, lexicalStopWordSet } from "../locale/index.mjs";
+
+export function tokenize(text) {
+  const stop = lexicalStopWordSet();
+  return String(text ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^a-z0-9à-ú]+/gi, " ")
+    .split(/\s+/)
+    .filter((t) => t.length >= LEXICAL_MIN_TOKEN_LENGTH && !stop.has(t));
+}
+
+export function termVector(text) {
+  const vec = new Map();
+  for (const tok of tokenize(text)) {
+    vec.set(tok, (vec.get(tok) ?? 0) + 1);
+  }
+  return vec;
+}
+
+export function cosineSimilarity(a, b) {
+  if (!a.size || !b.size) {
+    return 0;
+  }
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (const v of a.values()) {
+    normA += v * v;
+  }
+  for (const v of b.values()) {
+    normB += v * v;
+  }
+  const smaller = a.size < b.size ? a : b;
+  const larger = a.size < b.size ? b : a;
+  for (const [k, v] of smaller) {
+    const w = larger.get(k);
+    if (w) {
+      dot += v * w;
+    }
+  }
+  if (!normA || !normB) {
+    return 0;
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+export function cosineDense(a, b) {
+  if (!a?.length || !b?.length || a.length !== b.length) {
+    return 0;
+  }
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  if (!normA || !normB) {
+    return 0;
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+export function vectorFromJson(raw) {
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && typeof parsed[0] === "number") {
+      return parsed;
+    }
+    if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
+      return new Map(parsed);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}

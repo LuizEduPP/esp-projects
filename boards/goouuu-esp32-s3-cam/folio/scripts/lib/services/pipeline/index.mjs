@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
-import { CFG } from "./config.mjs";
+import { CFG } from "../../config/index.mjs";
 import {
   bumpSttAttempts,
   deleteAudioChunk,
@@ -12,10 +12,10 @@ import {
   pendingCounts,
   pendingFrames,
   pruneExpiredPcm,
-} from "./db.mjs";
-import { captionFrame } from "./lm.mjs";
-import { isSpeechChunk, transcribeWav } from "./whisper.mjs";
-import { writeWav } from "./util.mjs";
+} from "../../db/index.mjs";
+import { captionFrame } from "../../llm/index.mjs";
+import { isSpeechChunk, transcribeWav } from "../../stt/index.mjs";
+import { writeWav } from "../../util/audio.mjs";
 
 const MAX_STT_ATTEMPTS = 3;
 let lastFrameLmAt = 0;

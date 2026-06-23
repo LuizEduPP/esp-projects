@@ -102,18 +102,17 @@ scripts/
 ├── folio-brain.mjs      # HTTP server + background loops
 ├── folio.mjs            # CLI: digest | process | enroll | memory reindex
 ├── ui/index.html
-└── lib/
-    ├── config.mjs       # ~/.folio/config.json + CFG
-    ├── db.mjs           # SQLite schema + queries + openDb
-    ├── digest.mjs       # episodes, graph, passes A→D, scheduler
-    ├── memory.mjs       # RAG embed/retrieve + index
-    ├── http.mjs         # routes (/ingest, /api/*)
-    ├── ingest.mjs       # fast path: save PCM/JPEG
-    ├── worker.mjs       # Whisper + LM queue + retention
-    ├── lm.mjs
-    ├── whisper.mjs
-    ├── locale.mjs
-    └── util.mjs
+└── lib/                     # só pastas — cada uma com index.mjs
+    ├── config/
+    ├── locale/
+    ├── models/              # ModelSlot, modelId
+    ├── db/
+    ├── util/                # time, audio, response, json
+    ├── stt/
+    ├── llm/
+    ├── memory/
+    ├── services/            # ingest/, pipeline/, digest/
+    └── http/
 ```
 
 ## Offline spool (microSD card — slot onboard)

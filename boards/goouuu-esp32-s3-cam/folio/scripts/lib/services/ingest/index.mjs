@@ -1,15 +1,15 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CFG, PATHS } from "./config.mjs";
+import { CFG, PATHS } from "../../config/index.mjs";
 import {
   ensureDevice,
   insertAudioChunk,
   insertEvent,
   insertFrame,
   openDb,
-} from "./db.mjs";
-import { isSpeechChunk, pcmEnergy, shouldStoreAudioChunk } from "./whisper.mjs";
-import { dayFromIso, isoNow, parseMetaHeader } from "./util.mjs";
+} from "../../db/index.mjs";
+import { isSpeechChunk, pcmEnergy, shouldStoreAudioChunk } from "../../stt/index.mjs";
+import { dayFromIso, isoNow, parseMetaHeader } from "../../util/time.mjs";
 
 export function ingestAudioChunk(deviceId, pcmBuffer, metaHeader) {
   const db = openDb();

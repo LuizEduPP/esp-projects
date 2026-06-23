@@ -10,7 +10,7 @@ const FRAME_SIZE_TO_ID = { CIF: 5, QVGA: 6, VGA: 7, SVGA: 8, XGA: 9 };
 
 const EXAMPLE_PATH = join(
   dirname(fileURLToPath(import.meta.url)),
-  "../../folio.config.example.json",
+  "../../../folio.config.example.json",
 );
 
 export const DEFAULT_CONFIG = JSON.parse(readFileSync(EXAMPLE_PATH, "utf8"));
@@ -175,6 +175,16 @@ export function nodeConfigVersion(data = fileData) {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex").slice(0, 12);
 }
 
+function runtimeModels() {
+  return {
+    fast: CFG.modelFast,
+    deep: CFG.modelDeep,
+    whisper: CFG.whisperModel,
+    embed: CFG.memoryEmbeddingModel || CFG.modelFast,
+    whisperDevice: CFG.whisperDevice,
+  };
+}
+
 export function editableConfig() {
   return {
     configPath,
@@ -183,6 +193,7 @@ export function editableConfig() {
       whisperDeviceEffective: CFG.whisperDevice,
       cudaAvailable: cudaAvailable(),
       speechEnergyThreshold: CFG.speechEnergyThreshold,
+      models: runtimeModels(),
     },
     ...clone(fileData),
   };

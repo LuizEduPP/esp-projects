@@ -3,12 +3,11 @@
  * folio — CLI for brain-side tasks.
  * Usage: folio.mjs <digest|process|enroll> [options]
  */
-import { CFG } from "./lib/config.mjs";
-import { getDigest, openDb, memoryChunkCount, pendingCounts, upsertSpeaker } from "./lib/db.mjs";
-import { runDigestForDay } from "./lib/digest.mjs";
-import { reindexMemoriesFromDigests } from "./lib/memory.mjs";
-import { runPendingQueueOnce } from "./lib/worker.mjs";
-import { errMsg, today } from "./lib/util.mjs";
+import { CFG } from "./lib/config/index.mjs";
+import { getDigest, openDb, memoryChunkCount, pendingCounts, upsertSpeaker } from "./lib/db/index.mjs";
+import { runDigestForDay, runPendingQueueOnce } from "./lib/services/index.mjs";
+import { reindexMemoriesFromDigests } from "./lib/memory/index.mjs";
+import { errMsg, today } from "./lib/util/index.mjs";
 
 function usage() {
   console.error(`Usage:
