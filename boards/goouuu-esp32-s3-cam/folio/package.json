@@ -11,13 +11,6 @@
     "fw:build": "bash ../../../scripts/pio.sh run -d firmware",
     "fw:upload": "bash ../../../scripts/pio.sh run -d firmware -t upload",
     "fw:flash": "bash ../../../scripts/pio.sh run -d firmware && bash ../../../scripts/pio.sh run -d firmware -t upload",
-    "fw:monitor": "bash ../../../scripts/pio.sh device monitor -d firmware -b 115200 --filter direct",
-    "brain": "node --watch scripts/folio-brain.mjs",
-    "brain:prod": "node scripts/folio-brain.mjs",
-    "cli": "node scripts/folio.mjs",
-    "process": "node scripts/folio.mjs process",
-    "insights": "node scripts/folio.mjs insights --today --force",
-    "memory:reindex": "node scripts/folio.mjs memory reindex",
-    "enroll": "node scripts/folio.mjs enroll"
+    "fw:monitor": "bash ../../../scripts/pio.sh device monitor -d firmware -b 115200 --filter direct"
   }
 }
