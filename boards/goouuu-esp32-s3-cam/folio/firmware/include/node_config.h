@@ -12,6 +12,7 @@ struct NodeRuntimeConfig {
   uint32_t wifiRetryMs;
   uint32_t pushBackoffMaxMs;
   uint32_t statusIntervalMs;
+  uint32_t motionCaptureMinMs;
   float motionMin;
   float soundMinEnergy;
   float speechEnergyThreshold;

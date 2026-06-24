@@ -2,12 +2,12 @@
 
 #include "folio_config.h"
 
-static float gMotionMin = FOLIO_MOTION_MIN;
+static float gMotionMin = FOLIO_MOTION_MIN > 0.f ? FOLIO_MOTION_MIN : 0.08f;
 static uint32_t gPrevSig = 0;
 
 void motionSetMin(float minScore) {
   if (minScore > 0.f && minScore <= 1.f) {
-    gMotionMin = minScore;
+    gMotionMin = minScore < 0.04f ? 0.04f : minScore;
   }
 }
 

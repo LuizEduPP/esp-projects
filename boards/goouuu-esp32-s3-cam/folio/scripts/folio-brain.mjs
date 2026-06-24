@@ -48,20 +48,20 @@ function main() {
         `${CFG.lmModelEmbed ? ` · embed=${CFG.lmModelEmbed}` : ""}`,
     );
     if (boot.stt?.ready) {
-      console.log(`whisper: ${boot.stt.backend} · ${boot.stt.model}`);
+      console.log(`whisper: ${boot.stt.backend} · ${boot.stt.model} · ${boot.stt.device} (${boot.stt.bin})`);
     }
     console.log(`memory: ${boot.embeddings ? "embeddings" : "lexical"} · pipeline/insights auto`);
     for (const note of boot.notes ?? []) {
       console.log(`[auto] ${note}`);
     }
     console.log(`locale: ${activeLocale()} (${promptLanguageName()})`);
-  });
 
-  if (CFG.pipelineEnabled) {
-    startProcessingLoop();
-  } else {
-    console.log("[worker] disabled — set pipeline.enabled in config");
-  }
+    if (CFG.pipelineEnabled) {
+      startProcessingLoop();
+    } else {
+      console.log("[worker] disabled — set pipeline.enabled in config");
+    }
+  });
 
   if (CFG.insightsAuto) {
     startInsightsLoop();

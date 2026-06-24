@@ -1,7 +1,7 @@
 #pragma once
 
 // Node capture + camera — override via platformio.ini build_flags (-DNAME=value).
-// See folio.config.example.json and README.
+// See README — brain syncs most settings at runtime.
 
 #ifndef FOLIO_SAMPLE_RATE
 #define FOLIO_SAMPLE_RATE 16000
@@ -39,17 +39,17 @@
 #define FOLIO_STATUS_INTERVAL_MS 15000
 #endif
 
-/** RMS energy gate — must match brain audio.speechEnergyThreshold (default 0.008). */
+/** RMS gate — 0 until brain calibrates via /api/node/config. */
 #ifndef FOLIO_SPEECH_ENERGY
-#define FOLIO_SPEECH_ENERGY 0.008f
+#define FOLIO_SPEECH_ENERGY 0.0f
 #endif
 
-/** Lower gate for non-speech sounds (latido, porta…) — match brain perception.soundMinEnergy. */
+/** Non-speech gate — synced from brain calibration. */
 #ifndef FOLIO_SOUND_ENERGY
-#define FOLIO_SOUND_ENERGY 0.003f
+#define FOLIO_SOUND_ENERGY 0.0f
 #endif
 
-/** JPEG motion proxy threshold (0..1) — synced from brain perception.motionMin at runtime. */
+/** Motion gate — synced from brain calibration. */
 #ifndef FOLIO_MOTION_MIN
-#define FOLIO_MOTION_MIN 0.08f
+#define FOLIO_MOTION_MIN 0.0f
 #endif

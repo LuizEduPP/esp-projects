@@ -90,7 +90,8 @@ static void applyDefaults() {
   gCfg.wifiRetryMs = FOLIO_WIFI_RETRY_MS;
   gCfg.pushBackoffMaxMs = FOLIO_PUSH_BACKOFF_MAX_MS;
   gCfg.statusIntervalMs = FOLIO_STATUS_INTERVAL_MS;
-  gCfg.motionMin = FOLIO_MOTION_MIN;
+  gCfg.motionCaptureMinMs = 15000;
+  gCfg.motionMin = FOLIO_MOTION_MIN > 0.f ? FOLIO_MOTION_MIN : 0.08f;
   gCfg.soundMinEnergy = FOLIO_SOUND_ENERGY;
   gCfg.speechEnergyThreshold = FOLIO_SPEECH_ENERGY;
   snprintf(gVersionHeader, sizeof(gVersionHeader), "boot");
@@ -142,6 +143,11 @@ static bool fetchFromBrain() {
 
   gCfg.frameIntervalMs = (uint32_t)jsonNestedLong(body, "frames", "captureIntervalMs",
                                                   gCfg.frameIntervalMs);
+  gCfg.motionCaptureMinMs = (uint32_t)jsonNestedLong(
+      body, "frames", "motionCaptureMinMs", gCfg.motionCaptureMinMs);
+  if (gCfg.motionCaptureMinMs < 5000UL) {
+    gCfg.motionCaptureMinMs = 5000UL;
+  }
   gCfg.jpegQuality =
       (uint8_t)jsonNestedLong(body, "frames", "jpegQuality", gCfg.jpegQuality);
   gCfg.frameSizeId = (uint8_t)jsonNestedLong(body, "frames", "sizeId", gCfg.frameSizeId);
@@ -178,8 +184,8 @@ static bool fetchFromBrain() {
   }
 
   Serial.printf(
-      "[config] synced v=%s frame=%lums jpegQ=%u motion=%.3f speechE=%.4f soundE=%.4f\n",
-      gCfg.version, gCfg.frameIntervalMs, gCfg.jpegQuality, gCfg.motionMin,
+      "[config] synced v=%s frame=%lums motionMinMs=%lu motion=%.3f speechE=%.4f soundE=%.4f\n",
+      gCfg.version, gCfg.frameIntervalMs, gCfg.motionCaptureMinMs, gCfg.motionMin,
       gCfg.speechEnergyThreshold, gCfg.soundMinEnergy);
   return true;
 }

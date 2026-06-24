@@ -439,17 +439,22 @@ void loop() {
 
   if (gCamOk) {
     const unsigned long frameEvery = cfg.frameIntervalMs;
+    const unsigned long motionEvery = cfg.motionCaptureMinMs;
     if (now - gLastFrameMs >= frameEvery) {
       captureFrameChunk("interval");
-    } else if (now - gLastFrameMs >= 6000UL) {
-      camera_fb_t *fb = captureFrame();
-      if (fb) {
-        bool motionChanged = false;
-        motionScoreJpeg(fb->buf, fb->len, &motionChanged);
-        if (motionChanged) {
-          persistFrame(fb, "motion");
+    } else if (now - gLastFrameMs >= motionEvery) {
+      static unsigned long gLastMotionSampleMs = 0;
+      if (now - gLastMotionSampleMs >= 2500UL) {
+        gLastMotionSampleMs = now;
+        camera_fb_t *fb = captureFrame();
+        if (fb) {
+          bool motionChanged = false;
+          motionScoreJpeg(fb->buf, fb->len, &motionChanged);
+          if (motionChanged) {
+            persistFrame(fb, "motion");
+          }
+          esp_camera_fb_return(fb);
         }
-        esp_camera_fb_return(fb);
       }
     }
   }

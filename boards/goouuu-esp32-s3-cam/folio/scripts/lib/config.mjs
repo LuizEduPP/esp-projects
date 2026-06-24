@@ -3,24 +3,49 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { DEFAULT_CONFIG } from "./defaults.mjs";
 import { normalizeOpenAiBase } from "./llm.mjs";
 import { brainUrlForClient, listLanUrls } from "./network.mjs";
+
+export { DEFAULT_CONFIG };
 
 /** esp_camera framesize_t IDs — must match firmware FOLIO_FRAME_SIZE_ID / platformio.ini */
 const FRAME_SIZE_TO_ID = { CIF: 5, QVGA: 6, VGA: 7, SVGA: 8, XGA: 9 };
 
-const DEFAULTS_PATH = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../folio.defaults.json",
-);
+const SUPPORTED_LOCALES = new Set([
+  "pt-BR", "pt-PT", "en-US", "en-GB", "es-ES", "fr-FR", "de-DE",
+]);
 
-const EXAMPLE_PATH = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../folio.config.example.json",
-);
-
-export const DEFAULT_CONFIG = JSON.parse(readFileSync(DEFAULTS_PATH, "utf8"));
+function detectSystemLocale() {
+  const raw = process.env.FOLIO_LOCALE || process.env.LANG || "";
+  const normalized = raw.replace(/\.UTF-8/i, "").replace(/\.utf8/i, "").replace("_", "-");
+  if (SUPPORTED_LOCALES.has(normalized)) {
+    return normalized;
+  }
+  const base = normalized.split("-")[0];
+  if (base === "pt") {
+    return "pt-BR";
+  }
+  if (base === "en") {
+    return "en-US";
+  }
+  if (base === "es") {
+    return "es-ES";
+  }
+  if (base === "fr") {
+    return "fr-FR";
+  }
+  if (base === "de") {
+    return "de-DE";
+  }
+  try {
+    const sys = Intl.DateTimeFormat().resolvedOptions().locale.replace("_", "-");
+    if (SUPPORTED_LOCALES.has(sys)) {
+      return sys;
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_CONFIG.locale;
+}
 
 function getPath(obj, dotPath) {
   return dotPath.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
@@ -171,7 +196,39 @@ function resolveWhisperDevice(fileVal, envVal) {
 }
 
 let configPath = null;
+let userOverrides = {};
 let fileData = clone(DEFAULT_CONFIG);
+
+function syncFileData() {
+  fileData = deepMerge(clone(DEFAULT_CONFIG), userOverrides);
+}
+
+/** Disk stores only the user's model choice — everything else is code + bootstrap. */
+function extractUserOverrides(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  const legacy = clone(raw);
+  migrateOpenAiToLm(legacy);
+
+  const model =
+    legacy.lm?.model ||
+    legacy.lm?.modelFast ||
+    legacy.openai?.model ||
+    null;
+
+  if (!model) {
+    return {};
+  }
+  return { lm: { model } };
+}
+
+function compactStoredOverrides(overrides = userOverrides) {
+  if (overrides.lm?.model) {
+    return { lm: { model: overrides.lm.model } };
+  }
+  return {};
+}
 
 function migrateOpenAiToLm(file) {
   let changed = false;
@@ -199,7 +256,7 @@ function migrateOpenAiToLm(file) {
     changed = true;
   }
   if (!file.lm || typeof file.lm !== "object") {
-    file.lm = { ...DEFAULT_CONFIG.lm };
+    file.lm = {};
     changed = true;
   }
   if (file.memory?.embeddingModel && !file.lm.modelEmbed) {
@@ -219,343 +276,48 @@ function migrateOpenAiToLm(file) {
   return changed;
 }
 
-/** Drop legacy keys; ensure lm, insights, audio.vad. */
-function migrateConfigSchema(file) {
-  let changed = false;
-
-  if (file.digest && typeof file.digest === "object") {
-    if (!file.insights || typeof file.insights !== "object") {
-      file.insights = {};
-    }
-    const d = file.digest;
-    if (d.auto != null && file.insights.auto == null) {
-      file.insights.auto = d.auto;
-    }
-    if (d.passDTemperature != null && file.insights.temperature == null) {
-      file.insights.temperature = d.passDTemperature;
-    }
-    delete file.digest;
-    changed = true;
-  }
-
-  if (file.episodes) {
-    delete file.episodes;
-    changed = true;
-  }
-
-  if (!file.insights || typeof file.insights !== "object") {
-    file.insights = { ...DEFAULT_CONFIG.insights };
-    changed = true;
-  } else {
-    for (const [k, v] of Object.entries(DEFAULT_CONFIG.insights)) {
-      if (file.insights[k] == null && v != null) {
-        file.insights[k] = v;
-        changed = true;
-      }
-    }
-  }
-
-  if (!file.lm || typeof file.lm !== "object") {
-    file.lm = { ...DEFAULT_CONFIG.lm };
-    changed = true;
-  } else {
-    for (const [k, v] of Object.entries(DEFAULT_CONFIG.lm)) {
-      if (!(k in file.lm)) {
-        file.lm[k] = v;
-        changed = true;
-      }
-    }
-  }
-
-  if (!file.perception || typeof file.perception !== "object") {
-    file.perception = { ...DEFAULT_CONFIG.perception };
-    changed = true;
-  } else {
-    for (const [k, v] of Object.entries(DEFAULT_CONFIG.perception)) {
-      if (file.perception[k] == null && v != null) {
-        file.perception[k] = v;
-        changed = true;
-      }
-    }
-  }
-
-  if (!file.audio || typeof file.audio !== "object") {
-    file.audio = { ...DEFAULT_CONFIG.audio };
-    changed = true;
-  } else {
-    if (file.audio.chunkMs != null) {
-      delete file.audio.chunkMs;
-      changed = true;
-    }
-    if (file.audio.ambientEnergyThreshold != null) {
-      delete file.audio.ambientEnergyThreshold;
-      changed = true;
-    }
-    if (file.audio.chunkMs != null && !file.audio.vad?.frameMs) {
-      if (!file.audio.vad) {
-        file.audio.vad = { ...DEFAULT_CONFIG.audio.vad };
-      }
-      file.audio.vad.frameMs = file.audio.chunkMs;
-      changed = true;
-    }
-    if (!file.audio.vad || typeof file.audio.vad !== "object") {
-      file.audio.vad = { ...DEFAULT_CONFIG.audio.vad };
-      changed = true;
-    } else {
-      for (const [k, v] of Object.entries(DEFAULT_CONFIG.audio.vad)) {
-        if (file.audio.vad[k] == null && v != null) {
-          file.audio.vad[k] = v;
-          changed = true;
-        }
-      }
-    }
-    const rejectDefaults = DEFAULT_CONFIG.audio?.sttRejectPatterns ?? [];
-    if (
-      rejectDefaults.length &&
-      (!Array.isArray(file.audio.sttRejectPatterns) || file.audio.sttRejectPatterns.length === 0)
-    ) {
-      file.audio.sttRejectPatterns = [...rejectDefaults];
-      changed = true;
-    }
-  }
-
-  if (file.memory?.embeddingsUrl != null) {
-    delete file.memory.embeddingsUrl;
-    changed = true;
-  }
-  if (file.memory?.rerank?.url != null) {
-    delete file.memory.rerank.url;
-    changed = true;
-  }
-  if (file.memory?.fallbackLexical != null) {
-    delete file.memory.fallbackLexical;
-    changed = true;
-  }
-
-  if (!file.memory || typeof file.memory !== "object") {
-    file.memory = { ...DEFAULT_CONFIG.memory };
-    changed = true;
-  } else {
-    for (const [k, v] of Object.entries(DEFAULT_CONFIG.memory)) {
-      if (k === "lexical" || k === "rerank") {
-        continue;
-      }
-      if (file.memory[k] == null && v != null) {
-        file.memory[k] = v;
-        changed = true;
-      }
-    }
-    if (!file.memory.lexical || typeof file.memory.lexical !== "object") {
-      file.memory.lexical = {
-        minTokenLength: DEFAULT_CONFIG.memory.lexical?.minTokenLength ?? 3,
-      };
-      changed = true;
-    } else {
-      for (const [k, v] of Object.entries(DEFAULT_CONFIG.memory.lexical)) {
-        if (k === "stopWords") {
-          continue;
-        }
-        if (file.memory.lexical[k] == null && v != null) {
-          file.memory.lexical[k] = v;
-          changed = true;
-        }
-      }
-    }
-  }
-
-  if (!file.speaker || typeof file.speaker !== "object") {
-    file.speaker = { ...DEFAULT_CONFIG.speaker };
-    changed = true;
-  } else {
-    for (const [k, v] of Object.entries(DEFAULT_CONFIG.speaker)) {
-      if (file.speaker[k] == null && v != null) {
-        file.speaker[k] = v;
-        changed = true;
-      }
-    }
-  }
-
-  if (file.perception && typeof file.perception === "object") {
-    for (const key of ["soundLabels", "yamnetKindMap", "heuristic", "vision"]) {
-      if (!file.perception[key] || typeof file.perception[key] !== "object") {
-        file.perception[key] = { ...DEFAULT_CONFIG.perception[key] };
-        changed = true;
-      } else {
-        for (const [k, v] of Object.entries(DEFAULT_CONFIG.perception[key] ?? {})) {
-          if (file.perception[key][k] == null && v != null) {
-            file.perception[key][k] = v;
-            changed = true;
-          }
-        }
-      }
-    }
-    for (const [k, v] of Object.entries(DEFAULT_CONFIG.perception)) {
-      if (typeof v === "object") {
-        continue;
-      }
-      if (file.perception[k] == null && v != null) {
-        file.perception[k] = v;
-        changed = true;
-      }
-    }
-  }
-
-  if (!file.present || typeof file.present !== "object") {
-    file.present = { ...DEFAULT_CONFIG.present };
-    changed = true;
-  } else {
-    if (!file.present.labels || typeof file.present.labels !== "object") {
-      file.present.labels = { ...DEFAULT_CONFIG.present.labels };
-      changed = true;
-    }
-    for (const [k, v] of Object.entries(DEFAULT_CONFIG.present)) {
-      if (k === "labels") {
-        continue;
-      }
-      if (file.present[k] == null && v != null) {
-        file.present[k] = v;
-        changed = true;
-      }
-    }
-  }
-
-  if (!file.http || typeof file.http !== "object") {
-    file.http = { ...DEFAULT_CONFIG.http };
-    changed = true;
-  } else {
-    for (const [k, v] of Object.entries(DEFAULT_CONFIG.http)) {
-      if (file.http[k] == null && v != null) {
-        file.http[k] = v;
-        changed = true;
-      }
-    }
-  }
-
-  if (!file.entities || typeof file.entities !== "object") {
-    file.entities = { ...DEFAULT_CONFIG.entities };
-    changed = true;
-  } else if (!file.entities.soundKindEntity) {
-    file.entities.soundKindEntity = { ...DEFAULT_CONFIG.entities.soundKindEntity };
-    changed = true;
-  }
-
-  if (file.frames && !file.frames.backlogGapMs) {
-    file.frames.backlogGapMs = { ...DEFAULT_CONFIG.frames.backlogGapMs };
-    changed = true;
-  }
-  if (file.frames?.staticSummary == null && DEFAULT_CONFIG.frames.staticSummary) {
-    file.frames.staticSummary = DEFAULT_CONFIG.frames.staticSummary;
-    changed = true;
-  }
-
-  if (file.audio?.sttEnabled === false) {
-    delete file.audio.sttEnabled;
-    changed = true;
-  }
-
-  if (file.memory?.useEmbeddings != null) {
-    delete file.memory.useEmbeddings;
-    changed = true;
-  }
-
-  if (file.worker) {
-    delete file.worker;
-    changed = true;
-  }
-  if (file.frames?.backlogGapMs) {
-    delete file.frames.backlogGapMs;
-    changed = true;
-  }
-
-  return changed;
-}
 
 function persistFileConfig(path, data) {
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
-function compactObject(user, defaults) {
-  if (!user || typeof user !== "object" || Array.isArray(user)) {
-    return {};
-  }
-  const out = {};
-  for (const [k, v] of Object.entries(user)) {
-    if (v == null) {
-      continue;
-    }
-    const d = defaults?.[k];
-    if (typeof v === "object" && !Array.isArray(v) && d && typeof d === "object" && !Array.isArray(d)) {
-      const nested = compactObject(v, d);
-      if (Object.keys(nested).length) {
-        out[k] = nested;
-      }
-    } else if (JSON.stringify(v) !== JSON.stringify(d)) {
-      out[k] = v;
-    }
-  }
-  return out;
+export function userConfigOverrides() {
+  return clone(compactStoredOverrides());
 }
 
-function compactStoredConfig(file) {
-  const compact = compactObject(file, DEFAULT_CONFIG);
-  compact.locale = file.locale ?? DEFAULT_CONFIG.locale;
-  if (!compact.lm) {
-    compact.lm = {};
-  }
-  for (const key of ["url", "model", "modelDeep", "modelEmbed"]) {
-    if (file.lm?.[key] != null && file.lm[key] !== DEFAULT_CONFIG.lm?.[key]) {
-      compact.lm[key] = file.lm[key];
-    }
-  }
-  if (Object.keys(compact.lm).length === 0) {
-    delete compact.lm;
-  }
-  if (file.node?.brainUrl) {
-    compact.node = { brainUrl: file.node.brainUrl };
-  }
-  return compact;
+export function editableConfig() {
+  return {
+    configPath,
+    version: nodeConfigVersion(),
+    runtime: {
+      speechEnergyThreshold: CFG.speechEnergyThreshold,
+      lmUrl: CFG.lmBaseUrl,
+      models: runtimeModels(),
+    },
+    ...clone(userConfigOverrides()),
+  };
 }
 
-function maybeCompactConfig(file, path) {
-  if (JSON.stringify(file).length < 1400) {
-    return false;
-  }
-  const compact = compactStoredConfig(file);
-  persistFileConfig(path, compact);
-  for (const key of Object.keys(file)) {
-    delete file[key];
-  }
-  Object.assign(file, deepMerge(clone(DEFAULT_CONFIG), compact));
-  console.log(`[config] compacted — só overrides em ${path}`);
-  return true;
-}
-
-function runConfigMigrations(file, path) {
-  const lm = migrateOpenAiToLm(file);
-  const schema = migrateConfigSchema(file);
-  const compact = maybeCompactConfig(file, path);
-  if (lm || schema || compact) {
-    if (!compact) {
-      persistFileConfig(path, compactStoredConfig(file));
-    }
-    if (lm) {
-      console.log(`[config] migrated openai.* → lm.* (local only) in ${path}`);
-    }
-    if (schema) {
-      console.log(`[config] migrated schema (lm, vad, insights) in ${path}`);
-    }
-  }
-}
+export const publicConfig = editableConfig;
 
 function loadFileConfig() {
+  configPath = null;
+  userOverrides = {};
   for (const path of configPaths()) {
     if (existsSync(path)) {
       configPath = path;
-      fileData = deepMerge(clone(DEFAULT_CONFIG), JSON.parse(readFileSync(path, "utf8")));
-      runConfigMigrations(fileData, path);
+      const raw = JSON.parse(readFileSync(path, "utf8"));
+      userOverrides = extractUserOverrides(raw);
+      const compact = compactStoredOverrides();
+      if (JSON.stringify(raw) !== JSON.stringify(compact)) {
+        persistFileConfig(path, compact);
+        console.log(`[config] só modelo em ${path}`);
+      }
+      syncFileData();
       return;
     }
   }
+  syncFileData();
 }
 
 function getFileData() {
@@ -602,21 +364,6 @@ function runtimeModels() {
   };
 }
 
-export function editableConfig() {
-  return {
-    configPath,
-    version: nodeConfigVersion(),
-    runtime: {
-      speechEnergyThreshold: CFG.speechEnergyThreshold,
-      lmUrl: CFG.lmBaseUrl,
-      models: runtimeModels(),
-    },
-    ...clone(fileData),
-  };
-}
-
-export const publicConfig = editableConfig;
-
 export function nodeConfigPayload(clientIp = null) {
   const size = String(CFG.frameSize).toUpperCase();
   const brainUrl = brainUrlForClient(clientIp);
@@ -647,7 +394,7 @@ export function nodeConfigPayload(clientIp = null) {
       },
     },
     perception: {
-      motionMin: CFG.perceptionMotionMin,
+      motionMin: Math.max(0.04, CFG.perceptionMotionMin ?? 0.04),
       soundMinEnergy: CFG.perceptionSoundMinEnergy,
     },
     node: { ...node, brainUrl: CFG.nodeBrainUrl ?? node.brainUrl ?? null },
@@ -658,14 +405,14 @@ export function nodeConfigPayload(clientIp = null) {
 
 const RESTART_KEYS = new Set(["port", "dataDir"]);
 
-function patchNeedsRestart(patch, prefix = "") {
-  for (const [k, v] of Object.entries(patch ?? {})) {
-    const path = prefix ? `${prefix}.${k}` : k;
-    if (v && typeof v === "object" && !Array.isArray(v)) {
-      if (patchNeedsRestart(v, path)) {
-        return true;
-      }
-    } else if (RESTART_KEYS.has(path) || RESTART_KEYS.has(k)) {
+function patchNeedsRestart(patch) {
+  for (const key of RESTART_KEYS) {
+    if (!(key in patch)) {
+      continue;
+    }
+    const newVal = patch[key];
+    const oldVal = userOverrides[key] ?? DEFAULT_CONFIG[key];
+    if (JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
       return true;
     }
   }
@@ -673,11 +420,14 @@ function patchNeedsRestart(patch, prefix = "") {
 }
 
 export function saveConfigPatch(patch) {
-  fileData = deepMerge(fileData, patch);
-  runConfigMigrations(fileData, configPath ?? configPaths()[configPaths().length - 1]);
-  const targetPath = configPath ?? configPaths()[configPaths().length - 1];
+  if (patch?.lm?.model != null) {
+    userOverrides.lm = { model: patch.lm.model };
+  }
+  syncFileData();
+  const targetPath = configPath ?? join(homedir(), ".folio", "config.json");
   mkdirSync(dirname(targetPath), { recursive: true });
-  persistFileConfig(targetPath, compactStoredConfig(fileData));
+  const compact = compactStoredOverrides();
+  persistFileConfig(targetPath, compact);
   configPath = targetPath;
   const version = nodeConfigVersion();
   return {
@@ -772,7 +522,7 @@ function buildCfgFromFile(file = getFileData()) {
       cfgNum(file, "audio.vad.frameMs", "FOLIO_VAD_FRAME_MS") ||
       cfgNum(file, "audio.chunkMs", "FOLIO_AUDIO_CHUNK_MS"),
     audioSampleRate: cfgNum(file, "audio.sampleRate", "FOLIO_AUDIO_SAMPLE_RATE"),
-    speechEnergyThreshold: cfgNum(file, "audio.speechEnergyThreshold", "FOLIO_SPEECH_ENERGY"),
+    speechEnergyThreshold: 0,
     sttTimeoutMs: cfgNum(file, "audio.sttTimeoutMs", "FOLIO_STT_TIMEOUT_MS") ||
       cfgNum(file, "audio.whisperTimeoutMs", "FOLIO_WHISPER_TIMEOUT_MS"),
     sttLanguage: cfgStr(file, "audio.sttLanguage", "FOLIO_STT_LANGUAGE") ||
@@ -817,12 +567,7 @@ function buildCfgFromFile(file = getFileData()) {
     perceptionAutoEnhance: cfgBool(file, "perception.autoEnhance", "FOLIO_AUTO_ENHANCE"),
     perceptionVision: cfgObject(file, "perception.vision"),
     perceptionStoreSounds: cfgBool(file, "perception.storeSounds", "FOLIO_STORE_SOUNDS"),
-    perceptionSoundMinEnergy: cfgNum(file, "perception.soundMinEnergy", "FOLIO_SOUND_MIN_ENERGY"),
-    perceptionSoundMinConfidence: cfgNum(
-      file,
-      "perception.soundMinConfidence",
-      "FOLIO_SOUND_MIN_CONF",
-    ),
+    perceptionSoundMinEnergy: 0,
     perceptionSoundEngine: cfgStr(file, "perception.soundEngine", "FOLIO_SOUND_ENGINE"),
     perceptionYamnetMinScore: cfgNum(file, "perception.yamnetMinScore", "FOLIO_YAMNET_MIN_SCORE"),
     perceptionYamnetModelPath: cfgStr(file, "perception.yamnetModelPath", "FOLIO_YAMNET_MODEL") || null,
@@ -830,13 +575,9 @@ function buildCfgFromFile(file = getFileData()) {
     perceptionYamnetModelUrl: cfgStr(file, "perception.yamnetModelUrl", "FOLIO_YAMNET_MODEL_URL"),
     perceptionYamnetLabelsUrl: cfgStr(file, "perception.yamnetLabelsUrl", "FOLIO_YAMNET_LABELS_URL"),
     perceptionSoundLabels: cfgObject(file, "perception.soundLabels"),
-    perceptionYamnetKindMap: cfgObject(file, "perception.yamnetKindMap"),
-    perceptionHeuristic: cfgObject(file, "perception.heuristic"),
-
-    speakerMinMatchScore: cfgNum(file, "speaker.minMatchScore", "FOLIO_SPEAKER_MIN_MATCH"),
     speakerMaxEnrollmentSamples: cfgNum(file, "speaker.maxEnrollmentSamples", "FOLIO_SPEAKER_MAX_SAMPLES"),
 
-    perceptionMotionMin: cfgNum(file, "perception.motionMin", "FOLIO_MOTION_MIN"),
+    perceptionMotionMin: 0,
     workerBacklogHigh: cfgNum(file, "worker.backlogHigh", "FOLIO_WORKER_BACKLOG_HIGH"),
     workerBacklogMedium: cfgNum(file, "worker.backlogMedium", "FOLIO_WORKER_BACKLOG_MEDIUM"),
     workerBatchMaxHigh: cfgNum(file, "worker.batchMaxHigh", "FOLIO_WORKER_BATCH_MAX_HIGH"),
@@ -887,7 +628,7 @@ function buildCfgFromFile(file = getFileData()) {
     memoryRerankCandidateLimit: cfgNum(file, "memory.rerank.candidateLimit", "FOLIO_MEMORY_RERANK_CANDIDATES"),
     memoryRerankTopK: cfgNum(file, "memory.rerank.topK", "FOLIO_MEMORY_RERANK_TOPK"),
 
-    defaultLocale: cfgStr(file, "locale", "FOLIO_LOCALE"),
+    defaultLocale: cfgStr(file, "locale", "FOLIO_LOCALE") || detectSystemLocale(),
 
     nodeBrainUrl: cfgStr(file, "node.brainUrl", "FOLIO_BRAIN_URL") || null,
 

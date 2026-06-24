@@ -10,6 +10,16 @@ export const SoundKind = Object.freeze({
   UNKNOWN: "unknown",
 });
 
+/** Classifier shape — not user config; ranked against calibrated energy gates. */
+const HEURISTIC = Object.freeze({
+  speech: { confidence: 0.92 },
+  bark: { confidence: 0.74, maxEnergy: 0.045, minZcr: 0.07, maxDurationMs: 2500 },
+  door: { confidence: 0.7, minEnergy: 0.01, maxDurationMs: 900, minRms: 0.018, maxZcr: 0.05 },
+  knock: { confidence: 0.62, minEnergy: 0.008, maxDurationMs: 600, minZcr: 0.12 },
+  appliance: { confidence: 0.55, maxZcr: 0.04, minDurationMs: 800 },
+  unknown: { confidence: 0.4, lowConfidence: 0.15 },
+});
+
 function soundLabel(kind) {
   return CFG.perceptionSoundLabels?.[kind] ?? kind;
 }
@@ -18,81 +28,61 @@ function hit(kind, confidence) {
   return { kind, label: soundLabel(kind), confidence };
 }
 
-function ruleNum(rule, key, fallback = null) {
-  const v = rule?.[key];
-  return v == null ? fallback : Number(v);
-}
-
 function classifySoundHeuristic(pcmBuffer, energy, durationMs) {
-  const rules = CFG.perceptionHeuristic ?? {};
   const fp = pcmFingerprint(pcmBuffer);
   const zcr = fp[1] ?? 0;
   const rms = fp[0] ?? energy ?? 0;
   const dur = durationMs ?? CFG.audioChunkMs;
+  const speechGate = CFG.speechEnergyThreshold;
+  const soundGate = CFG.perceptionSoundMinEnergy;
 
-  if (energy >= CFG.speechEnergyThreshold) {
-    return hit(SoundKind.SPEECH, ruleNum(rules.speech, "confidence", 0.92));
+  if (energy >= speechGate) {
+    return hit(SoundKind.SPEECH, HEURISTIC.speech.confidence);
   }
 
-  const bark = rules.bark ?? {};
+  const bark = HEURISTIC.bark;
   if (
-    energy >= CFG.perceptionSoundMinEnergy &&
-    energy < ruleNum(bark, "maxEnergy", 0.045) &&
-    zcr > ruleNum(bark, "minZcr", 0.07) &&
-    dur <= ruleNum(bark, "maxDurationMs", 2500)
+    energy >= soundGate &&
+    energy < bark.maxEnergy &&
+    zcr > bark.minZcr &&
+    dur <= bark.maxDurationMs
   ) {
-    return hit(SoundKind.BARK, ruleNum(bark, "confidence", 0.74));
+    return hit(SoundKind.BARK, bark.confidence);
   }
 
-  const door = rules.door ?? {};
+  const door = HEURISTIC.door;
   if (
-    energy >= ruleNum(door, "minEnergy", 0.01) &&
-    dur <= ruleNum(door, "maxDurationMs", 900) &&
-    rms > ruleNum(door, "minRms", 0.018) &&
-    zcr < ruleNum(door, "maxZcr", 0.05)
+    energy >= door.minEnergy &&
+    dur <= door.maxDurationMs &&
+    rms > door.minRms &&
+    zcr < door.maxZcr
   ) {
-    return hit(SoundKind.DOOR, ruleNum(door, "confidence", 0.7));
+    return hit(SoundKind.DOOR, door.confidence);
   }
 
-  const knock = rules.knock ?? {};
-  if (
-    energy >= ruleNum(knock, "minEnergy", 0.008) &&
-    dur <= ruleNum(knock, "maxDurationMs", 600) &&
-    zcr > ruleNum(knock, "minZcr", 0.12)
-  ) {
-    return hit(SoundKind.KNOCK, ruleNum(knock, "confidence", 0.62));
+  const knock = HEURISTIC.knock;
+  if (energy >= knock.minEnergy && dur <= knock.maxDurationMs && zcr > knock.minZcr) {
+    return hit(SoundKind.KNOCK, knock.confidence);
   }
 
-  const appliance = rules.appliance ?? {};
-  if (
-    energy >= CFG.perceptionSoundMinEnergy &&
-    zcr < ruleNum(appliance, "maxZcr", 0.04) &&
-    dur > ruleNum(appliance, "minDurationMs", 800)
-  ) {
-    return hit(SoundKind.APPLIANCE, ruleNum(appliance, "confidence", 0.55));
+  const appliance = HEURISTIC.appliance;
+  if (energy >= soundGate && zcr < appliance.maxZcr && dur > appliance.minDurationMs) {
+    return hit(SoundKind.APPLIANCE, appliance.confidence);
   }
 
-  const unknown = rules.unknown ?? {};
-  if (energy >= CFG.perceptionSoundMinEnergy) {
-    return hit(SoundKind.UNKNOWN, ruleNum(unknown, "confidence", 0.4));
+  if (energy >= soundGate) {
+    return hit(SoundKind.UNKNOWN, HEURISTIC.unknown.confidence);
   }
 
-  return hit(SoundKind.UNKNOWN, ruleNum(unknown, "lowConfidence", 0.15));
+  return hit(SoundKind.UNKNOWN, HEURISTIC.unknown.lowConfidence);
 }
 
 export async function classifySound(pcmBuffer, energy, durationMs) {
-  if (CFG.perceptionSoundEngine === "yamnet") {
-    console.warn("[sound] yamnet removed — use heuristic (LM Studio only stack)");
-  }
   return classifySoundHeuristic(pcmBuffer, energy, durationMs);
 }
 
 export function isInterestingSound(result) {
-  return (
-    result.kind !== SoundKind.UNKNOWN &&
-    result.kind !== SoundKind.SPEECH &&
-    result.confidence >= CFG.perceptionSoundMinConfidence
-  );
+  return result.kind !== SoundKind.UNKNOWN && result.kind !== SoundKind.SPEECH;
 }
 
 export function speechLabel() {

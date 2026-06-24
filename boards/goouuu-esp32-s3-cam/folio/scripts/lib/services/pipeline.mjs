@@ -1,5 +1,6 @@
 import { existsSync, unlinkSync } from "node:fs";
 import { adaptivePipelineIntervalMs } from "../bootstrap.mjs";
+import { applyCalibrationToCfg } from "../calibration.mjs";
 import { CFG } from "../config.mjs";
 import { deleteAudioChunk, openDb, pendingAudioChunks, pendingCounts, pendingFrames, pruneExpiredPcm } from "../db/index.mjs";
 import { processAudioChunk, processFrame } from "../perception/index.mjs";
@@ -18,16 +19,27 @@ function adaptiveBatch(pending, base, max) {
 
 /** Shorter gap when frames pile up — scales with queue depth. */
 function frameCaptionGapMs(pendingFrameCount) {
-  const base = CFG.frameCaptionIntervalMs;
+  if (pendingFrameCount >= 16) {
+    return 2500;
+  }
+  if (pendingFrameCount >= 6) {
+    return 6000;
+  }
+  const base = CFG.frameCaptionIntervalMs ?? 60_000;
   if (pendingFrameCount <= 1) {
     return base;
   }
-  const factor = Math.min(1, 12 / Math.sqrt(pendingFrameCount));
-  return Math.max(1500, Math.round(base * factor));
+  return Math.max(4000, Math.floor(base / 8));
 }
 
 function maxCaptionsPerCycle(pendingFrameCount) {
-  return Math.min(6, Math.max(1, Math.ceil(Math.sqrt(pendingFrameCount) / 4)));
+  if (pendingFrameCount >= 20) {
+    return 6;
+  }
+  if (pendingFrameCount >= 8) {
+    return 4;
+  }
+  return Math.min(3, Math.max(1, Math.ceil(Math.sqrt(pendingFrameCount))));
 }
 
 function deleteChunkFile(path) {
@@ -171,28 +183,29 @@ export async function processPendingFrames(limit = CFG.pipelineFrameBatch, { byp
   limit = adaptiveBatch(pending.frames, limit, CFG.workerFrameSkipBatch ?? 48);
 
   const minGap = bypassGap ? 0 : frameCaptionGapMs(pending.frames);
-  if (minGap > 0 && Date.now() - lastFrameLmAt < minGap) {
-    return [];
-  }
-
   const maxLm = bypassGap ? limit : maxCaptionsPerCycle(pending.frames);
   const frames = pendingFrames(db, limit);
   const results = [];
   let lmCount = 0;
 
   for (const frame of frames) {
-    if (minGap > 0 && Date.now() - lastFrameLmAt < minGap) {
+    const lmBlocked = !bypassGap && minGap > 0 && Date.now() - lastFrameLmAt < minGap;
+    if (lmBlocked && lmCount >= maxLm) {
       break;
     }
-    if (minGap > 0 && lmCount >= maxLm) {
-      break;
-    }
+    const allowLm = bypassGap || !lmBlocked || lmCount < maxLm;
     try {
-      const result = await processFrame(db, frame);
+      const result = await processFrame(db, frame, { allowLm });
+      if (result.deferred) {
+        break;
+      }
       results.push(result);
       if (result.usedLm) {
         lastFrameLmAt = Date.now();
         lmCount++;
+        console.log(`[perception] frame ${frame.id}: ${result.caption?.slice(0, 80) ?? "caption"}`);
+      } else if (result.skipped) {
+        console.log(`[perception] frame ${frame.id}: skip ${result.skipped}`);
       }
     } catch (err) {
       results.push({ id: frame.id, error: err.message, usedLm: false });
@@ -228,6 +241,7 @@ export function startProcessingLoop(intervalMs = CFG.pipelineIntervalMs) {
       }
 
       let after = before;
+      let stagnantRounds = 0;
       for (let round = 0; round < 24; round++) {
         if (after.audio > 0) {
           console.log(`[worker] audio queue ${after.audio}`);
@@ -236,20 +250,33 @@ export function startProcessingLoop(intervalMs = CFG.pipelineIntervalMs) {
           console.log(`[worker] frame queue ${after.frames}`);
         }
 
-        await processPendingAudio();
-        await processPendingFrames();
+        const audioResults = await processPendingAudio();
+        const frameResults = await processPendingFrames(CFG.pipelineFrameBatch, {
+          bypassGap: after.frames >= 8,
+        });
         const next = pendingCounts(db);
-        if (next.audio + next.frames >= after.audio + after.frames) {
-          after = next;
-          break;
-        }
+        const madeProgress =
+          audioResults.length > 0 ||
+          frameResults.length > 0 ||
+          next.frames < after.frames ||
+          next.audio < after.audio;
+
         after = next;
         if (after.audio === 0 && after.frames === 0) {
           break;
         }
+        if (!madeProgress) {
+          stagnantRounds++;
+          if (stagnantRounds >= 2) {
+            break;
+          }
+        } else {
+          stagnantRounds = 0;
+        }
       }
 
       await maybeAutoInsights(before, after);
+      applyCalibrationToCfg(CFG, db);
     } catch (err) {
       console.error(`[worker] ${err.message}`);
     } finally {

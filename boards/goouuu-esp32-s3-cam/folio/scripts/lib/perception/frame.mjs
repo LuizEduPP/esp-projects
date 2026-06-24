@@ -444,7 +444,7 @@ function markSkipped(db, frame, motion, quality) {
   return markQuietFrame(db, frame, motion, quality, { reason: "no_motion" });
 }
 
-export async function processFrame(db, frame) {
+export async function processFrame(db, frame, { allowLm = true } = {}) {
   const buf = readFileSync(frame.path);
   const quality = jpegQuality(buf);
 
@@ -452,6 +452,13 @@ export async function processFrame(db, frame) {
   const prev = lastProcessedFrame(db);
   if (prev?.path && existsSync(prev.path)) {
     motion = compareFrames(readFileSync(prev.path), buf, { dark: quality.dark });
+  }
+
+  if (frame.reason === "motion" && prev?.captured_at) {
+    const gap = msBetween(prev.captured_at, frame.captured_at);
+    if (gap < 45_000) {
+      return markQuietFrame(db, frame, motion, quality, { reason: "motion_burst" });
+    }
   }
 
   if (!shouldAnalyze({ motion, frame, prev, forceIntervalMs: CFG.perceptionMotionForceMs, quality })) {
@@ -488,6 +495,10 @@ export async function processFrame(db, frame) {
     msBetween(prev?.captured_at, frame.captured_at) < CFG.perceptionMotionForceMs / 3
   ) {
     return markQuietFrame(db, frame, motion, lmQuality, { reason: "same_scene" });
+  }
+
+  if (!allowLm) {
+    return { id: frame.id, deferred: true, usedLm: false };
   }
 
   const sceneRaw = await captionFrame(visionBuf.toString("base64"), frame.reason, {

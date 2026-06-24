@@ -3,12 +3,12 @@ import {
   entitiesActiveOnDay, getDayInsights, getSpeaker, latestWitnessAt, listEntities, openDb,
   timelineForDay, upsertDayInsights, upsertEntity, witnessStats,
 } from "../db/index.mjs";
-import { chatJsonLenient } from "../llm.mjs";
+import { chatJson } from "../llm.mjs";
 import { promptLanguageRule } from "../locale.mjs";
 import { indexDayMemories, retrieveContextForDay } from "../memory.mjs";
 import { isMeaningfulFrameItem } from "../present.mjs";
 import { modelId, ModelSlot } from "../models.mjs";
-import { dayOffset, isoNow, parseInsightsFallback, parseJsonLoose, today, isSttHallucination } from "../util.mjs";
+import { dayOffset, isoNow, today, isSttHallucination } from "../util.mjs";
 
 const insightsRuntime = { busy: false, phase: null, error: null, day: null };
 
@@ -178,7 +178,7 @@ async function generateInsightsJson(db, day, stats, ragHits) {
     "Schema: " +
     '{"summary":"…","moments":["15:30 …"],"insights":[],"patterns":[],"entities":[]}';
 
-  return chatJsonLenient({
+  return chatJson({
     model: modelId(ModelSlot.DEEP),
     temperature: CFG.insightsTemperature,
     maxTokens: CFG.insightsMaxTokens,
@@ -186,9 +186,7 @@ async function generateInsightsJson(db, day, stats, ragHits) {
       { role: "system", content: system },
       { role: "user", content: user },
     ],
-    fallback: (text) =>
-      normalizeInsightsPayload(parseJsonLoose(text) ?? parseInsightsFallback(text)),
-  });
+  }).then((raw) => normalizeInsightsPayload(raw));
 }
 
 function formatInsightItem(value) {

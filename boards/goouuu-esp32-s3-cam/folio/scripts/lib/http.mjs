@@ -349,6 +349,6 @@ export function logServerStartup() {
   if (CFG.configPath) {
     console.log(`config: ${CFG.configPath}`);
   } else {
-    console.log("config: (defaults) copy folio.config.example.json → ~/.folio/config.json");
+    console.log("config: automático (escolha o modelo na UI se quiser fixar)");
   }
 }

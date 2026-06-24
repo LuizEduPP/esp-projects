@@ -2,12 +2,22 @@ import { readFileSync, unlinkSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { CFG } from "./config.mjs";
-import { transcribeAudio } from "./llm.mjs";
 import { whisperLanguageCode } from "./locale.mjs";
 import { refreshSttCapability, sttActive, sttCapability } from "./stt-capability.mjs";
 import { isSttHallucination } from "./util.mjs";
 
 const execFileAsync = promisify(execFile);
+
+const WHISPER_LANG_NAME = {
+  pt: "Portuguese",
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  it: "Italian",
+  ja: "Japanese",
+  zh: "Chinese",
+};
 
 function pcmSamples(pcmBuffer) {
   if (!pcmBuffer?.length) {
@@ -43,7 +53,6 @@ export function isSpeechChunk(energy, threshold = CFG.speechEnergyThreshold) {
   return energy >= threshold;
 }
 
-/** Store only voiced segments — no ambient/noise archive. */
 export function shouldStoreAudioChunk(pcmBuffer, energyOverride = null) {
   if (pcmIsEmpty(pcmBuffer)) {
     return { store: false, energy: 0, reason: "empty" };
@@ -71,17 +80,6 @@ export function shouldRejectTranscript(stt) {
   }
   return false;
 }
-
-const WHISPER_LANG_NAME = {
-  pt: "Portuguese",
-  en: "English",
-  es: "Spanish",
-  fr: "French",
-  de: "German",
-  it: "Italian",
-  ja: "Japanese",
-  zh: "Chinese",
-};
 
 async function transcribeWhisperCli(wavPath, { chunkId } = {}) {
   const cap = sttCapability();
@@ -120,37 +118,18 @@ async function transcribeWhisperCli(wavPath, { chunkId } = {}) {
   return { text, segments: raw.segments ?? [], confidence: text ? 0.9 : 0 };
 }
 
-async function transcribeWhisperLm(wavPath, { chunkId } = {}) {
-  const cap = sttCapability();
-  const tag = chunkId != null ? `chunk=${chunkId}` : wavPath;
-  const lang = CFG.sttLanguage ? whisperLanguageCode() : null;
-  const raw = await transcribeAudio(wavPath, {
-    model: cap.model,
-    language: lang,
-    timeoutMs: CFG.sttTimeoutMs,
-  });
-  const text = String(raw.text ?? "").trim();
-  console.log(`[whisper] ${tag} lm ok "${text.slice(0, 120)}${text.length > 120 ? "…" : ""}"`);
-  return { text, segments: [], confidence: text ? 0.85 : 0 };
-}
-
-/** Whisper CLI or LM Studio /v1/audio/transcriptions — auto when available. */
+/** Host openai-whisper CLI (CUDA/CPU) — LM Studio is vision/embed only. */
 export async function transcribeWav(wavPath, { chunkId } = {}) {
   await refreshSttCapability();
   if (!sttActive()) {
-    return { text: "", segments: [], confidence: 0, skipped: "no_whisper" };
+    throw new Error(`Whisper CLI not found: ${CFG.whisperBin}`);
   }
 
-  const cap = sttCapability();
   const tag = chunkId != null ? `chunk=${chunkId}` : wavPath;
   const t0 = Date.now();
 
   try {
-    const result =
-      cap.backend === "cli"
-        ? await transcribeWhisperCli(wavPath, { chunkId })
-        : await transcribeWhisperLm(wavPath, { chunkId });
-
+    const result = await transcribeWhisperCli(wavPath, { chunkId });
     if (shouldRejectTranscript(result)) {
       console.log(`[whisper] ${tag} rejected hallucination ${Date.now() - t0}ms`);
       return { text: "", segments: [], confidence: 0 };

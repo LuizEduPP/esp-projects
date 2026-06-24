@@ -66,16 +66,14 @@ const PHASE_LABEL = {
   done: "Pronto",
 };
 
-const LOCALE_OPTS = ["pt-BR", "pt-PT", "en-US", "en-GB", "es-ES", "fr-FR", "de-DE"];
-
 const SECTIONS = [
-  { title: "Folio", hint: "O resto (Whisper, fila, RAG, gaps) é automático na subida.", fields: [
-    { path: "locale", label: "Idioma", type: "select", options: LOCALE_OPTS },
-    { path: "lm.url", label: "LM Studio URL", type: "text", placeholder: "http://127.0.0.1:1234/v1" },
-    { path: "lm.model", label: "Modelo visão/texto", type: "lmSelect", pool: "chat" },
-    { path: "dataDir", label: "Pasta de dados", type: "text", placeholder: "~/.folio" },
-    { path: "node.brainUrl", label: "Brain URL ESP", type: "text", placeholder: "auto na rede" },
-  ]},
+  {
+    title: "Modelo",
+    hint: "LM Studio = visão/insights. Whisper roda no PC (CLI).",
+    fields: [
+      { path: "lm.model", label: "Modelo visão/texto", type: "lmSelect", pool: "chat" },
+    ],
+  },
 ];
 
 function get(obj, path) {
@@ -447,7 +445,10 @@ async function refreshLmModels() {
 
 function applyConfigToForm(cfg) {
   document.querySelectorAll("[data-path]").forEach((el) => {
-    const v = get(cfg, el.dataset.path);
+    let v = get(cfg, el.dataset.path);
+    if (v == null && el.dataset.path === "lm.model" && cfg.runtime?.models?.fast) {
+      v = cfg.runtime.models.fast;
+    }
     if (el.tagName === "SELECT" && el.querySelector('option[value="true"]') && !el.dataset.lmPool) {
       el.value = v === false || v === "false" ? "false" : "true";
     } else {
@@ -457,13 +458,31 @@ function applyConfigToForm(cfg) {
   fillLmSelects();
 }
 
+function buildConfigPatchFromForm() {
+  const patch = {};
+  document.querySelectorAll("[data-path]").forEach((el) => {
+    let v = el.value;
+    if (el.tagName === "SELECT" && el.querySelector('option[value="true"]')) {
+      v = v === "true";
+    } else if (el.type === "number") {
+      v = v === "" ? null : Number(String(v).replace(",", "."));
+    } else if (v === "") {
+      v = null;
+    }
+    if (v != null) {
+      set(patch, el.dataset.path, v);
+    }
+  });
+  return patch;
+}
+
 function loadConfigForm() {
   fetch("/api/config").then((r) => r.json()).then(async (cfg) => {
     cfgCache = cfg;
     $("cfg-info").textContent = cfg.configPath || "defaults";
     const rt = cfg.runtime || {};
     $("cfg-runtime").textContent = rt.lmUrl
-      ? `LM ${rt.lmUrl} · ${rt.models?.fast}`
+      ? `LM ${rt.lmUrl} · ${rt.models?.fast || "auto"}`
       : "";
     applyConfigToForm(cfg);
     await refreshLmModels();
@@ -551,17 +570,14 @@ $("mem-search").onclick = async () => {
 buildConfigForm();
 $("cfg-form").onsubmit = async (e) => {
   e.preventDefault();
-  const patch = JSON.parse(JSON.stringify(cfgCache));
-  document.querySelectorAll("[data-path]").forEach((el) => {
-    let v = el.value;
-    if (el.tagName === "SELECT" && el.querySelector('option[value="true"]')) v = v === "true";
-    else if (el.type === "number") v = v === "" ? null : Number(String(v).replace(",", "."));
-    else if (v === "") v = null;
-    set(patch, el.dataset.path, v);
+  const patch = buildConfigPatchFromForm();
+  await fetch("/api/config", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
   });
-  delete patch.configPath; delete patch.version; delete patch.runtime;
-  await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
-  toast("Config salva");
+  toast("Modelo salvo");
+  loadConfigForm();
 };
 $("cfg-reload").onclick = loadConfigForm;
 $("cfg-lm-refresh").onclick = refreshLmModels;

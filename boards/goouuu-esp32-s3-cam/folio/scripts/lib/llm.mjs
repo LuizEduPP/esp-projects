@@ -1,7 +1,7 @@
 import { CFG } from "./config.mjs";
 import { promptLanguageRule } from "./locale.mjs";
 import { modelId, ModelSlot } from "./models.mjs";
-import { parseJsonLoose, parseVisionFallback } from "./util.mjs";
+import { parseJsonLoose } from "./util.mjs";
 
 
 // --- openai-base.mjs ---
@@ -127,16 +127,19 @@ export async function transcribeAudio(wavPath, { model, language, timeoutMs = 12
 }
 
 export function messageContent(msg) {
-  const content = msg?.content ?? msg?.reasoning_content;
-  if (typeof content === "string") {
+  const content = msg?.content;
+  if (typeof content === "string" && content.trim()) {
     return content.trim();
   }
   if (Array.isArray(content)) {
-    return content
+    const text = content
       .filter((p) => p.type === "text")
       .map((p) => p.text)
       .join("")
       .trim();
+    if (text) {
+      return text;
+    }
   }
   return "";
 }
@@ -241,8 +244,11 @@ export async function chatCompletion({
     messages,
     temperature,
     max_tokens: maxTokens,
+    enableThinking: false,
+    chat_template_kwargs: { enable_thinking: false },
   };
-  if (responseFormat) {
+  // LM Studio accepts response_format.type json_schema | text only (not json_object).
+  if (responseFormat?.type === "json_schema") {
     body.response_format = responseFormat;
   }
   const json = await chatCompletions(body);
@@ -402,11 +408,9 @@ export async function captionFrame(b64, reason, ctx = {}) {
     `Trigger: ${reason || "interval"}. ` +
     promptLanguageRule();
 
-  const scene = await chatJsonLenientWithSlot(ModelSlot.FAST, {
+  const scene = await chatJsonWithSlot(ModelSlot.FAST, {
     temperature: CFG.frameCaptionTemperature,
     maxTokens: CFG.frameCaptionMaxTokens,
-    responseFormat: { type: "json_object" },
-    fallback: parseVisionFallback,
     messages: [
       {
         role: "user",

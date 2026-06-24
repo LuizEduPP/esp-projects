@@ -125,39 +125,19 @@ Requires `FOLIO_BRAIN_URL` reachable from the ESP’s network.
 
 ## Configuration
 
-Copy the template and edit:
+Sem arquivo de config obrigatório. Na subida o brain detecta LM Studio (localhost/LAN), **Whisper CLI no PC** (CUDA se tiver NVIDIA), modelo de embedding e idioma do sistema. Na UI (**Settings**) você só escolhe o **modelo** de visão/texto.
 
-```bash
-mkdir -p ~/.folio
-cp boards/goouuu-esp32-s3-cam/folio/folio.config.example.json ~/.folio/config.json
-```
-
-**Env vars override** `config.json` (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_MODEL_DEEP`; legacy `LM_URL` / `FOLIO_LM_MODEL` still work). Edit in the UI (**Settings**) or via API:
+Opcional: `LM_URL`, `FOLIO_LM_MODEL`, `FOLIO_LOCALE`, `FOLIO_PORT`, `FOLIO_DATA_DIR`.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/config` | Full config + version |
-| PUT | `/api/config` | Save (partial merge) → hot reload OpenAI/Whisper/locale; **restart brain** only for `port` / `dataDir` |
-| GET | `/api/openai/models` | List models from configured base URL (alias: `/api/lm/models`) |
+| GET | `/api/config` | Modelo salvo + runtime detectado |
+| PUT | `/api/config` | `{"lm":{"model":"..."}}` |
+| GET | `/api/openai/models` | Modelos no LM Studio |
 | GET | `/api/node/config` | ESP pulls this (include `X-Folio-Device-Id`) |
 | GET | `/api/devices` | Sync status per node |
 
-ESP polls `/api/node/config` every `node.statusIntervalMs` and sends `X-Folio-Config-Version` on ingest. Frame interval, JPEG quality, audio energy gates, and `perception.motionMin` apply at runtime; audio buffer size / frame resolution need matching `platformio.ini` + reflash.
-
-### Brain — UI settings (`Settings` panel)
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `locale` | `pt-BR` | Language |
-| `openai.baseUrl` / `openai.apiKey` / `openai.model` / `openai.modelDeep` | OpenAI API | LM Studio, Ollama, vLLM, OpenAI — fast = captions; deep = daily insights |
-| `lm.model` | — | Model loaded in LM Studio (vision + insights) |
-| `audio.sttEnabled` | `false` | Optional STT via LM — off by default |
-| `node.brainUrl` | `null` | Override; else brain picks IP on ESP subnet |
-| `audio.retentionDays` | `7` | PCM replay window; transcripts kept longer |
-| `pipeline.enabled` / `insights.auto` | `true` | Background worker + daily insights |
-| `frames.*` / `node.*` / `present.*` | — | ESP sync + timeline grouping |
-
-Everything else (`memory`, `worker`, `http`, `entities`) runs automatically — tune in `~/.folio/config.json` only if needed.
+ESP polls `/api/node/config` every 15s. Frame interval, JPEG quality, audio gates sync at runtime; buffer size / resolution need `platformio.ini` + reflash.
 
 ### ESP (`firmware/platformio.ini` build_flags)
 
