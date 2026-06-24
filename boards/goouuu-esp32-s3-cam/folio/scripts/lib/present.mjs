@@ -46,27 +46,30 @@ export function isStaticFrameItem(item) {
   if (item.type !== "frame") {
     return false;
   }
+
+  const scene = parseSceneJson(item.scene_json);
+  if (scene) {
+    if (scene.skipped || scene.quiet || scene.unchanged || scene.hallucination_guard) {
+      return true;
+    }
+    if (scene.skip_reason) {
+      return true;
+    }
+    if (!scene.person_present && (scene.activity === "quiet" || scene.activity === "unknown")) {
+      return true;
+    }
+    if (scene.people === 0 && !scene.person_present && scene.activity !== "active") {
+      return true;
+    }
+  }
+
   if (!item.caption) {
     return true;
   }
   if (item.caption === CFG.frameStaticSummary) {
     return true;
   }
-  const scene = parseSceneJson(item.scene_json);
-  if (scene?.skipped || scene?.unchanged || scene?.quiet || scene?.hallucination_guard) {
-    return true;
-  }
-  if (scene?.activity === "quiet" && !scene?.person_present) {
-    return true;
-  }
-  if (
-    /smartphone|tablet|celular|cama|deitad|dispositivo pequeno|assistindo algo em um dispositivo/i.test(
-      item.caption,
-    ) &&
-    (scene?.lighting === "dark" ||
-      scene?.lighting === "very_dark" ||
-      (scene?.brightness != null && scene.brightness < 0.22))
-  ) {
+  if (/^ambiente quieto\.?$/i.test(String(item.caption).trim())) {
     return true;
   }
   if (isDarkSceneCaption(item.caption)) {

@@ -211,10 +211,6 @@ function migrateOpenAiToLm(file) {
     file.lm.modelWhisper = file.audio.whisperModel;
     changed = true;
   }
-  if (file.audio?.sttEnabled == null && file.audio?.whisperModel) {
-    file.audio.sttEnabled = false;
-    changed = true;
-  }
   return changed;
 }
 
@@ -444,6 +440,11 @@ function migrateConfigSchema(file) {
   }
   if (file.frames?.staticSummary == null && DEFAULT_CONFIG.frames.staticSummary) {
     file.frames.staticSummary = DEFAULT_CONFIG.frames.staticSummary;
+    changed = true;
+  }
+
+  if (file.audio?.sttEnabled === false) {
+    delete file.audio.sttEnabled;
     changed = true;
   }
 
@@ -797,7 +798,29 @@ function buildCfgFromFile(file = getFileData()) {
     defaultLocale: cfgStr(file, "locale", "FOLIO_LOCALE"),
 
     nodeBrainUrl: cfgStr(file, "node.brainUrl", "FOLIO_BRAIN_URL") || null,
-    audioSttEnabled: cfgBool(file, "audio.sttEnabled", "FOLIO_STT_ENABLED"),
+
+    whisperBin: resolveWhisperBin(getPath(file, "audio.whisperBin")),
+    whisperModel: cfgStr(file, "audio.whisperModel", "FOLIO_WHISPER_MODEL") || null,
+    whisperDevice: resolveWhisperDevice(
+      getPath(file, "audio.whisperDevice"),
+      process.env.FOLIO_WHISPER_DEVICE,
+    ),
+    lmModelWhisper: cfgStr(file, "lm.modelWhisper", "FOLIO_LM_MODEL_WHISPER") || null,
+
+    audioSttEnabled: (() => {
+      const env = process.env.FOLIO_STT_ENABLED;
+      if (env !== undefined && env !== "") {
+        return env !== "0" && env !== "false";
+      }
+      const v = getPath(file, "audio.sttEnabled");
+      if (v === false) {
+        return false;
+      }
+      if (v === true) {
+        return true;
+      }
+      return null;
+    })(),
   };
 }
 

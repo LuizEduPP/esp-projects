@@ -523,6 +523,9 @@ export function isSttHallucination(text, extraPatterns = []) {
   if (!raw) {
     return true;
   }
+  if (/<\|[^|>]+\|>/.test(raw) || /\bundefined\b/i.test(raw)) {
+    return true;
+  }
   const lower = raw.toLowerCase();
   const patterns = [...STT_HALLUCINATION_HINTS, ...extraPatterns].filter(Boolean);
   for (const pat of patterns) {

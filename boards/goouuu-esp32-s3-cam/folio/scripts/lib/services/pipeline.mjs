@@ -2,35 +2,31 @@ import { existsSync, unlinkSync } from "node:fs";
 import { CFG } from "../config.mjs";
 import { deleteAudioChunk, openDb, pendingAudioChunks, pendingCounts, pendingFrames, pruneExpiredPcm } from "../db/index.mjs";
 import { processAudioChunk, processFrame } from "../perception/index.mjs";
+import { needsInsightsRefresh, runDayInsights } from "./insights.mjs";
+import { today } from "../util.mjs";
 
 let lastFrameLmAt = 0;
-let loggedSttMissing = false;
+let lastInsightDrainAt = 0;
 
-/** Shorter gap when frames pile up — catch up without hammering LM at steady state. */
-function frameCaptionGapMs(pendingFrameCount) {
-  const base = CFG.frameCaptionIntervalMs;
-  const g = CFG.frameBacklogGap ?? {};
-  if (pendingFrameCount > (g.thresholdHigh ?? 20)) {
-    return Math.min(base, g.gapHigh ?? 3000);
+function adaptiveBatch(pending, base, max) {
+  if (pending <= 0) {
+    return base;
   }
-  if (pendingFrameCount > (g.thresholdMedium ?? 10)) {
-    return Math.min(base, g.gapMedium ?? 8000);
-  }
-  if (pendingFrameCount > (g.thresholdLow ?? 5)) {
-    return Math.min(base, g.gapLow ?? 15000);
-  }
-  return base;
+  return Math.min(max, Math.max(base, Math.ceil(Math.sqrt(pending) * 3)));
 }
 
-/** More LM captions per worker tick when frames pile up. */
+/** Shorter gap when frames pile up — scales with queue depth. */
+function frameCaptionGapMs(pendingFrameCount) {
+  const base = CFG.frameCaptionIntervalMs;
+  if (pendingFrameCount <= 1) {
+    return base;
+  }
+  const factor = Math.min(1, 12 / Math.sqrt(pendingFrameCount));
+  return Math.max(1500, Math.round(base * factor));
+}
+
 function maxCaptionsPerCycle(pendingFrameCount) {
-  if (pendingFrameCount > CFG.workerBacklogHigh) {
-    return 4;
-  }
-  if (pendingFrameCount > CFG.workerBacklogMedium) {
-    return 2;
-  }
-  return 1;
+  return Math.min(6, Math.max(1, Math.ceil(Math.sqrt(pendingFrameCount) / 4)));
 }
 
 function deleteChunkFile(path) {
@@ -120,17 +116,39 @@ export function startRetentionLoop() {
 
 function isSttError(err) {
   const msg = String(err?.message ?? err ?? "");
-  return /STT|transcriptions|LM Studio/i.test(msg);
+  return /whisper|STT|transcriptions/i.test(msg);
+}
+
+async function maybeAutoInsights(before, after) {
+  if (!CFG.insightsAuto) {
+    return;
+  }
+  const was = before.audio + before.frames;
+  const now = after.audio + after.frames;
+  if (was < 8 || now > was * 0.25) {
+    return;
+  }
+  if (Date.now() - lastInsightDrainAt < 120_000) {
+    return;
+  }
+  const db = openDb();
+  const day = today();
+  const check = needsInsightsRefresh(db, day);
+  if (!check.needed) {
+    return;
+  }
+  lastInsightDrainAt = Date.now();
+  try {
+    await runDayInsights(db, day);
+  } catch (err) {
+    console.error(`[insights] auto after drain: ${err.message}`);
+  }
 }
 
 export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
   const db = openDb();
   const pending = pendingCounts(db);
-  if (pending.audio > CFG.workerBacklogHigh) {
-    limit = Math.min(CFG.workerBatchMaxHigh, limit * 3);
-  } else if (pending.audio > CFG.workerBacklogMedium) {
-    limit = Math.min(CFG.workerBatchMaxMedium, limit * 2);
-  }
+  limit = adaptiveBatch(pending.audio, limit, CFG.workerBatchMaxHigh ?? 16);
 
   const chunks = pendingAudioChunks(db, limit);
   const results = [];
@@ -149,11 +167,7 @@ export async function processPendingAudio(limit = CFG.pipelineAudioBatch) {
 export async function processPendingFrames(limit = CFG.pipelineFrameBatch, { bypassGap = false } = {}) {
   const db = openDb();
   const pending = pendingCounts(db);
-  if (pending.frames > CFG.workerBacklogHigh) {
-    limit = Math.max(CFG.workerFrameSkipBatch ?? 32, limit);
-  } else if (pending.frames > CFG.workerBacklogMedium) {
-    limit = Math.min(CFG.workerBatchMaxMedium, limit * 2);
-  }
+  limit = adaptiveBatch(pending.frames, limit, CFG.workerFrameSkipBatch ?? 48);
 
   const minGap = bypassGap ? 0 : frameCaptionGapMs(pending.frames);
   if (minGap > 0 && Date.now() - lastFrameLmAt < minGap) {
@@ -199,50 +213,51 @@ export function startProcessingLoop(intervalMs = CFG.pipelineIntervalMs) {
 
   console.log(
     `[worker] every ${intervalMs}ms · audio batch=${CFG.pipelineAudioBatch} · ` +
-      `frame batch=${CFG.pipelineFrameBatch} · LM gap=${CFG.frameCaptionIntervalMs}ms`,
+      `frame batch=${CFG.pipelineFrameBatch}`,
   );
 
-  return setInterval(async () => {
+  const tick = async () => {
     if (busy) {
       return;
     }
     busy = true;
     try {
       const db = openDb();
-      const pending = pendingCounts(db);
-      if (pending.audio === 0 && pending.frames === 0) {
+      const before = pendingCounts(db);
+      if (before.audio === 0 && before.frames === 0) {
         return;
       }
 
-      if (pending.audio > 0) {
-        console.log(`[stt] queue ${pending.audio} audio chunk(s)`);
-      }
-      if (pending.frames > 5) {
-        console.log(`[worker] frame backlog ${pending.frames} — faster caption gap`);
+      let after = before;
+      for (let round = 0; round < 24; round++) {
+        if (after.audio > 0) {
+          console.log(`[worker] audio queue ${after.audio}`);
+        }
+        if (after.frames > 0) {
+          console.log(`[worker] frame queue ${after.frames}`);
+        }
+
+        await processPendingAudio();
+        await processPendingFrames();
+        const next = pendingCounts(db);
+        if (next.audio + next.frames >= after.audio + after.frames) {
+          after = next;
+          break;
+        }
+        after = next;
+        if (after.audio === 0 && after.frames === 0) {
+          break;
+        }
       }
 
-      const audio = await processPendingAudio();
-      const frames = await processPendingFrames();
-
-      const sttErrors = audio.filter((r) => r.error && isSttError({ message: r.error }));
-      if (sttErrors.length && !loggedSttMissing) {
-        loggedSttMissing = true;
-        console.error(
-          "[stt] LM Studio STT failed — set audio.sttEnabled=false or check lm.url",
-        );
-      }
-
-      const utt = audio.filter((r) => r.text).length;
-      const cap = frames.filter((r) => r.caption).length;
-      const skipped = frames.filter((r) => r.skipped).length;
-      const snd = audio.filter((r) => r.sound).length;
-      if (utt > 0 || cap > 0 || snd > 0 || skipped > 0) {
-        console.log(`[worker] done utt=${utt} caption=${cap} skip=${skipped} sounds=${snd}`);
-      }
+      await maybeAutoInsights(before, after);
     } catch (err) {
       console.error(`[worker] ${err.message}`);
     } finally {
       busy = false;
     }
-  }, intervalMs);
+  };
+
+  setInterval(tick, intervalMs);
+  tick();
 }

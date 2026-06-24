@@ -9,6 +9,7 @@ export const ModelSlot = Object.freeze({
   DEEP: "deep",
   EMBED: "embed",
   RERANK: "rerank",
+  WHISPER: "whisper",
 });
 
 export function modelId(slot) {
@@ -21,6 +22,8 @@ export function modelId(slot) {
       return CFG.lmModelEmbed;
     case ModelSlot.RERANK:
       return CFG.lmModelRerank;
+    case ModelSlot.WHISPER:
+      return CFG.lmModelWhisper || CFG.whisperModel || null;
     default:
       throw new Error(`Unknown model slot: ${slot}`);
   }

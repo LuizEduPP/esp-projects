@@ -9,6 +9,7 @@ import {
   runDayInsights, runPendingQueueOnce,
 } from "./services.mjs";
 import { reindexAllMemories, retrieveMemories } from "./memory.mjs";
+import { sttCapability } from "./stt-capability.mjs";
 import { errMsg, pcmToWav, sendBytes, sendJson, today } from "./util.mjs";
 import {
   getAudioChunk, getFrame, listDevices, listEntities, memoryChunkCount, openDb,
@@ -308,6 +309,7 @@ export function createFolioServer(ui) {
       }
 
       if (path === "/api/health") {
+        const stt = sttCapability();
         sendJson(res, 200, {
           ok: true,
           today: today(),
@@ -318,6 +320,9 @@ export function createFolioServer(ui) {
           pipeline: CFG.pipelineEnabled,
           insights: CFG.insightsAuto,
           memory_chunks: memoryChunkCount(openDb()),
+          stt: stt.ready
+            ? { ready: true, backend: stt.backend, model: stt.model }
+            : { ready: false },
         });
         return;
       }

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { CFG } from "./lib/config.mjs";
 import { createFolioServer, logServerStartup } from "./lib/http.mjs";
 import { activeLocale, promptLanguageName } from "./lib/locale.mjs";
+import { refreshSttCapability } from "./lib/stt-capability.mjs";
 import { startInsightsLoop, startRetentionLoop, startProcessingLoop } from "./lib/services.mjs";
 
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "ui");
@@ -32,8 +33,9 @@ function main() {
     }
     throw err;
   });
-  server.listen(CFG.port, "0.0.0.0", () => {
+  server.listen(CFG.port, "0.0.0.0", async () => {
     logServerStartup();
+    const stt = await refreshSttCapability({ force: true });
     console.log(
       `frames: capture=${CFG.frameCaptureIntervalMs}ms caption=${CFG.frameCaptionIntervalMs}ms ` +
         `size=${CFG.frameSize} jpegQ=${CFG.frameJpegQuality}`,
@@ -47,11 +49,15 @@ function main() {
         `${CFG.modelDeep !== CFG.modelFast ? ` · insights=${CFG.modelDeep}` : ""}` +
         `${CFG.lmModelEmbed ? ` · embed=${CFG.lmModelEmbed}` : ""}`,
     );
-    console.log(
-      `audio: stt=${CFG.audioSttEnabled ? "on (experimental)" : "off — speech stored without transcript"}`,
-    );
+    if (stt.ready) {
+      console.log(`whisper: ${stt.backend} · model=${stt.model}${stt.device ? ` · ${stt.device}` : ""}`);
+    } else if (CFG.audioSttEnabled === false) {
+      console.log("whisper: disabled in config");
+    } else {
+      console.log("whisper: not found — speech stored without transcript");
+    }
     console.log(`locale: ${activeLocale()} (${promptLanguageName()})`);
-    console.log("[config] hot reload: LM Studio/Whisper/locale apply on save — restart only for port/dataDir");
+    console.log("[config] hot reload: LM/Whisper/locale apply on save — restart only for port/dataDir");
   });
 
   if (CFG.pipelineEnabled) {

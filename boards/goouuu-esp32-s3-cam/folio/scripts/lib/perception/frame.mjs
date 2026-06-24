@@ -371,11 +371,10 @@ function objectsSummary(scene) {
   if (!tags.length) {
     return null;
   }
-  return tags
+  const names = tags
     .map((o) => (typeof o === "string" ? o : o?.name))
-    .filter(Boolean)
-    .slice(0, 4)
-    .join(", ");
+    .filter((n) => n && n !== "undefined");
+  return names.length ? names.slice(0, 4).join(", ") : null;
 }
 
 function shouldAnalyze({ motion, frame, prev, forceIntervalMs, quality }) {

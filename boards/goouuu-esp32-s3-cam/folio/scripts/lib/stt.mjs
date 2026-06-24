@@ -1,7 +1,13 @@
+import { readFileSync, unlinkSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { CFG } from "./config.mjs";
 import { transcribeAudio } from "./llm.mjs";
 import { whisperLanguageCode } from "./locale.mjs";
-import { modelId, ModelSlot } from "./models.mjs";
+import { refreshSttCapability, sttActive, sttCapability } from "./stt-capability.mjs";
+import { isSttHallucination } from "./util.mjs";
+
+const execFileAsync = promisify(execFile);
 
 function pcmSamples(pcmBuffer) {
   if (!pcmBuffer?.length) {
@@ -54,6 +60,9 @@ export function shouldRejectTranscript(stt) {
   if (!text) {
     return false;
   }
+  if (isSttHallucination(text, CFG.audioSttRejectPatterns)) {
+    return true;
+  }
   const lower = text.toLowerCase();
   for (const pat of CFG.audioSttRejectPatterns ?? []) {
     if (pat && lower.includes(String(pat).toLowerCase())) {
@@ -63,44 +72,95 @@ export function shouldRejectTranscript(stt) {
   return false;
 }
 
-/** LM Studio STT — optional; most setups use one chat/vision model only (sttEnabled=false). */
-export async function transcribeWav(wavPath, { chunkId } = {}) {
-  if (!CFG.audioSttEnabled) {
-    return { text: "", segments: [], confidence: 0, skipped: "stt_disabled" };
+const WHISPER_LANG_NAME = {
+  pt: "Portuguese",
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  it: "Italian",
+  ja: "Japanese",
+  zh: "Chinese",
+};
+
+async function transcribeWhisperCli(wavPath, { chunkId } = {}) {
+  const cap = sttCapability();
+  const tag = chunkId != null ? `chunk=${chunkId}` : wavPath;
+  const lang = whisperLanguageCode();
+  const args = [
+    wavPath,
+    "--model",
+    cap.model || "base",
+    "--output_format",
+    "json",
+    "--fp16",
+    "False",
+    "--device",
+    cap.device || "cpu",
+  ];
+  if (lang) {
+    args.push("--language", WHISPER_LANG_NAME[lang] ?? lang);
   }
 
-  const model = modelId(ModelSlot.FAST);
+  await execFileAsync(cap.bin, args, {
+    timeout: CFG.sttTimeoutMs,
+    env: process.env,
+  });
+
+  const jsonPath = wavPath.replace(/\.wav$/i, ".json");
+  const raw = JSON.parse(readFileSync(jsonPath, "utf8"));
+  try {
+    unlinkSync(jsonPath);
+  } catch {
+    /* ignore */
+  }
+
+  const text = String(raw.text ?? "").trim();
+  console.log(`[whisper] ${tag} cli ok "${text.slice(0, 120)}${text.length > 120 ? "…" : ""}"`);
+  return { text, segments: raw.segments ?? [], confidence: text ? 0.9 : 0 };
+}
+
+async function transcribeWhisperLm(wavPath, { chunkId } = {}) {
+  const cap = sttCapability();
+  const tag = chunkId != null ? `chunk=${chunkId}` : wavPath;
+  const lang = CFG.sttLanguage ? whisperLanguageCode() : null;
+  const raw = await transcribeAudio(wavPath, {
+    model: cap.model,
+    language: lang,
+    timeoutMs: CFG.sttTimeoutMs,
+  });
+  const text = String(raw.text ?? "").trim();
+  console.log(`[whisper] ${tag} lm ok "${text.slice(0, 120)}${text.length > 120 ? "…" : ""}"`);
+  return { text, segments: [], confidence: text ? 0.85 : 0 };
+}
+
+/** Whisper CLI or LM Studio /v1/audio/transcriptions — auto when available. */
+export async function transcribeWav(wavPath, { chunkId } = {}) {
+  await refreshSttCapability();
+  if (!sttActive()) {
+    return { text: "", segments: [], confidence: 0, skipped: "no_whisper" };
+  }
+
+  const cap = sttCapability();
   const tag = chunkId != null ? `chunk=${chunkId}` : wavPath;
   const t0 = Date.now();
-  const lang = CFG.sttLanguage ? whisperLanguageCode() : null;
-
-  console.log(`[stt] ${tag} start model=${model} lang=${lang ?? "auto"}`);
 
   try {
-    const raw = await transcribeAudio(wavPath, {
-      model,
-      language: lang,
-      timeoutMs: CFG.sttTimeoutMs,
-    });
+    const result =
+      cap.backend === "cli"
+        ? await transcribeWhisperCli(wavPath, { chunkId })
+        : await transcribeWhisperLm(wavPath, { chunkId });
 
-    const text = String(raw.text ?? "").trim();
-    const ms = Date.now() - t0;
-    const confidence = text ? 0.85 : 0;
-
-    if (text) {
-      const preview = text.length > 160 ? `${text.slice(0, 160)}…` : text;
-      console.log(`[stt] ${tag} ok ${ms}ms "${preview}"`);
-    } else {
-      console.log(`[stt] ${tag} empty ${ms}ms`);
-    }
-
-    const result = { text, segments: [], confidence };
     if (shouldRejectTranscript(result)) {
+      console.log(`[whisper] ${tag} rejected hallucination ${Date.now() - t0}ms`);
       return { text: "", segments: [], confidence: 0 };
     }
     return result;
   } catch (err) {
-    console.error(`[stt] ${tag} fail ${Date.now() - t0}ms — ${err.message}`);
-    throw new Error(`LM Studio STT failed: ${err.message}`);
+    console.error(`[whisper] ${tag} fail ${Date.now() - t0}ms — ${err.message}`);
+    await refreshSttCapability({ force: true });
+    throw err;
   }
 }
+
+export { refreshSttCapability, sttActive, sttCapability };

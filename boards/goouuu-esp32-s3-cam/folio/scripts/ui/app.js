@@ -82,7 +82,6 @@ const SECTIONS = [
   { title: "Captura", fields: [
     { path: "audio.vad.frameMs", label: "Chunk áudio ESP (ms)", type: "number" },
     { path: "frames.captureIntervalMs", label: "Intervalo câmera (ms)", type: "number" },
-    { path: "audio.sttEnabled", label: "STT via LM (experimental)", type: "bool" },
   ]},
   { title: "Processamento", fields: [
     { path: "pipeline.enabled", label: "Worker ativo", type: "bool" },
@@ -400,6 +399,7 @@ async function loadSystem() {
   ]);
   $("health-grid").innerHTML = [
     ["Pipeline", h.pipeline ? "ativo" : "pausado"],
+    ["Whisper", h.stt?.ready ? `${h.stt.backend} · ${h.stt.model}` : "auto (off)"],
     ["Fila", `${h.pending?.audio ?? 0} áudio · ${h.pending?.frames ?? 0} frames`],
     ["Memória", `${h.memory_chunks ?? 0} chunks`],
     ["Insights", h.insights ? "auto" : "manual"],

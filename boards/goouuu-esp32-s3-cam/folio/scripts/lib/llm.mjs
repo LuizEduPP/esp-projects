@@ -148,6 +148,9 @@ function modelIdFromEntry(entry) {
 
 function classifyModel(id) {
   const lower = String(id).toLowerCase();
+  if (/whisper|distil-whisper|faster-whisper/.test(lower)) {
+    return "whisper";
+  }
   if (/rerank|re-rank|cross-encoder/.test(lower)) {
     return "rerank";
   }
@@ -168,9 +171,12 @@ export async function fetchOpenAiModels() {
     const chat = [];
     const embed = [];
     const rerankModels = [];
+    const whisper = [];
     for (const id of ids) {
       const kind = classifyModel(id);
-      if (kind === "rerank") {
+      if (kind === "whisper") {
+        whisper.push(id);
+      } else if (kind === "rerank") {
         rerankModels.push(id);
       } else if (kind === "embed") {
         embed.push(id);
@@ -185,6 +191,7 @@ export async function fetchOpenAiModels() {
       chat,
       embed,
       rerank: rerankModels,
+      whisper,
       all: ids,
     };
   } catch (err) {

@@ -32,7 +32,6 @@
   "audio": {
     "sampleRate": 16000,
     "chunkMs": 1000,
-    "sttEnabled": false,
     "speechEnergyThreshold": 0.008,
     "sttMaxAttempts": 3,
     "sttTimeoutMs": 120000,

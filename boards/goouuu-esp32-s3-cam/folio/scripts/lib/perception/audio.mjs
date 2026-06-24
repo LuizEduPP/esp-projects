@@ -9,7 +9,7 @@ import {
   updateAudioClassification,
 } from "../db.mjs";
 import { identifySpeaker } from "../speaker.mjs";
-import { isSpeechChunk, transcribeWav } from "../stt.mjs";
+import { isSpeechChunk, sttActive, transcribeWav } from "../stt.mjs";
 import { writeWav } from "../util.mjs";
 import { classifySound, isInterestingSound, speechLabel } from "./sound.mjs";
 import { SoundKind } from "./sound.mjs";
@@ -82,7 +82,7 @@ export async function processAudioChunk(db, chunk) {
   try {
     const speaker = identifySpeaker(db, pcm);
 
-    if (!CFG.audioSttEnabled) {
+    if (!sttActive()) {
       updateAudioClassification(db, chunk.id, {
         sound_kind: SoundKind.SPEECH,
         sound_label: speechLabel(),
@@ -94,7 +94,7 @@ export async function processAudioChunk(db, chunk) {
         id: chunk.id,
         speech: true,
         speaker: speaker.speaker_id,
-        skipped: "stt_disabled",
+        skipped: "no_whisper",
       };
     }
 
