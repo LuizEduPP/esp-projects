@@ -7,7 +7,7 @@ The ESP32 **does not respond**. It listens and sees; the PC stores **everything*
 | Layer | Role |
 |-------|------|
 | **folio-node** (ESP32-S3-CAM + INMP441) | Push audio chunks + JPEG over WiFi to brain |
-| **folio-brain** (PC, Node 22+) | Ingest, Whisper, sound classify, speaker ID, vision captions, RAG memory, daily insights |
+| **folio-brain** (PC, Node 22+) | Ingest, LM Studio STT, sound classify, speaker ID, vision captions, RAG memory, daily insights |
 | **Archive UI** | Insights (dia) + witness timeline (frames, fala, sons) |
 
 ## Hardware
@@ -104,13 +104,17 @@ yarn folio:insights --today          # or: yarn folio:process, folio:enroll, fol
 ```
 scripts/
 ├── folio-brain.mjs      # HTTP server + background loops
-├── folio.mjs            # CLI: insights | process | enroll | memory reindex
-├── ui/index.html
-└── lib/
-    ├── config.mjs, locale.mjs, models.mjs, present.mjs
-    ├── db.mjs, llm.mjs, memory.mjs, http.mjs, services.mjs
-    ├── util.mjs, speaker.mjs, stt.mjs
-    └── perception/            # audio, frame, image, sound, yamnet
+├── folio.mjs            # CLI
+├── lib/
+│   ├── config.mjs       # ~/.folio/config.json
+│   ├── db/              # SQLite (split modules)
+│   ├── db.mjs           # re-export db/
+│   ├── services/        # ingest, pipeline, insights
+│   ├── services.mjs     # re-export services/
+│   ├── network.mjs      # brainUrl por subnet do ESP
+│   ├── perception/      # frame, audio, sound
+│   └── …
+└── ui/
 ```
 
 ## Capture pipeline (WiFi only)
@@ -146,11 +150,9 @@ ESP polls `/api/node/config` every `node.statusIntervalMs` and sends `X-Folio-Co
 |-----|---------|-------------|
 | `locale` | `pt-BR` | Language |
 | `openai.baseUrl` / `openai.apiKey` / `openai.model` / `openai.modelDeep` | OpenAI API | LM Studio, Ollama, vLLM, OpenAI — fast = captions; deep = daily insights |
-| `audio.whisperModel` | `base` | Whisper model |
-| `audio.whisperDevice` | `cuda` | `cpu`, `cuda`, `mps`, `auto` — see UI **runtime** line for effective device |
-| `audio.speechEnergyThreshold` | `0.008` | RMS gate — synced to ESP via `/api/node/config` |
-| `perception.motionMin` | `0.035` | Frame motion gate — synced to ESP at runtime |
-| `perception.soundEngine` | `heuristic` | `heuristic` or `yamnet` (ONNX) |
+| `lm.model` | — | Model loaded in LM Studio (vision + insights) |
+| `audio.sttEnabled` | `false` | Optional STT via LM — off by default |
+| `node.brainUrl` | `null` | Override; else brain picks IP on ESP subnet |
 | `audio.retentionDays` | `7` | PCM replay window; transcripts kept longer |
 | `pipeline.enabled` / `insights.auto` | `true` | Background worker + daily insights |
 | `frames.*` / `node.*` / `present.*` | — | ESP sync + timeline grouping |

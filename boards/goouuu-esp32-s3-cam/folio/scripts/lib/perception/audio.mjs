@@ -81,6 +81,23 @@ export async function processAudioChunk(db, chunk) {
 
   try {
     const speaker = identifySpeaker(db, pcm);
+
+    if (!CFG.audioSttEnabled) {
+      updateAudioClassification(db, chunk.id, {
+        sound_kind: SoundKind.SPEECH,
+        sound_label: speechLabel(),
+        speaker_id: speaker.speaker_id,
+        speaker_confidence: speaker.confidence,
+      });
+      markAudioProcessed(db, chunk.id);
+      return {
+        id: chunk.id,
+        speech: true,
+        speaker: speaker.speaker_id,
+        skipped: "stt_disabled",
+      };
+    }
+
     const stt = await transcribeWav(wavPath, { chunkId: chunk.id });
     if (stt.text) {
       insertUtterance(db, {

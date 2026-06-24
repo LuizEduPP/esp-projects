@@ -34,8 +34,8 @@ export function activeLocale() {
 }
 
 export function whisperLanguageCode() {
-  if (CFG.whisperLanguage) {
-    const w = CFG.whisperLanguage.toLowerCase();
+  if (CFG.sttLanguage) {
+    const w = CFG.sttLanguage.toLowerCase();
     if (w.length <= 3) {
       return w;
     }
@@ -45,7 +45,7 @@ export function whisperLanguageCode() {
     if (fromName) {
       return fromName[1].whisper;
     }
-    return CFG.whisperLanguage;
+    return CFG.sttLanguage;
   }
   return localeMeta(activeLocale())?.whisper ?? "en";
 }

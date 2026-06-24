@@ -16,7 +16,7 @@
     "captionIntervalMs": 60000,
     "captionMaxTokens": 220,
     "captionTemperature": 0.05,
-    "pipelineBatch": 1,
+    "pipelineBatch": 2,
     "jpegQuality": 12,
     "size": "QVGA",
     "staticSummary": "Sem movimento relevante.",
@@ -31,9 +31,12 @@
   },
   "audio": {
     "sampleRate": 16000,
+    "chunkMs": 1000,
+    "sttEnabled": false,
     "speechEnergyThreshold": 0.008,
     "sttMaxAttempts": 3,
-    "sttMaxNoSpeechProb": 0.55,
+    "sttTimeoutMs": 120000,
+    "sttLanguage": null,
     "sttRejectPatterns": [
       "legendas pela comunidade",
       "legendas por ",
@@ -45,14 +48,9 @@
     ],
     "retentionDays": 7,
     "retentionSweepMs": 21600000,
-    "whisperBin": "whisper",
-    "whisperModel": "base",
-    "whisperDevice": "cuda",
-    "whisperTimeoutMs": 120000,
-    "whisperLanguage": null,
     "pipelineBatch": 4,
     "vad": {
-      "frameMs": 100,
+      "frameMs": 1000,
       "debounceMs": 300,
       "silenceMs": 1200,
       "prerollMs": 400
@@ -148,7 +146,7 @@
     "storeSounds": true,
     "soundMinEnergy": 0.003,
     "soundMinConfidence": 0.55,
-    "soundEngine": "yamnet",
+    "soundEngine": "heuristic",
     "soundLabels": {
       "speech": "fala",
       "bark": "latido",
@@ -156,18 +154,6 @@
       "knock": "batida",
       "appliance": "eletrodoméstico",
       "unknown": "som"
-    },
-    "yamnetMinScore": 0.2,
-    "yamnetModelPath": null,
-    "yamnetLabelsPath": null,
-    "yamnetModelUrl": "https://huggingface.co/zeropointnine/yamnet-onnx/resolve/main/yamnet.onnx",
-    "yamnetLabelsUrl": "https://raw.githubusercontent.com/ispysoftware/AgentDVR-Plugins/main/Listen/onnx/yamnet_class_map.csv",
-    "yamnetKindMap": {
-      "speech": ["Speech", "Conversation", "Narration, monologue", "Child speech, kid speaking"],
-      "bark": ["Bark", "Dog", "Canidae, dogs, wolves"],
-      "door": ["Door", "Sliding door", "Cupboard open or close", "Drawer open or close"],
-      "knock": ["Knock", "Tap"],
-      "appliance": ["Vacuum cleaner", "Dishes, pots, and pans", "Microwave oven", "Refrigerator", "Water tap, faucet"]
     },
     "heuristic": {
       "speech": { "confidence": 0.92 },
@@ -179,6 +165,7 @@
     }
   },
   "node": {
+    "brainUrl": null,
     "wifiRetryMs": 5000,
     "pushBackoffMaxMs": 30000,
     "statusIntervalMs": 15000

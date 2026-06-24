@@ -1,9 +1,9 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
-import { networkInterfaces } from "node:os";
 import { resolve } from "node:path";
 import { CFG, nodeConfigPayload, publicConfig, updateConfig } from "./config.mjs";
 import { fetchOpenAiModels } from "./llm.mjs";
+import { listLanUrls } from "./network.mjs";
 import {
   getInsightsForApi, ingestAudioChunk, ingestEvent, ingestFrame, needsInsightsRefresh,
   runDayInsights, runPendingQueueOnce,
@@ -27,7 +27,7 @@ let lastQuietLogAt = 0;
 function logAudioIngest(deviceId, body, result) {
   if (!result.skipped) {
     console.log(
-      `[ingest] audio ${deviceId} id=${result.id} bytes=${body.length} energy=${result.energy?.toFixed(4)} → whisper queue`,
+      `[ingest] audio ${deviceId} id=${result.id} bytes=${body.length} energy=${result.energy?.toFixed(4)} → stt queue`,
     );
     return;
   }
@@ -36,7 +36,7 @@ function logAudioIngest(deviceId, body, result) {
   const now = Date.now();
   if (quietSkipCount <= 3 || now - lastQuietLogAt >= 30_000) {
     console.log(
-      `[ingest] audio ${deviceId} skip ${result.skipped} energy=${result.energy?.toFixed(4)} (no whisper)`,
+      `[ingest] audio ${deviceId} skip ${result.skipped} energy=${result.energy?.toFixed(4)} (no stt)`,
     );
     if (quietSkipCount > 3) {
       quietSkipCount = 0;
@@ -273,16 +273,17 @@ export function createFolioServer(ui) {
         if (deviceId) {
           touchDevice(openDb(), deviceId);
         }
-        const payload = nodeConfigPayload();
-        sendJson(res, 200, payload);
+        const clientIp = req.socket?.remoteAddress ?? null;
+        sendJson(res, 200, nodeConfigPayload(clientIp));
         return;
       }
 
       if (path === "/api/devices") {
         const db = openDb();
-        const brainVersion = nodeConfigPayload().version;
+        const payload = nodeConfigPayload();
         sendJson(res, 200, {
-          brain_config_version: brainVersion,
+          brain_config_version: payload.version,
+          brain_url: payload.brainUrl,
           devices: listDevices(db),
         });
         return;
@@ -328,15 +329,7 @@ export function createFolioServer(ui) {
 }
 
 function lanUrls(port) {
-  const urls = [];
-  for (const ifaces of Object.values(networkInterfaces())) {
-    for (const iface of ifaces ?? []) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        urls.push(`http://${iface.address}:${port}`);
-      }
-    }
-  }
-  return urls;
+  return listLanUrls(port);
 }
 
 export function logServerStartup() {

@@ -35,6 +35,7 @@ const RESOURCE_PATH = {
   embeddings: "embeddings",
   models: "models",
   rerank: "rerank",
+  transcriptions: "audio/transcriptions",
 };
 
 export function openAiBaseUrl() {
@@ -93,6 +94,36 @@ export async function listModels({ timeoutMs = 8_000 } = {}) {
 /** POST /v1/rerank — Jina/TEI extension (not core OpenAI). */
 export async function rerank(body, { timeoutMs = 60_000 } = {}) {
   return openAiRequest(openAiUrl("rerank"), { method: "POST", body, timeoutMs });
+}
+
+/** POST /v1/audio/transcriptions — Whisper model loaded in LM Studio. */
+export async function transcribeAudio(wavPath, { model, language, timeoutMs = 120_000 } = {}) {
+  const { readFileSync } = await import("node:fs");
+  const { basename } = await import("node:path");
+  const buf = readFileSync(wavPath);
+  const form = new FormData();
+  form.append("file", new Blob([buf], { type: "audio/wav" }), basename(wavPath));
+  form.append("model", model);
+  if (language) {
+    form.append("language", language);
+  }
+
+  const headers = openAiHeaders();
+  delete headers["Content-Type"];
+
+  const res = await fetch(openAiUrl("transcriptions"), {
+    method: "POST",
+    headers,
+    body: form,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`LM Studio STT ${res.status}: ${text.slice(0, 240)}`);
+  }
+
+  return res.json();
 }
 
 export function messageContent(msg) {

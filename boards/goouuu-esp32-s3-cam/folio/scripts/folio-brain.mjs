@@ -5,9 +5,9 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CFG, isCudaAvailable } from "./lib/config.mjs";
+import { CFG } from "./lib/config.mjs";
 import { createFolioServer, logServerStartup } from "./lib/http.mjs";
-import { activeLocale, promptLanguageName, whisperLanguageCode } from "./lib/locale.mjs";
+import { activeLocale, promptLanguageName } from "./lib/locale.mjs";
 import { startInsightsLoop, startRetentionLoop, startProcessingLoop } from "./lib/services.mjs";
 
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "ui");
@@ -43,16 +43,14 @@ function main() {
         `speech≥${CFG.speechEnergyThreshold} retention=${CFG.audioRetentionDays}d`,
     );
     console.log(
-      `lm studio: ${CFG.lmBaseUrl} · vision=${CFG.modelFast}` +
-        `${CFG.modelDeep !== CFG.modelFast ? ` insights=${CFG.modelDeep}` : ""}` +
-        `${CFG.lmModelEmbed ? ` embed=${CFG.lmModelEmbed}` : ""}` +
-        `${CFG.lmModelRerank ? ` rerank=${CFG.lmModelRerank}` : ""}`,
+      `lm studio: ${CFG.lmBaseUrl} · model=${CFG.modelFast}` +
+        `${CFG.modelDeep !== CFG.modelFast ? ` · insights=${CFG.modelDeep}` : ""}` +
+        `${CFG.lmModelEmbed ? ` · embed=${CFG.lmModelEmbed}` : ""}`,
     );
-    const whisperLang = CFG.whisperLanguage ? whisperLanguageCode() : "auto";
     console.log(
-      `whisper (local): ${CFG.whisperBin} model=${CFG.whisperModel} device=${CFG.whisperDevice} ` +
-        `lang=${whisperLang} cuda=${isCudaAvailable() ? "yes" : "no"}`,
+      `audio: stt=${CFG.audioSttEnabled ? "on (experimental)" : "off — speech stored without transcript"}`,
     );
+    console.log(`locale: ${activeLocale()} (${promptLanguageName()})`);
     console.log("[config] hot reload: LM Studio/Whisper/locale apply on save — restart only for port/dataDir");
   });
 

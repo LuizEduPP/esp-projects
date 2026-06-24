@@ -44,7 +44,6 @@ const PHASE_LABEL = {
 };
 
 const LOCALE_OPTS = ["pt-BR", "pt-PT", "en-US", "en-GB", "es-ES", "fr-FR", "de-DE"];
-const WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"];
 const WHISPER_LANG_OPTS = [
   { v: "", l: "auto (locale)" }, { v: "pt", l: "português" }, { v: "en", l: "english" },
   { v: "es", l: "español" }, { v: "fr", l: "français" }, { v: "de", l: "deutsch" },
@@ -56,25 +55,17 @@ const SECTIONS = [
     { path: "port", label: "Porta HTTP", type: "number" },
     { path: "dataDir", label: "Pasta de dados", type: "text", placeholder: "~/.folio" },
   ]},
-  { title: "LM Studio", hint: "Visão, insights, embeddings e rerank — só LM Studio (Whisper é separado)", fields: [
+  { title: "LM Studio", hint: "Um modelo carregado no LM Studio — visão + insights (mesmo lm.model)", fields: [
     { path: "lm.url", label: "URL", type: "text", placeholder: "http://127.0.0.1:1234/v1" },
-    { path: "lm.model", label: "Modelo visão", type: "lmSelect", pool: "chat" },
-    { path: "lm.modelDeep", label: "Modelo insights", type: "lmSelect", pool: "chat", emptyOption: "(igual visão)" },
+    { path: "lm.model", label: "Modelo", type: "lmSelect", pool: "chat" },
+    { path: "lm.modelDeep", label: "Modelo insights", type: "lmSelect", pool: "chat", emptyOption: "(igual acima)" },
     { path: "lm.modelEmbed", label: "Modelo embed", type: "lmSelect", pool: "embed", emptyOption: "(desligado)" },
-    { path: "lm.modelRerank", label: "Modelo rerank", type: "lmSelect", pool: "rerank", emptyOption: "(desligado)" },
   ]},
-  { title: "Áudio · VAD", hint: "Grava só quando detecta voz (estilo Omi)", fields: [
-    { path: "audio.vad.frameMs", label: "Frame (ms)", type: "number" },
+  { title: "Áudio", fields: [
+    { path: "audio.vad.frameMs", label: "Chunk ESP (ms)", type: "number" },
     { path: "audio.speechEnergyThreshold", label: "Limiar voz", type: "number", step: "0.001" },
-    { path: "audio.vad.debounceMs", label: "Debounce (ms)", type: "number" },
-    { path: "audio.vad.silenceMs", label: "Silêncio p/ parar (ms)", type: "number" },
-    { path: "audio.vad.prerollMs", label: "Pré-roll (ms)", type: "number" },
+    { path: "audio.sttEnabled", label: "STT via LM (experimental)", type: "bool" },
     { path: "audio.retentionDays", label: "Retenção PCM (dias)", type: "number" },
-  ]},
-  { title: "Whisper (STT local)", hint: "Transcrição de voz — CLI openai-whisper, independente do LM Studio", fields: [
-    { path: "audio.whisperModel", label: "Modelo", type: "select", options: WHISPER_MODELS },
-    { path: "audio.whisperDevice", label: "Device", type: "select", options: ["cuda", "auto", "cpu", "mps"] },
-    { path: "audio.whisperLanguage", label: "Idioma STT", type: "select", options: WHISPER_LANG_OPTS.map((o) => o.v), labels: WHISPER_LANG_OPTS },
   ]},
   { title: "Câmera", fields: [
     { path: "frames.captureIntervalMs", label: "Captura (ms)", type: "number" },
@@ -93,8 +84,7 @@ const SECTIONS = [
     { path: "perception.storeSounds", label: "Guardar sons", type: "bool" },
     { path: "perception.soundMinEnergy", label: "Energia som mín.", type: "number", step: "0.001" },
     { path: "perception.soundMinConfidence", label: "Confiança som mín.", type: "number", step: "0.05" },
-    { path: "perception.soundEngine", label: "Motor de som", type: "select", options: ["yamnet", "heuristic"] },
-    { path: "perception.yamnetMinScore", label: "YAMNet score mín.", type: "number", step: "0.05" },
+    { path: "perception.soundEngine", label: "Motor de som", type: "select", options: ["heuristic"] },
   ]},
   { title: "Pipeline", fields: [
     { path: "pipeline.enabled", label: "Worker", type: "bool" },
@@ -110,7 +100,8 @@ const SECTIONS = [
     { path: "memory.lexical.minTokenLength", label: "Token mín. (lexical)", type: "number" },
     { path: "memory.retrieveLimit", label: "Hits por busca", type: "number" },
   ]},
-  { title: "ESP32", fields: [
+  { title: "ESP32", hint: "brainUrl vazio = brain envia IP da mesma subnet do ESP", fields: [
+    { path: "node.brainUrl", label: "Brain URL (opcional)", type: "text", placeholder: "http://192.168.x.x:8770" },
     { path: "node.wifiRetryMs", label: "WiFi retry (ms)", type: "number" },
     { path: "node.statusIntervalMs", label: "Poll config (ms)", type: "number" },
   ]},
@@ -406,7 +397,7 @@ function fillLmSelects() {
   document.querySelectorAll("[data-lm-pool]").forEach((sel) => {
     const pool = sel.dataset.lmPool;
     const cur = sel.value;
-    const list = lmModels[pool] || [];
+    const list = pool === "all" ? (lmModels.all || lmModels.chat || []) : (lmModels[pool] || []);
     let html = sel.dataset.empty ? `<option value="">${sel.dataset.empty}</option>` : "";
     html += list.map((id) => `<option value="${esc(id)}">${esc(id)}</option>`).join("");
     if (!list.length) html += '<option value="" disabled>(offline)</option>';
@@ -444,7 +435,7 @@ function loadConfigForm() {
     $("cfg-info").textContent = cfg.configPath || "defaults";
     const rt = cfg.runtime || {};
     $("cfg-runtime").textContent = rt.lmUrl
-      ? `LM Studio ${rt.lmUrl} · visão ${rt.models?.fast}${rt.models?.deep && rt.models.deep !== rt.models.fast ? ` · insights ${rt.models.deep}` : ""}${rt.models?.embed ? ` · embed ${rt.models.embed}` : ""} · whisper ${rt.models?.whisper} (${rt.whisperDeviceEffective})`
+      ? `LM Studio ${rt.lmUrl} · ${rt.models?.fast}${rt.models?.deep && rt.models.deep !== rt.models.fast ? ` · insights ${rt.models.deep}` : ""}`
       : "";
     applyConfigToForm(cfg);
     await refreshLmModels();

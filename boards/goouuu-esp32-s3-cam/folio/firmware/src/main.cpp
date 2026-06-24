@@ -106,7 +106,7 @@ static bool brainPost(const char *path, const uint8_t *body, size_t len,
     return false;
   }
   HTTPClient http;
-  String url = String(FOLIO_BRAIN_URL) + path;
+  String url = String(nodeBrainUrl()) + path;
   if (!http.begin(url)) {
     Serial.printf("[push] HTTP begin failed %s\n", url.c_str());
     return false;
@@ -354,7 +354,7 @@ static void handleHealth() {
   j += ",\"wifi_ssid\":\"";
   j += folioWifiSsid();
   j += "\",\"brain\":\"";
-  j += FOLIO_BRAIN_URL;
+  j += nodeBrainUrl();
   j += "\",\"camera\":";
   j += gCamOk ? "true" : "false";
   j += ",\"audio\":";
@@ -382,7 +382,7 @@ void setup() {
   delay(300);
   gBootMs = millis();
   Serial.println("\n[boot] ========== folio-node ==========");
-  Serial.printf("[boot] device=%s brain=%s\n", FOLIO_DEVICE_ID, FOLIO_BRAIN_URL);
+  Serial.printf("[boot] device=%s brain=%s\n", FOLIO_DEVICE_ID, nodeBrainUrl());
   Serial.printf("[boot] heap=%u psram=%u\n", ESP.getFreeHeap(), ESP.getFreePsram());
 
   gCamOk = cameraBegin();

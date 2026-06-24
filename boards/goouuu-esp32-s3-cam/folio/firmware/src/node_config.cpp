@@ -16,6 +16,7 @@
 
 static NodeRuntimeConfig gCfg = {};
 static char gVersionHeader[24] = "";
+static char gBrainUrl[96] = FOLIO_BRAIN_URL;
 static unsigned long gLastFetchMs = 0;
 
 static long jsonNestedLong(const String &body, const char *section, const char *key,
@@ -109,7 +110,7 @@ static bool fetchFromBrain() {
   }
 
   HTTPClient http;
-  String url = String(FOLIO_BRAIN_URL) + "/api/node/config";
+  String url = String(gBrainUrl) + "/api/node/config";
   if (!http.begin(url)) {
     return false;
   }
@@ -129,6 +130,14 @@ static bool fetchFromBrain() {
   if (version.length() > 0) {
     version.toCharArray(gCfg.version, sizeof(gCfg.version));
     snprintf(gVersionHeader, sizeof(gVersionHeader), "%s", gCfg.version);
+  }
+
+  const String brainUrl = jsonString(body, "brainUrl");
+  if (brainUrl.length() > 0 && brainUrl.length() < sizeof(gBrainUrl)) {
+    if (strcmp(gBrainUrl, brainUrl.c_str()) != 0) {
+      brainUrl.toCharArray(gBrainUrl, sizeof(gBrainUrl));
+      Serial.printf("[config] brainUrl=%s\n", gBrainUrl);
+    }
   }
 
   gCfg.frameIntervalMs = (uint32_t)jsonNestedLong(body, "frames", "captureIntervalMs",
@@ -193,3 +202,5 @@ bool nodeConfigPoll() {
 const NodeRuntimeConfig &nodeConfig() { return gCfg; }
 
 const char *nodeConfigVersionHeader() { return gVersionHeader; }
+
+const char *nodeBrainUrl() { return gBrainUrl; }

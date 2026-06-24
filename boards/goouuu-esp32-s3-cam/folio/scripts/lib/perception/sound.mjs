@@ -1,6 +1,5 @@
 import { CFG } from "../config.mjs";
 import { pcmFingerprint } from "../speaker.mjs";
-import { classifySoundYamnet } from "./yamnet.mjs";
 
 export const SoundKind = Object.freeze({
   SPEECH: "speech",
@@ -83,7 +82,7 @@ function classifySoundHeuristic(pcmBuffer, energy, durationMs) {
 
 export async function classifySound(pcmBuffer, energy, durationMs) {
   if (CFG.perceptionSoundEngine === "yamnet") {
-    return classifySoundYamnet(pcmBuffer, energy);
+    console.warn("[sound] yamnet removed — use heuristic (LM Studio only stack)");
   }
   return classifySoundHeuristic(pcmBuffer, energy, durationMs);
 }

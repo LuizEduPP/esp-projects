@@ -21,3 +21,5 @@ void nodeConfigBegin();
 bool nodeConfigPoll();
 const NodeRuntimeConfig &nodeConfig();
 const char *nodeConfigVersionHeader();
+/** Push URL — compile-time default until brain syncs brainUrl on same subnet. */
+const char *nodeBrainUrl();

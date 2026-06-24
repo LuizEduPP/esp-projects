@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeOpenAiBase } from "./llm.mjs";
+import { brainUrlForClient, listLanUrls } from "./network.mjs";
 
 /** esp_camera framesize_t IDs — must match firmware FOLIO_FRAME_SIZE_ID / platformio.ini */
 const FRAME_SIZE_TO_ID = { CIF: 5, QVGA: 6, VGA: 7, SVGA: 8, XGA: 9 };
@@ -204,6 +205,14 @@ function migrateOpenAiToLm(file) {
   if (file.memory?.rerank?.model && !file.lm.modelRerank) {
     file.lm.modelRerank = file.memory.rerank.model;
     delete file.memory.rerank.model;
+    changed = true;
+  }
+  if (file.audio?.whisperModel && !file.lm?.modelWhisper) {
+    file.lm.modelWhisper = file.audio.whisperModel;
+    changed = true;
+  }
+  if (file.audio?.sttEnabled == null && file.audio?.whisperModel) {
+    file.audio.sttEnabled = false;
     changed = true;
   }
   return changed;
@@ -509,10 +518,8 @@ function runtimeModels() {
   return {
     fast: CFG.modelFast,
     deep: CFG.modelDeep,
-    whisper: CFG.whisperModel,
     embed: CFG.lmModelEmbed,
     rerank: CFG.lmModelRerank,
-    whisperDevice: CFG.whisperDevice,
   };
 }
 
@@ -521,8 +528,6 @@ export function editableConfig() {
     configPath,
     version: nodeConfigVersion(),
     runtime: {
-      whisperDeviceEffective: CFG.whisperDevice,
-      cudaAvailable: cudaAvailable(),
       speechEnergyThreshold: CFG.speechEnergyThreshold,
       lmUrl: CFG.lmBaseUrl,
       models: runtimeModels(),
@@ -533,11 +538,14 @@ export function editableConfig() {
 
 export const publicConfig = editableConfig;
 
-export function nodeConfigPayload() {
+export function nodeConfigPayload(clientIp = null) {
   const { frames, audio, node, perception } = fileData;
   const size = String(frames.size).toUpperCase();
+  const brainUrl = brainUrlForClient(clientIp);
   return {
     version: nodeConfigVersion(),
+    brainUrl,
+    brainUrls: listLanUrls(),
     frames: {
       captureIntervalMs: frames.captureIntervalMs,
       jpegQuality: frames.jpegQuality,
@@ -681,17 +689,11 @@ function buildCfgFromFile(file = getFileData()) {
       cfgNum(file, "audio.chunkMs", "FOLIO_AUDIO_CHUNK_MS"),
     audioSampleRate: cfgNum(file, "audio.sampleRate", "FOLIO_AUDIO_SAMPLE_RATE"),
     speechEnergyThreshold: cfgNum(file, "audio.speechEnergyThreshold", "FOLIO_SPEECH_ENERGY"),
-    whisperBin: resolveWhisperBin(
-      cfgStr(file, "audio.whisperBin", "FOLIO_WHISPER_BIN"),
-      process.env.FOLIO_WHISPER_BIN,
-    ),
-    whisperModel: cfgStr(file, "audio.whisperModel", "FOLIO_WHISPER_MODEL"),
-    whisperDevice: resolveWhisperDevice(
-      getPath(file, "audio.whisperDevice"),
-      process.env.FOLIO_WHISPER_DEVICE,
-    ),
-    whisperTimeoutMs: cfgNum(file, "audio.whisperTimeoutMs", "FOLIO_WHISPER_TIMEOUT_MS"),
-    whisperLanguage: cfgStr(file, "audio.whisperLanguage", "FOLIO_WHISPER_LANGUAGE") || null,
+    sttTimeoutMs: cfgNum(file, "audio.sttTimeoutMs", "FOLIO_STT_TIMEOUT_MS") ||
+      cfgNum(file, "audio.whisperTimeoutMs", "FOLIO_WHISPER_TIMEOUT_MS"),
+    sttLanguage: cfgStr(file, "audio.sttLanguage", "FOLIO_STT_LANGUAGE") ||
+      cfgStr(file, "audio.whisperLanguage", "FOLIO_WHISPER_LANGUAGE") ||
+      null,
     pipelineAudioBatch: cfgNum(file, "audio.pipelineBatch", "FOLIO_PIPELINE_AUDIO_BATCH"),
     audioRetentionDays: cfgNum(file, "audio.retentionDays", "FOLIO_AUDIO_RETENTION_DAYS"),
     audioRetentionSweepMs: cfgNum(file, "audio.retentionSweepMs", "FOLIO_AUDIO_RETENTION_SWEEP_MS"),
@@ -793,6 +795,9 @@ function buildCfgFromFile(file = getFileData()) {
     memoryRerankTopK: cfgNum(file, "memory.rerank.topK", "FOLIO_MEMORY_RERANK_TOPK"),
 
     defaultLocale: cfgStr(file, "locale", "FOLIO_LOCALE"),
+
+    nodeBrainUrl: cfgStr(file, "node.brainUrl", "FOLIO_BRAIN_URL") || null,
+    audioSttEnabled: cfgBool(file, "audio.sttEnabled", "FOLIO_STT_ENABLED"),
   };
 }
 
