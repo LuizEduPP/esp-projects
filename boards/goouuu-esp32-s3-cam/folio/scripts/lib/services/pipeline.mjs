@@ -1,4 +1,5 @@
 import { existsSync, unlinkSync } from "node:fs";
+import { adaptivePipelineIntervalMs } from "../bootstrap.mjs";
 import { CFG } from "../config.mjs";
 import { deleteAudioChunk, openDb, pendingAudioChunks, pendingCounts, pendingFrames, pruneExpiredPcm } from "../db/index.mjs";
 import { processAudioChunk, processFrame } from "../perception/index.mjs";
@@ -210,11 +211,9 @@ export async function runPendingQueueOnce({ bypassFrameGap = false } = {}) {
 
 export function startProcessingLoop(intervalMs = CFG.pipelineIntervalMs) {
   let busy = false;
+  let timer = null;
 
-  console.log(
-    `[worker] every ${intervalMs}ms · audio batch=${CFG.pipelineAudioBatch} · ` +
-      `frame batch=${CFG.pipelineFrameBatch}`,
-  );
+  console.log(`[worker] adaptive · base interval ${intervalMs}ms`);
 
   const tick = async () => {
     if (busy) {
@@ -255,9 +254,12 @@ export function startProcessingLoop(intervalMs = CFG.pipelineIntervalMs) {
       console.error(`[worker] ${err.message}`);
     } finally {
       busy = false;
+      const pending = pendingCounts(openDb());
+      const nextMs = adaptivePipelineIntervalMs(pending.audio + pending.frames);
+      clearTimeout(timer);
+      timer = setTimeout(tick, nextMs);
     }
   };
 
-  setInterval(tick, intervalMs);
   tick();
 }

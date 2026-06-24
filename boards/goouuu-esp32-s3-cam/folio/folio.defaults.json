@@ -1,0 +1,137 @@
+{
+  "locale": "pt-BR",
+  "port": 8770,
+  "dataDir": null,
+  "lm": {
+    "url": "http://127.0.0.1:1234/v1",
+    "model": "mistralai/ministral-3-3b",
+    "modelDeep": null,
+    "modelEmbed": null,
+    "modelRerank": null,
+    "chatMaxTokens": 2048,
+    "chatMaxTokensDeep": 4096
+  },
+  "frames": {
+    "captureIntervalMs": 60000,
+    "captionIntervalMs": 60000,
+    "captionMaxTokens": 220,
+    "captionTemperature": 0.05,
+    "pipelineBatch": 2,
+    "jpegQuality": 12,
+    "size": "QVGA",
+    "staticSummary": "Sem movimento relevante."
+  },
+  "audio": {
+    "sampleRate": 16000,
+    "speechEnergyThreshold": 0.008,
+    "sttMaxAttempts": 3,
+    "sttTimeoutMs": 120000,
+    "sttLanguage": null,
+    "sttRejectPatterns": [
+      "legendas pela comunidade",
+      "legendas por ",
+      "amara.org",
+      "subtitles by",
+      "subtitle by",
+      "obrigado por assistir",
+      "thanks for watching"
+    ],
+    "retentionDays": 7,
+    "retentionSweepMs": 21600000,
+    "pipelineBatch": 4,
+    "vad": {
+      "frameMs": 1000,
+      "debounceMs": 300,
+      "silenceMs": 1200,
+      "prerollMs": 400
+    }
+  },
+  "http": {
+    "bodyMaxBytes": 524288,
+    "ingestAudioMaxBytes": 131072,
+    "ingestFrameMaxBytes": 409600,
+    "ingestEventMaxBytes": 16384,
+    "configPatchMaxBytes": 65536
+  },
+  "pipeline": { "enabled": true, "intervalMs": 30000 },
+  "insights": {
+    "auto": true,
+    "intervalMs": 300000,
+    "temperature": 0.25,
+    "maxTokens": 2048,
+    "sampleUtterances": 24,
+    "sampleFrames": 12
+  },
+  "memory": {
+    "enabled": true,
+    "lookbackDays": 90,
+    "retrieveLimit": 14,
+    "minScore": 0.08,
+    "embedBatchSize": 32,
+    "minUtteranceChars": 12,
+    "utteranceGroupMs": 300000,
+    "contextQueryTemplate": "padrões entidades sons fala {day}",
+    "lexical": { "minTokenLength": 3, "stopWords": [] },
+    "rerank": { "enabled": false, "candidateLimit": 40, "topK": 14 }
+  },
+  "speaker": { "minMatchScore": 0.82, "maxEnrollmentSamples": 8 },
+  "entities": { "soundKindEntity": {} },
+  "present": {
+    "hideStaticFrames": true,
+    "hidePendingInFeed": true,
+    "labels": {
+      "speechGroup": "Conversa",
+      "speechSingle": "Fala",
+      "soundPluralSuffix": "s",
+      "soundFallback": "Som",
+      "sceneGroup": "Cena contínua",
+      "sceneSingle": "Cena",
+      "pending": "Aguardando"
+    }
+  },
+  "perception": {
+    "motionMin": 0.035,
+    "motionForceMs": 300000,
+    "autoEnhance": true,
+    "vision": {
+      "jpegQuality": 88,
+      "darkThreshold": 0.28,
+      "brightThreshold": 0.82,
+      "lowContrast": 0.16,
+      "targetBrightness": 0.44,
+      "maxGain": 3.2,
+      "maxPasses": 4,
+      "contrastStretch": true,
+      "gammaMin": 0.5,
+      "sharpen": 0.12,
+      "minBrightnessForLm": 0.1,
+      "darkMotionMin": 0.08
+    },
+    "storeSounds": true,
+    "soundMinEnergy": 0.003,
+    "soundMinConfidence": 0.55,
+    "soundEngine": "heuristic",
+    "soundLabels": {
+      "speech": "fala",
+      "bark": "latido",
+      "door": "porta",
+      "knock": "batida",
+      "appliance": "eletrodoméstico",
+      "unknown": "som"
+    },
+    "heuristic": {
+      "speech": { "confidence": 0.92 },
+      "bark": { "confidence": 0.74, "maxEnergy": 0.045, "minZcr": 0.07, "maxDurationMs": 2500 },
+      "door": { "confidence": 0.7, "minEnergy": 0.01, "maxDurationMs": 900, "minRms": 0.018, "maxZcr": 0.05 },
+      "knock": { "confidence": 0.62, "minEnergy": 0.008, "maxDurationMs": 600, "minZcr": 0.12 },
+      "appliance": { "confidence": 0.55, "maxZcr": 0.04, "minDurationMs": 800 },
+      "unknown": { "confidence": 0.4, "lowConfidence": 0.15 }
+    }
+  },
+  "node": {
+    "brainUrl": null,
+    "wifiRetryMs": 5000,
+    "pushBackoffMaxMs": 30000,
+    "statusIntervalMs": 15000
+  }
+}

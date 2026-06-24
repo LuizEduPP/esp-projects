@@ -79,6 +79,15 @@ function buildRagQuery(stats) {
   return String(CFG.memoryContextQueryTemplate ?? "").replaceAll("{day}", stats.day).trim();
 }
 
+function sampleLimits(stats) {
+  const speech = stats.utterances + stats.speech_chunks;
+  const scenes = stats.scenes ?? 0;
+  return {
+    utterances: Math.min(32, Math.max(8, Math.ceil(Math.sqrt(speech + 1) * 4))),
+    frames: Math.min(20, Math.max(6, Math.ceil(Math.sqrt(scenes + 1) * 3))),
+  };
+}
+
 export function buildDayStats(db, day) {
   const items = timelineForDay(db, day);
   const stats = witnessStats(db, day);
@@ -113,6 +122,8 @@ export function buildDayStats(db, day) {
     (i) => i.type === "frame" && isMeaningfulFrameItem(i),
   );
 
+  const limits = sampleLimits({ utterances: stats.utterances, speech_chunks: stats.speech, scenes });
+
   return {
     day,
     frames: stats.frames,
@@ -123,13 +134,13 @@ export function buildDayStats(db, day) {
     speakers: speakerNames,
     speaker_counts: speakers,
     activity_by_hour: hours,
-    sample_utterances: sampleSpread(utteranceCandidates, CFG.insightsSampleUtterances).map((i) => ({
+    sample_utterances: sampleSpread(utteranceCandidates, limits.utterances).map((i) => ({
       at: i.at,
       speaker: i.speaker_id ? speakerNames[i.speaker_id] : null,
       text: i.text.slice(0, 160),
       sound: i.sound_label,
     })),
-    sample_frames: sampleSpread(frameCandidates, CFG.insightsSampleFrames).map((i) => ({
+    sample_frames: sampleSpread(frameCandidates, limits.frames).map((i) => ({
       at: i.at,
       caption: i.caption.slice(0, 120),
     })),

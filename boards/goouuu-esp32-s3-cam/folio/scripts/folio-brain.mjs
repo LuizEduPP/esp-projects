@@ -5,10 +5,10 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { bootstrapRuntime } from "./lib/bootstrap.mjs";
 import { CFG } from "./lib/config.mjs";
 import { createFolioServer, logServerStartup } from "./lib/http.mjs";
 import { activeLocale, promptLanguageName } from "./lib/locale.mjs";
-import { refreshSttCapability } from "./lib/stt-capability.mjs";
 import { startInsightsLoop, startRetentionLoop, startProcessingLoop } from "./lib/services.mjs";
 
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "ui");
@@ -35,29 +35,26 @@ function main() {
   });
   server.listen(CFG.port, "0.0.0.0", async () => {
     logServerStartup();
-    const stt = await refreshSttCapability({ force: true });
+    const boot = await bootstrapRuntime({ force: true });
     console.log(
-      `frames: capture=${CFG.frameCaptureIntervalMs}ms caption=${CFG.frameCaptionIntervalMs}ms ` +
-        `size=${CFG.frameSize} jpegQ=${CFG.frameJpegQuality}`,
+      `frames: capture=${CFG.frameCaptureIntervalMs}ms · size=${CFG.frameSize}`,
     );
     console.log(
-      `audio: chunk=${CFG.audioChunkMs}ms rate=${CFG.audioSampleRate} ` +
-        `speech≥${CFG.speechEnergyThreshold} retention=${CFG.audioRetentionDays}d`,
+      `audio: chunk=${CFG.audioChunkMs}ms · retention=${CFG.audioRetentionDays}d`,
     );
     console.log(
-      `lm studio: ${CFG.lmBaseUrl} · model=${CFG.modelFast}` +
+      `lm: ${CFG.lmBaseUrl} · ${CFG.modelFast}` +
         `${CFG.modelDeep !== CFG.modelFast ? ` · insights=${CFG.modelDeep}` : ""}` +
         `${CFG.lmModelEmbed ? ` · embed=${CFG.lmModelEmbed}` : ""}`,
     );
-    if (stt.ready) {
-      console.log(`whisper: ${stt.backend} · model=${stt.model}${stt.device ? ` · ${stt.device}` : ""}`);
-    } else if (CFG.audioSttEnabled === false) {
-      console.log("whisper: disabled in config");
-    } else {
-      console.log("whisper: not found — speech stored without transcript");
+    if (boot.stt?.ready) {
+      console.log(`whisper: ${boot.stt.backend} · ${boot.stt.model}`);
+    }
+    console.log(`memory: ${boot.embeddings ? "embeddings" : "lexical"} · pipeline/insights auto`);
+    for (const note of boot.notes ?? []) {
+      console.log(`[auto] ${note}`);
     }
     console.log(`locale: ${activeLocale()} (${promptLanguageName()})`);
-    console.log("[config] hot reload: LM/Whisper/locale apply on save — restart only for port/dataDir");
   });
 
   if (CFG.pipelineEnabled) {

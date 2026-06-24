@@ -1,4 +1,5 @@
 import { CFG } from "./config.mjs";
+import { derivedPresentGaps } from "./bootstrap.mjs";
 import { activeLocale } from "./locale.mjs";
 import { formatSceneCaption, sceneFingerprint } from "./llm.mjs";
 import { isDarkSceneCaption, isSttHallucination } from "./util.mjs";
@@ -114,9 +115,10 @@ function presentLabels() {
 
 /** Turn flat witness items into human-readable groups (conversations, scenes, sounds). */
 export function groupTimelineItems(items, opts = {}) {
-  const speechGapMs = opts.speechGapMs ?? CFG.presentSpeechGapMs;
-  const sceneGapMs = opts.sceneGapMs ?? CFG.presentSceneGapMs;
-  const soundGapMs = opts.soundGapMs ?? CFG.presentSoundGapMs;
+  const gaps = derivedPresentGaps();
+  const speechGapMs = opts.speechGapMs ?? gaps.speechGapMs;
+  const sceneGapMs = opts.sceneGapMs ?? gaps.sceneGapMs;
+  const soundGapMs = opts.soundGapMs ?? gaps.soundGapMs;
   const sorted = [...items].sort((a, b) => a.at.localeCompare(b.at));
   const groups = [];
 

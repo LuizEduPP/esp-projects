@@ -69,28 +69,12 @@ const PHASE_LABEL = {
 const LOCALE_OPTS = ["pt-BR", "pt-PT", "en-US", "en-GB", "es-ES", "fr-FR", "de-DE"];
 
 const SECTIONS = [
-  { title: "Geral", fields: [
+  { title: "Folio", hint: "O resto (Whisper, fila, RAG, gaps) é automático na subida.", fields: [
     { path: "locale", label: "Idioma", type: "select", options: LOCALE_OPTS },
+    { path: "lm.url", label: "LM Studio URL", type: "text", placeholder: "http://127.0.0.1:1234/v1" },
+    { path: "lm.model", label: "Modelo visão/texto", type: "lmSelect", pool: "chat" },
     { path: "dataDir", label: "Pasta de dados", type: "text", placeholder: "~/.folio" },
-  ]},
-  { title: "LM Studio", hint: "Modelo carregado no LM Studio — visão + insights", fields: [
-    { path: "lm.url", label: "URL", type: "text", placeholder: "http://127.0.0.1:1234/v1" },
-    { path: "lm.model", label: "Modelo", type: "lmSelect", pool: "chat" },
-    { path: "lm.modelDeep", label: "Modelo insights (opcional)", type: "lmSelect", pool: "chat", emptyOption: "(igual acima)" },
-    { path: "lm.modelEmbed", label: "Embeddings (opcional)", type: "lmSelect", pool: "embed", emptyOption: "(desligado)" },
-  ]},
-  { title: "Captura", fields: [
-    { path: "audio.vad.frameMs", label: "Chunk áudio ESP (ms)", type: "number" },
-    { path: "frames.captureIntervalMs", label: "Intervalo câmera (ms)", type: "number" },
-  ]},
-  { title: "Processamento", fields: [
-    { path: "pipeline.enabled", label: "Worker ativo", type: "bool" },
-    { path: "insights.auto", label: "Insights automáticos", type: "bool" },
-    { path: "memory.enabled", label: "Memória RAG", type: "bool" },
-    { path: "memory.useEmbeddings", label: "Embeddings no RAG", type: "bool" },
-  ]},
-  { title: "ESP32", hint: "brainUrl vazio = IP automático na mesma rede", fields: [
-    { path: "node.brainUrl", label: "Brain URL", type: "text", placeholder: "http://192.168.x.x:8770" },
+    { path: "node.brainUrl", label: "Brain URL ESP", type: "text", placeholder: "auto na rede" },
   ]},
 ];
 

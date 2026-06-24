@@ -9,7 +9,7 @@ import {
   runDayInsights, runPendingQueueOnce,
 } from "./services.mjs";
 import { reindexAllMemories, retrieveMemories } from "./memory.mjs";
-import { sttCapability } from "./stt-capability.mjs";
+import { onConfigReloaded, runtimeSummary } from "./bootstrap.mjs";
 import { errMsg, pcmToWav, sendBytes, sendJson, today } from "./util.mjs";
 import {
   getAudioChunk, getFrame, listDevices, listEntities, memoryChunkCount, openDb,
@@ -265,7 +265,8 @@ export function createFolioServer(ui) {
       if (path === "/api/config" && req.method === "PUT") {
         const body = JSON.parse((await readBody(req, CFG.httpConfigPatchMaxBytes)).toString("utf8"));
         const result = updateConfig(body);
-        sendJson(res, 200, result);
+        await onConfigReloaded();
+        sendJson(res, 200, { ...result, runtime: runtimeSummary() });
         return;
       }
 
@@ -309,7 +310,7 @@ export function createFolioServer(ui) {
       }
 
       if (path === "/api/health") {
-        const stt = sttCapability();
+        const stt = runtimeSummary().stt ?? {};
         sendJson(res, 200, {
           ok: true,
           today: today(),
@@ -320,9 +321,8 @@ export function createFolioServer(ui) {
           pipeline: CFG.pipelineEnabled,
           insights: CFG.insightsAuto,
           memory_chunks: memoryChunkCount(openDb()),
-          stt: stt.ready
-            ? { ready: true, backend: stt.backend, model: stt.model }
-            : { ready: false },
+          stt: stt.ready ? { ready: true, backend: stt.backend, model: stt.model } : { ready: false },
+          runtime: runtimeSummary(),
         });
         return;
       }

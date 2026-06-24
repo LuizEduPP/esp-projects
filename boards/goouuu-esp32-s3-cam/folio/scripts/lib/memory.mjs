@@ -1,4 +1,5 @@
 import { CFG } from "./config.mjs";
+import { memoryEmbeddingsActive } from "./bootstrap.mjs";
 import { isMeaningfulFrameItem } from "./present.mjs";
 import {
   deleteMemoryForDay,
@@ -181,7 +182,7 @@ export async function embedText(text) {
 
 export async function embedTexts(texts) {
   const cleaned = texts.map((t) => cleanMemoryText(t).slice(0, 8192));
-  if (!CFG.memoryUseEmbeddings) {
+  if (!memoryEmbeddingsActive()) {
     return cleaned.map((t) => ({ kind: "lexical", vector: [...termVector(t).entries()] }));
   }
   const model = modelId(ModelSlot.EMBED);
@@ -433,7 +434,7 @@ export async function indexDayMemories(db, day, { force = false } = {}) {
   console.log(
     `[memory] indexed ${indexed} new for ${day}` +
       (skipped ? ` (${skipped} already indexed)` : "") +
-      (CFG.memoryUseEmbeddings
+      (memoryEmbeddingsActive()
         ? ` · ${Math.ceil(indexed / Math.max(1, CFG.memoryEmbedBatchSize ?? 32))} embed batch(es)`
         : ""),
   );

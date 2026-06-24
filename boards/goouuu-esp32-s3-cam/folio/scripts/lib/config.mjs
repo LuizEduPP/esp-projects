@@ -10,12 +10,17 @@ import { brainUrlForClient, listLanUrls } from "./network.mjs";
 /** esp_camera framesize_t IDs — must match firmware FOLIO_FRAME_SIZE_ID / platformio.ini */
 const FRAME_SIZE_TO_ID = { CIF: 5, QVGA: 6, VGA: 7, SVGA: 8, XGA: 9 };
 
+const DEFAULTS_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../folio.defaults.json",
+);
+
 const EXAMPLE_PATH = join(
   dirname(fileURLToPath(import.meta.url)),
   "../../folio.config.example.json",
 );
 
-export const DEFAULT_CONFIG = JSON.parse(readFileSync(EXAMPLE_PATH, "utf8"));
+export const DEFAULT_CONFIG = JSON.parse(readFileSync(DEFAULTS_PATH, "utf8"));
 
 function getPath(obj, dotPath) {
   return dotPath.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
@@ -448,6 +453,20 @@ function migrateConfigSchema(file) {
     changed = true;
   }
 
+  if (file.memory?.useEmbeddings != null) {
+    delete file.memory.useEmbeddings;
+    changed = true;
+  }
+
+  if (file.worker) {
+    delete file.worker;
+    changed = true;
+  }
+  if (file.frames?.backlogGapMs) {
+    delete file.frames.backlogGapMs;
+    changed = true;
+  }
+
   return changed;
 }
 
@@ -455,11 +474,70 @@ function persistFileConfig(path, data) {
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
+function compactObject(user, defaults) {
+  if (!user || typeof user !== "object" || Array.isArray(user)) {
+    return {};
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(user)) {
+    if (v == null) {
+      continue;
+    }
+    const d = defaults?.[k];
+    if (typeof v === "object" && !Array.isArray(v) && d && typeof d === "object" && !Array.isArray(d)) {
+      const nested = compactObject(v, d);
+      if (Object.keys(nested).length) {
+        out[k] = nested;
+      }
+    } else if (JSON.stringify(v) !== JSON.stringify(d)) {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+function compactStoredConfig(file) {
+  const compact = compactObject(file, DEFAULT_CONFIG);
+  compact.locale = file.locale ?? DEFAULT_CONFIG.locale;
+  if (!compact.lm) {
+    compact.lm = {};
+  }
+  for (const key of ["url", "model", "modelDeep", "modelEmbed"]) {
+    if (file.lm?.[key] != null && file.lm[key] !== DEFAULT_CONFIG.lm?.[key]) {
+      compact.lm[key] = file.lm[key];
+    }
+  }
+  if (Object.keys(compact.lm).length === 0) {
+    delete compact.lm;
+  }
+  if (file.node?.brainUrl) {
+    compact.node = { brainUrl: file.node.brainUrl };
+  }
+  return compact;
+}
+
+function maybeCompactConfig(file, path) {
+  if (JSON.stringify(file).length < 1400) {
+    return false;
+  }
+  const compact = compactStoredConfig(file);
+  persistFileConfig(path, compact);
+  for (const key of Object.keys(file)) {
+    delete file[key];
+  }
+  Object.assign(file, deepMerge(clone(DEFAULT_CONFIG), compact));
+  console.log(`[config] compacted — só overrides em ${path}`);
+  return true;
+}
+
 function runConfigMigrations(file, path) {
   const lm = migrateOpenAiToLm(file);
   const schema = migrateConfigSchema(file);
-  if (lm || schema) {
-    persistFileConfig(path, file);
+  const compact = maybeCompactConfig(file, path);
+  if (lm || schema || compact) {
+    if (!compact) {
+      persistFileConfig(path, compactStoredConfig(file));
+    }
     if (lm) {
       console.log(`[config] migrated openai.* → lm.* (local only) in ${path}`);
     }
@@ -540,34 +618,39 @@ export function editableConfig() {
 export const publicConfig = editableConfig;
 
 export function nodeConfigPayload(clientIp = null) {
-  const { frames, audio, node, perception } = fileData;
-  const size = String(frames.size).toUpperCase();
+  const size = String(CFG.frameSize).toUpperCase();
   const brainUrl = brainUrlForClient(clientIp);
+  const node = fileData.node ?? DEFAULT_CONFIG.node ?? {};
   return {
     version: nodeConfigVersion(),
     brainUrl,
     brainUrls: listLanUrls(),
     frames: {
-      captureIntervalMs: frames.captureIntervalMs,
-      jpegQuality: frames.jpegQuality,
+      captureIntervalMs: CFG.frameCaptureIntervalMs,
+      jpegQuality: CFG.frameJpegQuality,
       motionCaptureMinMs: Math.max(
         3000,
-        Math.min(30000, Math.floor((frames.captureIntervalMs ?? 60000) / 10)),
+        Math.min(30000, Math.floor((CFG.frameCaptureIntervalMs ?? 60000) / 10)),
       ),
       size,
       sizeId: frameSizeId(size),
     },
     audio: {
-      chunkMs: audio.vad?.frameMs ?? audio.chunkMs ?? DEFAULT_CONFIG.audio.vad.frameMs,
-      sampleRate: audio.sampleRate,
-      speechEnergyThreshold: audio.speechEnergyThreshold,
-      vad: { ...audio.vad },
+      chunkMs: CFG.vadFrameMs ?? CFG.audioChunkMs,
+      sampleRate: CFG.audioSampleRate,
+      speechEnergyThreshold: CFG.speechEnergyThreshold,
+      vad: {
+        frameMs: CFG.vadFrameMs,
+        debounceMs: CFG.vadDebounceMs,
+        silenceMs: CFG.vadSilenceMs,
+        prerollMs: CFG.vadPrerollMs,
+      },
     },
     perception: {
-      motionMin: perception?.motionMin,
-      soundMinEnergy: perception?.soundMinEnergy,
+      motionMin: CFG.perceptionMotionMin,
+      soundMinEnergy: CFG.perceptionSoundMinEnergy,
     },
-    node: { ...node },
+    node: { ...node, brainUrl: CFG.nodeBrainUrl ?? node.brainUrl ?? null },
     compileTimeNote:
       "frame sizeId and audio buffer size need matching FOLIO_* at flash time; other fields sync at runtime.",
   };
@@ -594,7 +677,7 @@ export function saveConfigPatch(patch) {
   runConfigMigrations(fileData, configPath ?? configPaths()[configPaths().length - 1]);
   const targetPath = configPath ?? configPaths()[configPaths().length - 1];
   mkdirSync(dirname(targetPath), { recursive: true });
-  persistFileConfig(targetPath, fileData);
+  persistFileConfig(targetPath, compactStoredConfig(fileData));
   configPath = targetPath;
   const version = nodeConfigVersion();
   return {
@@ -766,7 +849,16 @@ function buildCfgFromFile(file = getFileData()) {
     memoryLookbackDays: cfgNum(file, "memory.lookbackDays", "FOLIO_MEMORY_LOOKBACK_DAYS"),
     memoryRetrieveLimit: cfgNum(file, "memory.retrieveLimit", "FOLIO_MEMORY_RETRIEVE"),
     memoryMinScore: cfgNum(file, "memory.minScore", "FOLIO_MEMORY_MIN_SCORE"),
-    memoryUseEmbeddings: cfgBool(file, "memory.useEmbeddings", "FOLIO_MEMORY_EMBEDDINGS"),
+    memoryUseEmbeddings: (() => {
+      const v = getPath(file, "memory.useEmbeddings");
+      if (v === false) {
+        return false;
+      }
+      if (v === true) {
+        return true;
+      }
+      return null;
+    })(),
     memoryEmbedBatchSize: cfgNum(file, "memory.embedBatchSize", "FOLIO_MEMORY_EMBED_BATCH"),
     memoryMinUtteranceChars: cfgNum(file, "memory.minUtteranceChars", "FOLIO_MEMORY_MIN_UTT_CHARS"),
     memoryUtteranceGroupMs: cfgNum(file, "memory.utteranceGroupMs", "FOLIO_MEMORY_UTT_GROUP_MS"),
