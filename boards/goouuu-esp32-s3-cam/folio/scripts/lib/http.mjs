@@ -310,6 +310,8 @@ export function createFolioServer(ui) {
       if (path === "/api/health") {
         sendJson(res, 200, {
           ok: true,
+          today: today(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           data_dir: CFG.dataDir,
           port: CFG.port,
           pending: pendingCounts(openDb()),

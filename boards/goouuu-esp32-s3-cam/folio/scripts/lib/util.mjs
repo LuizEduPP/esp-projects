@@ -2,20 +2,28 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 export function dayFromIso(iso) {
-  return iso.slice(0, 10);
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return String(iso ?? "").slice(0, 10);
+  }
+  return localDateIso(d);
 }
 
-export function today() {
-  const d = new Date();
+export function localDateIso(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
+export function today() {
+  return localDateIso(new Date());
+}
+
 export function dayBounds(day) {
   const start = new Date(`${day}T00:00:00`);
-  const end = new Date(`${day}T23:59:59.999`);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
   return { start: start.toISOString(), end: end.toISOString() };
 }
 

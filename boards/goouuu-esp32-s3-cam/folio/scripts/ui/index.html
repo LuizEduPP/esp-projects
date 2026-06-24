@@ -16,29 +16,16 @@
       <button type="button" id="day-next" aria-label="Próximo dia">›</button>
     </div>
     <div class="status" id="status-chips"></div>
-    <button type="button" class="icon-btn" id="btn-drawer" title="Sistema e config">⚙</button>
+    <button type="button" class="icon-btn" id="btn-drawer" title="Sistema">⚙</button>
   </header>
 
   <div class="layout">
-    <section class="insights-pane">
-      <div class="pane-head">
-        <h1>Hoje</h1>
-        <p class="muted" id="insights-meta"></p>
-      </div>
-      <div id="insights-alert" class="digest-alert" hidden></div>
-      <div id="insights-summary" class="day-summary muted">Observando o ambiente…</div>
-      <div id="insights-moments" class="moment-list"></div>
-      <div id="insights-entities" class="entity-cards"></div>
-      <details class="insights-more" id="insights-more">
-        <summary>Mais detalhes</summary>
-        <ul id="insights-list" class="insight-list"></ul>
-        <ul id="patterns-list" class="insight-list muted"></ul>
-      </details>
-    </section>
-
-    <aside class="archive-pane">
-      <div class="witness-head">
-        <h2>Momentos</h2>
+    <main class="timeline-pane">
+      <div class="timeline-head">
+        <div>
+          <h1 id="day-title">Hoje</h1>
+          <p class="witness-stats" id="witness-stats"></p>
+        </div>
         <div class="filters">
           <button type="button" class="filter on" data-f="all">Tudo</button>
           <button type="button" class="filter" data-f="speech">Falas</button>
@@ -46,8 +33,26 @@
           <button type="button" class="filter" data-f="sounds">Sons</button>
         </div>
       </div>
-      <p class="witness-stats" id="witness-stats"></p>
       <div class="witness-feed" id="witness-feed"></div>
+    </main>
+
+    <aside class="digest-pane">
+      <div class="digest-head">
+        <h2>Resumo</h2>
+        <div class="digest-actions">
+          <button type="button" id="btn-insights" class="text-btn" title="Regenerar resumo">↻</button>
+        </div>
+      </div>
+      <p class="digest-meta muted" id="insights-meta"></p>
+      <div id="insights-alert" class="digest-alert" hidden></div>
+      <div id="insights-summary" class="day-summary muted">Observando o ambiente…</div>
+      <ul id="insights-moments" class="moment-timeline"></ul>
+      <details class="insights-more" id="insights-more">
+        <summary>Detalhes</summary>
+        <ul id="insights-list" class="insight-list"></ul>
+        <ul id="patterns-list" class="insight-list muted"></ul>
+      </details>
+      <div id="insights-people" class="people-list"></div>
     </aside>
   </div>
 </div>

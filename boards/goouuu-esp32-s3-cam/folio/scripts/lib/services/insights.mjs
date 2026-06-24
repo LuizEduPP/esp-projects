@@ -1,6 +1,6 @@
 import { CFG } from "../config.mjs";
 import {
-  entitiesActiveOnDay, getDayInsights, getSpeaker, listEntities, openDb,
+  entitiesActiveOnDay, getDayInsights, getSpeaker, latestWitnessAt, listEntities, openDb,
   timelineForDay, upsertDayInsights, upsertEntity, witnessStats,
 } from "../db/index.mjs";
 import { chatJsonLenient } from "../llm.mjs";
@@ -27,6 +27,56 @@ function setError(day, err) {
   insightsRuntime.phase = "error";
   insightsRuntime.error = err?.message ?? String(err);
   insightsRuntime.day = day;
+}
+
+function sampleSpread(items, limit) {
+  if (items.length <= limit) {
+    return items;
+  }
+  const byHour = {};
+  for (const item of items) {
+    const hour = item.at?.slice(11, 13) ?? "?";
+    (byHour[hour] ??= []).push(item);
+  }
+  const hours = Object.keys(byHour).sort();
+  const out = [];
+  let round = 0;
+  while (out.length < limit && hours.some((h) => byHour[h]?.length)) {
+    const hour = hours[round % hours.length];
+    const bucket = byHour[hour];
+    if (bucket?.length) {
+      out.push(bucket.shift());
+    }
+    round++;
+  }
+  return out;
+}
+
+function buildRagQuery(stats) {
+  const parts = [];
+  const soundKeys = Object.keys(stats.sounds ?? {}).slice(0, 4);
+  if (soundKeys.length) {
+    parts.push(soundKeys.join(" "));
+  }
+  const speakerNames = Object.values(stats.speakers ?? {}).slice(0, 4);
+  if (speakerNames.length) {
+    parts.push(speakerNames.join(" "));
+  }
+  for (const u of stats.sample_utterances ?? []) {
+    if (u.text) {
+      parts.push(u.text.slice(0, 80));
+    }
+  }
+  for (const f of stats.sample_frames ?? []) {
+    if (f.caption) {
+      parts.push(f.caption.slice(0, 80));
+    }
+  }
+  const built = parts.join(" ").replace(/\s+/g, " ").trim();
+  if (built.length >= 12) {
+    return built.slice(0, 512);
+  }
+  return String(CFG.memoryContextQueryTemplate ?? "").replaceAll("{day}", stats.day).trim();
 }
 
 export function buildDayStats(db, day) {
@@ -56,6 +106,13 @@ export function buildDayStats(db, day) {
     speakerNames[id] = getSpeaker(db, id)?.display_name ?? id;
   }
 
+  const utteranceCandidates = items.filter(
+    (i) => i.type === "audio" && i.text && !isSttHallucination(i.text, CFG.audioSttRejectPatterns),
+  );
+  const frameCandidates = items.filter(
+    (i) => i.type === "frame" && isMeaningfulFrameItem(i),
+  );
+
   return {
     day,
     frames: stats.frames,
@@ -66,19 +123,16 @@ export function buildDayStats(db, day) {
     speakers: speakerNames,
     speaker_counts: speakers,
     activity_by_hour: hours,
-    sample_utterances: items
-      .filter((i) => i.type === "audio" && i.text && !isSttHallucination(i.text, CFG.audioSttRejectPatterns))
-      .slice(0, CFG.insightsSampleUtterances)
-      .map((i) => ({
-        at: i.at,
-        speaker: i.speaker_id ? speakerNames[i.speaker_id] : null,
-        text: i.text.slice(0, 160),
-        sound: i.sound_label,
-      })),
-    sample_frames: items
-      .filter((i) => i.type === "frame" && i.caption)
-      .slice(0, CFG.insightsSampleFrames)
-      .map((i) => ({ at: i.at, caption: i.caption.slice(0, 120) })),
+    sample_utterances: sampleSpread(utteranceCandidates, CFG.insightsSampleUtterances).map((i) => ({
+      at: i.at,
+      speaker: i.speaker_id ? speakerNames[i.speaker_id] : null,
+      text: i.text.slice(0, 160),
+      sound: i.sound_label,
+    })),
+    sample_frames: sampleSpread(frameCandidates, CFG.insightsSampleFrames).map((i) => ({
+      at: i.at,
+      caption: i.caption.slice(0, 120),
+    })),
   };
 }
 
@@ -89,25 +143,29 @@ async function generateInsightsJson(db, day, stats, ragHits) {
 
   const system =
     "You observe a home passively — like a perceptive friend who lives there. " +
-    "Write in natural language, concrete and warm, never like a security report or JSON template. " +
-    "Return JSON only (no markdown fences). Keep every string on one line — no raw line breaks inside values. " +
+    "Write in natural language, concrete and warm, never like a security report. " +
+    "CRITICAL: only describe what appears in the stats JSON or memory block. " +
+    "If data is sparse, noisy, or unclear, say so briefly — do NOT invent people, devices, rooms, or events. " +
+    "Do NOT speculate about TVs, visitors, or family unless explicitly in the data. " +
+    "Return JSON only (no markdown fences). Keep every string on one line. " +
     promptLanguageRule();
 
   const enrolled = Object.keys(stats.speakers ?? {});
   const speakerHint = enrolled.length
     ? `Enrolled speakers (use speaker:ID only for these): ${enrolled.join(", ")}`
-    : "No enrolled speakers — use group:slug for people/groups and other:slug for objects; never invent speaker: IDs.";
+    : "No enrolled speakers — omit entities unless clearly evidenced in sample_utterances or sample_frames.";
 
   const user =
     `What happened on ${day}:\n${JSON.stringify(stats, null, 2)}\n\n` +
     `${speakerHint}\n\n` +
-    `Memory from past days:\n${ragBlock}\n\n` +
+    `Memory from past days (${ragHits.length} hits):\n${ragBlock}\n\n` +
+    "Rules:\n" +
+    "- summary: 1-3 sentences grounded in sample_utterances and sample_frames\n" +
+    "- moments: max 5, each starts with HH:MM from sample data, one line each\n" +
+    "- insights/patterns: optional, only if supported by data; omit if unsure\n" +
+    "- entities: max 3, only enrolled speakers or groups with direct evidence; never invent objects\n\n" +
     "Schema: " +
-    '{"summary":"2-4 sentences, one paragraph",' +
-    '"moments":["15:30 highlight as plain string, …"],' +
-    '"insights":["optional short observations as strings"],' +
-    '"patterns":["habit as plain string with brief evidence"],' +
-    '"entities":[{"id":"group:familia|other:tv|speaker:ENROLLED_ID","name":"short label","kind":"group|person|pet|other","notes":"max 120 chars"}]}';
+    '{"summary":"…","moments":["15:30 …"],"insights":[],"patterns":[],"entities":[]}';
 
   return chatJsonLenient({
     model: modelId(ModelSlot.DEEP),
@@ -296,7 +354,8 @@ export async function runDayInsights(db, day, { force = false } = {}) {
     await indexDayMemories(db, day);
 
     setPhase(day, "rag");
-    const ragHits = await retrieveContextForDay(db, day);
+    const ragQuery = buildRagQuery(stats);
+    const ragHits = await retrieveContextForDay(db, day, { query: ragQuery });
 
     setPhase(day, "insights");
     const insightsRaw = await generateInsightsJson(db, day, stats, ragHits);
@@ -314,6 +373,8 @@ export async function runDayInsights(db, day, { force = false } = {}) {
         moments: insightsPayload.moments ?? [],
         insights: insightsPayload.insights ?? [],
         patterns: insightsPayload.patterns ?? [],
+        rag_hits: ragHits.length,
+        rag_query: ragQuery.slice(0, 120),
       }),
       entities_json: JSON.stringify(entitiesActiveOnDay(db, day)),
       model: modelId(ModelSlot.DEEP),
@@ -347,15 +408,7 @@ export function needsInsightsRefresh(db, day) {
     return { needed: true, reason: "missing", stats };
   }
 
-  const latestWitness = db
-    .prepare(
-      `SELECT MAX(t) AS m FROM (
-         SELECT MAX(captured_at) AS t FROM audio_chunks WHERE substr(captured_at,1,10)=?
-         UNION ALL SELECT MAX(captured_at) FROM frames WHERE substr(captured_at,1,10)=?
-         UNION ALL SELECT MAX(started_at) FROM utterances WHERE substr(started_at,1,10)=?
-       )`,
-    )
-    .get(day, day, day)?.m;
+  const latestWitness = latestWitnessAt(db, day);
 
   if (latestWitness && row.updated_at && latestWitness > row.updated_at) {
     return { needed: true, reason: "stale_witness", stats, latestWitness };
@@ -407,6 +460,7 @@ export function getInsightsForApi(db, day) {
     moments: parsed.moments ?? [],
     insights: parsed.insights ?? [],
     patterns: parsed.patterns ?? [],
+    rag_hits: parsed.rag_hits ?? null,
     entities: JSON.parse(row.entities_json || "[]"),
     updated_at: row.updated_at,
     runtime: insightRuntime(),
