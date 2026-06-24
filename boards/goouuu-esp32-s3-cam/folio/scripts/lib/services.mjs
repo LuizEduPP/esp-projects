@@ -4,17 +4,17 @@ import { CFG, PATHS } from "./config.mjs";
 import {
   alignedMomentsForDay, bumpSttAttempts, deleteAudioChunk, ensureDevice, entitiesActiveOnDay,
   getDayInsights, getSpeaker, insertAudioChunk, insertEvent, insertFrame, insertUtterance,
-  latestWitnessAt, openDb, pendingAudioChunks, pendingCounts, pendingFrames, pruneExpiredPcm,
+  latestWitnessAt, listEntities, openDb, pendingAudioChunks, pendingCounts, pendingFrames, pruneExpiredPcm,
   timelineForDay, touchDevice, upsertDayInsights, upsertEntity, witnessStats,
 } from "./db.mjs";
-import { chatJson, fetchOpenAiModels } from "./llm.mjs";
+import { chatJsonLenient } from "./llm.mjs";
 import { promptLanguageRule } from "./locale.mjs";
 import { indexDayMemories, retrieveContextForDay, retrieveMemories } from "./memory.mjs";
 import { isMeaningfulFrameItem } from "./present.mjs";
 import { modelId, ModelSlot } from "./models.mjs";
 import { processAudioChunk, processFrame } from "./perception/index.mjs";
 import { isSpeechChunk, pcmEnergy, shouldStoreAudioChunk } from "./stt.mjs";
-import { dayFromIso, dayOffset, isoNow, parseMetaHeader, today } from "./util.mjs";
+import { dayFromIso, dayOffset, isoNow, parseInsightsFallback, parseJsonLoose, parseMetaHeader, today, isSttHallucination } from "./util.mjs";
 
 
 // --- ingest/index.mjs ---
@@ -404,7 +404,7 @@ export function buildDayStats(db, day) {
     speaker_counts: speakers,
     activity_by_hour: hours,
     sample_utterances: items
-      .filter((i) => i.type === "audio" && i.text)
+      .filter((i) => i.type === "audio" && i.text && !isSttHallucination(i.text, CFG.audioSttRejectPatterns))
       .slice(0, CFG.insightsSampleUtterances)
       .map((i) => ({
         at: i.at,
@@ -427,20 +427,26 @@ async function generateInsightsJson(db, day, stats, ragHits) {
   const system =
     "You observe a home passively — like a perceptive friend who lives there. " +
     "Write in natural language, concrete and warm, never like a security report or JSON template. " +
-    "Return JSON only (no markdown). " +
+    "Return JSON only (no markdown fences). Keep every string on one line — no raw line breaks inside values. " +
     promptLanguageRule();
+
+  const enrolled = Object.keys(stats.speakers ?? {});
+  const speakerHint = enrolled.length
+    ? `Enrolled speakers (use speaker:ID only for these): ${enrolled.join(", ")}`
+    : "No enrolled speakers — use group:slug for people/groups and other:slug for objects; never invent speaker: IDs.";
 
   const user =
     `What happened on ${day}:\n${JSON.stringify(stats, null, 2)}\n\n` +
+    `${speakerHint}\n\n` +
     `Memory from past days:\n${ragBlock}\n\n` +
     "Schema: " +
-    '{"summary":"2-4 sentences — what the day felt like, who was around, notable moments",' +
-    '"moments":["short highlights with time when known, e.g. 14:30 alguém falou sobre…"],' +
-    '"insights":["optional deeper observations"],' +
-    '"patterns":["recurring habits only if evidence exists"],' +
-    '"entities":[{"id":"speaker:xyz|pet:dog|…","name":"…","kind":"person|pet|other","notes":"…"}]}';
+    '{"summary":"2-4 sentences, one paragraph",' +
+    '"moments":["15:30 highlight as plain string, …"],' +
+    '"insights":["optional short observations as strings"],' +
+    '"patterns":["habit as plain string with brief evidence"],' +
+    '"entities":[{"id":"group:familia|other:tv|speaker:ENROLLED_ID","name":"short label","kind":"group|person|pet|other","notes":"max 120 chars"}]}';
 
-  return chatJson({
+  return chatJsonLenient({
     model: modelId(ModelSlot.DEEP),
     temperature: CFG.insightsTemperature,
     maxTokens: CFG.insightsMaxTokens,
@@ -448,21 +454,149 @@ async function generateInsightsJson(db, day, stats, ragHits) {
       { role: "system", content: system },
       { role: "user", content: user },
     ],
+    fallback: (text) =>
+      normalizeInsightsPayload(parseJsonLoose(text) ?? parseInsightsFallback(text)),
   });
 }
 
+function formatInsightItem(value) {
+  if (value == null || value === "") {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value.trim();
+  }
+  if (typeof value === "object") {
+    if (value.description && value.time) {
+      return `${value.time} — ${value.description}`.trim();
+    }
+    if (value.description) {
+      return String(value.description).trim();
+    }
+    if (value.pattern) {
+      const ev = value.evidence ? ` (${value.evidence})` : "";
+      return `${value.pattern}${ev}`.trim();
+    }
+    if (value.text) {
+      return String(value.text).trim();
+    }
+  }
+  return String(value).trim();
+}
+
+function asInsightList(value) {
+  if (Array.isArray(value)) {
+    return value.map(formatInsightItem).filter(Boolean);
+  }
+  const one = formatInsightItem(value);
+  return one ? [one] : [];
+}
+
+function asEntityArray(value) {
+  if (Array.isArray(value)) {
+    return value.filter((e) => e && typeof e === "object");
+  }
+  if (value && typeof value === "object") {
+    return [value];
+  }
+  return [];
+}
+
+function normalizeInsightsPayload(raw) {
+  if (!raw || typeof raw !== "object") {
+    return { summary: "", moments: [], insights: [], patterns: [], entities: [] };
+  }
+
+  // Model sometimes returns a single entity object instead of the full schema.
+  if (raw.id && raw.name && raw.summary == null && raw.moments == null && raw.insights == null) {
+    return {
+      summary: String(raw.notes ?? raw.name ?? "").trim(),
+      moments: [],
+      insights: [],
+      patterns: [],
+      entities: [raw],
+    };
+  }
+
+  return {
+    summary: String(raw.summary ?? "").trim(),
+    moments: asInsightList(raw.moments),
+    insights: asInsightList(raw.insights),
+    patterns: asInsightList(raw.patterns),
+    entities: asEntityArray(raw.entities),
+  };
+}
+
+function slugFromName(name) {
+  return String(name ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "item";
+}
+
+function normalizeInsightEntity(db, ent) {
+  const name = String(ent.name ?? "").trim();
+  if (!name) {
+    return null;
+  }
+  const notes = String(ent.notes ?? "").trim().slice(0, 120);
+  let kind = String(ent.kind ?? "other").toLowerCase();
+  const rawId = String(ent.id ?? "").trim();
+  const slug = rawId.includes(":") ? rawId.split(":").slice(1).join(":") : slugFromName(name);
+
+  let entityId = rawId || `other:${slug}`;
+  let speakerId = null;
+
+  if (rawId.startsWith("speaker:")) {
+    const sid = rawId.slice(8).trim();
+    if (sid && getSpeaker(db, sid)) {
+      speakerId = sid;
+      entityId = `speaker:${sid}`;
+      kind = "person";
+    } else {
+      entityId = `group:${slug || sid}`;
+      kind = "group";
+    }
+  } else if (!rawId.includes(":")) {
+    const prefix = kind === "pet" ? "pet" : kind.includes("person") ? "group" : "other";
+    entityId = `${prefix}:${slug}`;
+    if (kind.includes("person")) {
+      kind = "group";
+    }
+  }
+
+  return { id: entityId, kind, display_name: name, speaker_id: speakerId, notes };
+}
+
+function purgeInventedSpeakerEntities(db) {
+  for (const e of listEntities(db)) {
+    if (!e.id.startsWith("speaker:")) {
+      continue;
+    }
+    const sid = e.id.slice(8);
+    if (!getSpeaker(db, sid)) {
+      db.prepare("DELETE FROM entities WHERE id = ?").run(e.id);
+    }
+  }
+}
+
 function syncEntitiesFromInsights(db, day, entities = []) {
-  for (const ent of entities) {
-    if (!ent?.id || !ent?.name) {
+  purgeInventedSpeakerEntities(db);
+  for (const ent of asEntityArray(entities)) {
+    const row = normalizeInsightEntity(db, ent);
+    if (!row) {
       continue;
     }
     upsertEntity(db, {
-      id: ent.id,
-      kind: ent.kind || "other",
-      display_name: ent.name,
-      speaker_id: ent.kind === "person" && ent.id.startsWith("speaker:") ? ent.id.slice(8) : null,
-      profile_json: JSON.stringify({ notes: ent.notes ?? "" }),
-      patterns_json: JSON.stringify({ last_seen: day, notes: ent.notes ?? "" }),
+      id: row.id,
+      kind: row.kind,
+      display_name: row.display_name,
+      speaker_id: row.speaker_id,
+      profile_json: JSON.stringify({ notes: row.notes }),
+      patterns_json: JSON.stringify({ last_seen: day, notes: row.notes }),
     });
   }
 }
@@ -502,7 +636,8 @@ export async function runDayInsights(db, day, { force = false } = {}) {
     const ragHits = await retrieveContextForDay(db, day);
 
     setPhase(day, "insights");
-    const insightsPayload = await generateInsightsJson(db, day, stats, ragHits);
+    const insightsRaw = await generateInsightsJson(db, day, stats, ragHits);
+    const insightsPayload = normalizeInsightsPayload(insightsRaw);
     const now = isoNow();
 
     updatePatternsFromStats(db, day, stats);

@@ -21,9 +21,9 @@ export function modelId(slot) {
     case ModelSlot.WHISPER:
       return CFG.whisperModel;
     case ModelSlot.EMBED:
-      return CFG.memoryEmbeddingModel || CFG.modelFast;
+      return CFG.lmModelEmbed;
     case ModelSlot.RERANK:
-      return CFG.memoryRerankModel || CFG.modelFast;
+      return CFG.lmModelRerank;
     default:
       throw new Error(`Unknown model slot: ${slot}`);
   }
@@ -53,8 +53,8 @@ export function modelSummary() {
     fast: CFG.modelFast,
     deep: CFG.modelDeep,
     whisper: CFG.whisperModel,
-    embed: CFG.memoryEmbeddingModel || CFG.modelFast,
-    rerank: CFG.memoryRerankModel,
+    embed: CFG.lmModelEmbed,
+    rerank: CFG.lmModelRerank,
     whisperDevice: CFG.whisperDevice,
     lmBaseUrl: CFG.lmBaseUrl,
   };

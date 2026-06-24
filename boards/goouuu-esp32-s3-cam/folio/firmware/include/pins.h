@@ -2,12 +2,9 @@
 
 // GOOUUU ESP32-S3-CAM — see firmware/PINOUT.md (ESP32-S3 map + Folio wiring).
 //
-// INMP441 I2S (module pin "SD" = serial data, NOT the microSD slot):
+// INMP441 I2S (module pin "SD" = serial data, NOT the onboard microSD slot):
 //   WS=GPIO1  SCK=GPIO2  DOUT=GPIO21
 // Keyestudio KS5028 diagram uses DOUT=GPIO42 (MTMS / JTAG block) — do not use on Folio.
-//
-// microSD slot (SD_MMC 1-bit, separate from I2S):
-//   CLK=GPIO39  CMD=GPIO38  D0=GPIO40
 //
 // Strap pins: GPIO0, GPIO3, GPIO45, GPIO46 — do not use for peripherals.
 
@@ -42,8 +39,3 @@
 #define CAM_PIN_VSYNC  6
 #define CAM_PIN_HREF   7
 #define CAM_PIN_PCLK   13
-
-#define SD_PIN_CLK  39
-#define SD_PIN_CMD  38
-#define SD_PIN_D0   40
-#define SD_MOUNT    "/sdcard"

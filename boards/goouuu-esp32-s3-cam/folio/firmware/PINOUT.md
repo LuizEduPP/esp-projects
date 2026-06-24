@@ -102,10 +102,8 @@ Defined in `include/pins.h`:
 | Function | GPIO |
 |----------|------|
 | INMP441 WS / SCK / DOUT | 1 / 2 / **21** |
-| microSD CLK / CMD / D0 | 39 / 38 / 40 |
 | Camera | 4–18 — see `CAM_PIN_*` in `pins.h` |
 
 Build overrides: `platformio.ini`
 
 - `-DPIN_I2S_DOUT=21`
-- `-DFOLIO_MICROSD_SPOOL=1`

@@ -315,8 +315,41 @@ export function entityBySpeakerId(db, speakerId) {
   return db.prepare("SELECT * FROM entities WHERE speaker_id = ?").get(speakerId);
 }
 
+export function speakerEntityId(speakerId) {
+  return speakerId ? `speaker:${speakerId}` : null;
+}
+
+/** Ensure speakers row exists before entities.speaker_id FK insert. */
+function ensureSpeakerForEntity(db, speakerId, displayName) {
+  if (!speakerId || getSpeaker(db, speakerId)) {
+    return;
+  }
+  upsertSpeaker(db, speakerId, displayName || speakerId);
+}
+
+export function ensureSpeakerEntity(db, speakerId, displayName) {
+  if (!speakerId) {
+    return null;
+  }
+  const entityId = speakerEntityId(speakerId);
+  ensureSpeakerForEntity(db, speakerId, displayName);
+  upsertEntity(db, {
+    id: entityId,
+    kind: "person",
+    display_name: displayName || getSpeaker(db, speakerId)?.display_name || speakerId,
+    speaker_id: speakerId,
+    profile_json: JSON.stringify({ speaker_id: speakerId }),
+    patterns_json: null,
+  });
+  return entityId;
+}
+
 export function upsertEntity(db, entity) {
   const now = isoNow();
+  const speakerId = sqlNullable(entity.speaker_id);
+  if (speakerId) {
+    ensureSpeakerForEntity(db, speakerId, entity.display_name);
+  }
   const existing = getEntity(db, entity.id);
   if (existing) {
     db.prepare(
@@ -625,12 +658,26 @@ export function witnessIndexedAt(db, day) {
   return row?.m ?? null;
 }
 
+export function memoryEvidenceSet(db, day) {
+  return new Set(
+    db
+      .prepare("SELECT evidence_json FROM memory_chunks WHERE day = ?")
+      .all(day)
+      .map((r) => r.evidence_json)
+      .filter(Boolean),
+  );
+}
+
 // --- memory.mjs ---
 export function deleteMemoryForDay(db, day) {
   db.prepare("DELETE FROM memory_chunks WHERE day = ?").run(day);
 }
 
 export function insertMemoryChunk(db, row) {
+  let entityId = row.entity_id ?? null;
+  if (entityId && !getEntity(db, entityId)) {
+    entityId = null;
+  }
   db.prepare(
     `INSERT INTO memory_chunks (day, kind, text, evidence_json, embedding_json, entity_id, weight, created_at)
      VALUES (@day, @kind, @text, @evidence_json, @embedding_json, @entity_id, @weight, @created_at)`,
@@ -640,7 +687,7 @@ export function insertMemoryChunk(db, row) {
     text: row.text,
     evidence_json: row.evidence_json ?? null,
     embedding_json: row.embedding_json ?? null,
-    entity_id: row.entity_id ?? null,
+    entity_id: entityId,
     weight: row.weight ?? 1,
     created_at: row.created_at,
   });

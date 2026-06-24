@@ -6,7 +6,7 @@ The ESP32 **does not respond**. It listens and sees; the PC stores **everything*
 
 | Layer | Role |
 |-------|------|
-| **folio-node** (ESP32-S3-CAM + INMP441) | Push 1 s audio + JPEG every 60 s (USB power) |
+| **folio-node** (ESP32-S3-CAM + INMP441) | Push audio chunks + JPEG over WiFi to brain |
 | **folio-brain** (PC, Node 22+) | Ingest, Whisper, sound classify, speaker ID, vision captions, RAG memory, daily insights |
 | **Archive UI** | Insights (dia) + witness timeline (frames, fala, sons) |
 
@@ -28,7 +28,7 @@ GPIO **1**, **2**, and **21** are safe general-purpose pins on the ESP32-S3 — 
 | **L/R** | **GND** | Tie L/R to the same GND rail |
 | WS | **GPIO 1** | ADC1_0 |
 | SCK | **GPIO 2** | ADC1_1 |
-| SD (DOUT) | **GPIO 21** | Module I2S data — **not** the microSD slot (38/39/40) |
+| SD (DOUT) | **GPIO 21** | Module I2S data |
 
 **L/R “junto”** = L/R tied to **GND**, not floating.
 
@@ -82,7 +82,7 @@ yarn insights           # força insights do dia
 yarn enroll luiz Luiz --pcm sample.pcm   # speaker ID
 yarn memory:reindex     # rebuild RAG index
 
-yarn folio:flash          # terminal 2 — flash ESP (SD card required for offline spool)
+yarn folio:flash          # terminal 2 — flash ESP
 yarn folio:monitor        # node logs
 
 # After collecting data for the day
@@ -113,14 +113,11 @@ scripts/
     └── perception/            # audio, frame, image, sound, yamnet
 ```
 
-## Offline spool (microSD card — slot onboard)
+## Capture pipeline (WiFi only)
 
-**Always:** speech chunk (RMS ≥ threshold) → **microSD** → push to brain when WiFi is up.  
-Quiet seconds are **not** spooled or pushed. On successful push, the file is removed from the card.
+Speech/sound chunks (RMS ≥ threshold) and JPEG frames are **pushed directly** to folio-brain when WiFi is up. Quiet audio is dropped on the ESP. If WiFi or the brain is offline, captures are skipped (no local buffer).
 
-This is the **microSD slot** (CLK 39, CMD 38, D0 40) — not the INMP441 I2S data pin (DOUT).
-
-Insert a **FAT32** card before power-on. Boot should show `[microsd] ok …MB /folio`.
+Requires `FOLIO_BRAIN_URL` reachable from the ESP’s network.
 
 ## Configuration
 
@@ -210,7 +207,7 @@ Timeline grouping (speech/scene/sound gaps) is configured under `present.*`.
 
 - **Continuous** capture while the ESP is powered and the brain is running — no pause in firmware
 - To stop: power off the node or exit `yarn folio:brain`
-- Only speech chunks (RMS ≥ threshold) are spooled, stored, and transcribed. Quiet audio is dropped on ESP and at ingest.
+- Only speech chunks (RMS ≥ threshold) are pushed, stored, and transcribed. Quiet audio is dropped on ESP and at ingest.
 - PCM files are kept for `audio.retentionDays` (default 7) for replay; then deleted while **transcripts remain** in SQLite.
 
 ## Memory & RAG

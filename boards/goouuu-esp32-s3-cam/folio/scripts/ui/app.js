@@ -20,13 +20,19 @@ function humanDayMeta(iso) {
   }
 }
 
-function entityBlurb(e) {
+function entityBlurb(e, summary = "") {
   let pat = {};
   try { pat = JSON.parse(e.patterns_json || "{}"); } catch { /* */ }
   if (pat.utterances_today) return `${pat.utterances_today} falas hoje`;
   if (pat.barks_today) return `${pat.barks_today} latidos`;
-  if (pat.notes) return pat.notes;
-  return e.kind === "person" ? "por aqui" : "";
+  if (pat.notes) {
+    const notes = String(pat.notes).trim().replace(/\s+/g, " ");
+    if (summary && notes.length > 40 && summary.includes(notes.slice(0, 80))) {
+      return "";
+    }
+    return notes.length > 100 ? `${notes.slice(0, 97)}…` : notes;
+  }
+  return e.kind === "person" || e.kind === "group" ? "por aqui" : "";
 }
 
 const PHASE_LABEL = {
@@ -50,10 +56,12 @@ const SECTIONS = [
     { path: "port", label: "Porta HTTP", type: "number" },
     { path: "dataDir", label: "Pasta de dados", type: "text", placeholder: "~/.folio" },
   ]},
-  { title: "LM local", hint: "LM Studio na sua máquina — sem API externa", fields: [
+  { title: "LM Studio", hint: "Visão, insights, embeddings e rerank — só LM Studio (Whisper é separado)", fields: [
     { path: "lm.url", label: "URL", type: "text", placeholder: "http://127.0.0.1:1234/v1" },
     { path: "lm.model", label: "Modelo visão", type: "lmSelect", pool: "chat" },
     { path: "lm.modelDeep", label: "Modelo insights", type: "lmSelect", pool: "chat", emptyOption: "(igual visão)" },
+    { path: "lm.modelEmbed", label: "Modelo embed", type: "lmSelect", pool: "embed", emptyOption: "(desligado)" },
+    { path: "lm.modelRerank", label: "Modelo rerank", type: "lmSelect", pool: "rerank", emptyOption: "(desligado)" },
   ]},
   { title: "Áudio · VAD", hint: "Grava só quando detecta voz (estilo Omi)", fields: [
     { path: "audio.vad.frameMs", label: "Frame (ms)", type: "number" },
@@ -63,7 +71,7 @@ const SECTIONS = [
     { path: "audio.vad.prerollMs", label: "Pré-roll (ms)", type: "number" },
     { path: "audio.retentionDays", label: "Retenção PCM (dias)", type: "number" },
   ]},
-  { title: "Whisper local", fields: [
+  { title: "Whisper (STT local)", hint: "Transcrição de voz — CLI openai-whisper, independente do LM Studio", fields: [
     { path: "audio.whisperModel", label: "Modelo", type: "select", options: WHISPER_MODELS },
     { path: "audio.whisperDevice", label: "Device", type: "select", options: ["cuda", "auto", "cpu", "mps"] },
     { path: "audio.whisperLanguage", label: "Idioma STT", type: "select", options: WHISPER_LANG_OPTS.map((o) => o.v), labels: WHISPER_LANG_OPTS },
@@ -95,10 +103,9 @@ const SECTIONS = [
     { path: "insights.intervalMs", label: "Insights (ms)", type: "number" },
     { path: "insights.temperature", label: "Insights temp", type: "number", step: "0.05" },
   ]},
-  { title: "Memória", hint: "Busca lexical local; embeddings opcional via LM local", fields: [
+  { title: "Memória", hint: "Busca lexical local; embeddings via LM Studio (lm.modelEmbed)", fields: [
     { path: "memory.enabled", label: "RAG ativo", type: "bool" },
-    { path: "memory.useEmbeddings", label: "Embeddings (LM local)", type: "bool" },
-    { path: "memory.embeddingModel", label: "Modelo embed", type: "lmSelect", pool: "embed", emptyOption: "(lexical)" },
+    { path: "memory.useEmbeddings", label: "Embeddings (LM Studio)", type: "bool" },
     { path: "memory.contextQueryTemplate", label: "Query contexto ({day})", type: "text" },
     { path: "memory.lexical.minTokenLength", label: "Token mín. (lexical)", type: "number" },
     { path: "memory.retrieveLimit", label: "Hits por busca", type: "number" },
@@ -220,10 +227,12 @@ function renderInsights(ins) {
 
   const entities = ins.entities || [];
   $("insights-entities").innerHTML = entities.length
-    ? entities.map((e) =>
-      `<article class="entity-card"><strong>${esc(e.display_name)}</strong>
-        <p class="muted">${esc(entityBlurb(e))}</p></article>`,
-    ).join("")
+    ? entities.map((e) => {
+      const blurb = entityBlurb(e, ins.summary || "");
+      return `<article class="entity-card"><strong>${esc(e.display_name)}</strong>${
+        blurb ? `<p class="muted">${esc(blurb)}</p>` : ""
+      }</article>`;
+    }).join("")
     : "";
 
   const insights = ins.insights || [];
@@ -435,7 +444,7 @@ function loadConfigForm() {
     $("cfg-info").textContent = cfg.configPath || "defaults";
     const rt = cfg.runtime || {};
     $("cfg-runtime").textContent = rt.lmUrl
-      ? `LM ${rt.lmUrl} · whisper ${rt.models?.whisper} (${rt.whisperDeviceEffective})`
+      ? `LM Studio ${rt.lmUrl} · visão ${rt.models?.fast}${rt.models?.deep && rt.models.deep !== rt.models.fast ? ` · insights ${rt.models.deep}` : ""}${rt.models?.embed ? ` · embed ${rt.models.embed}` : ""} · whisper ${rt.models?.whisper} (${rt.whisperDeviceEffective})`
       : "";
     applyConfigToForm(cfg);
     await refreshLmModels();

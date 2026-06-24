@@ -1,8 +1,21 @@
 import { CFG } from "./config.mjs";
-import { deleteMemoryForDay, getSpeaker, insertMemoryChunk, memoryChunksInRange, openDb, timelineForDay } from "./db.mjs";
+import { isMeaningfulFrameItem } from "./present.mjs";
+import {
+  deleteMemoryForDay,
+  ensureSpeakerEntity,
+  entityBySpeakerId,
+  getEntity,
+  getSpeaker,
+  insertMemoryChunk,
+  memoryChunksInRange,
+  memoryEvidenceSet,
+  openDb,
+  speakerEntityId,
+  timelineForDay,
+} from "./db.mjs";
 import { createEmbeddings } from "./llm.mjs";
 import { modelId, ModelSlot } from "./models.mjs";
-import { dayOffset } from "./util.mjs";
+import { dayOffset, isDarkSceneCaption, isSttHallucination } from "./util.mjs";
 
 
 // --- lexical.mjs ---
@@ -98,20 +111,105 @@ export function vectorFromJson(json) {
 }
 
 // --- embeddings.mjs ---
+const UTTERANCE_FILLER = new Set([
+  "ok",
+  "okay",
+  "sim",
+  "nao",
+  "não",
+  "obrigado",
+  "obrigada",
+  "valeu",
+  "e agora",
+  "e ai",
+  "e aí",
+  "ve",
+  "no",
+  "but",
+  "yeah",
+  "yes",
+  "no",
+  "thanks",
+  "thank you",
+  "alright",
+  "simply",
+]);
+
+function cleanMemoryText(text) {
+  return String(text ?? "")
+    .replace(/<\|[^|>]+\|>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isDarkHallucinationCaption(caption) {
+  return isDarkSceneCaption(caption);
+}
+
+function isMemoryWorthyText(text, kind) {
+  const t = cleanMemoryText(text);
+  if (isSttHallucination(t, CFG.audioSttRejectPatterns)) {
+    return false;
+  }
+  const minLen = kind === "utterance" ? (CFG.memoryMinUtteranceChars ?? 12) : 8;
+  if (t.length < minLen) {
+    return false;
+  }
+  const norm = t
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .trim();
+  if (UTTERANCE_FILLER.has(norm)) {
+    return false;
+  }
+  const tokens = norm.split(/\s+/).filter(Boolean);
+  if (tokens.length >= 2 && new Set(tokens).size === 1) {
+    return false;
+  }
+  if (kind === "utterance" && /^(\w+\s*){1,2}$/.test(norm) && norm.length < 16) {
+    return false;
+  }
+  return true;
+}
+
 export async function embedText(text) {
+  const [embed] = await embedTexts([text]);
+  return embed;
+}
+
+export async function embedTexts(texts) {
+  const cleaned = texts.map((t) => cleanMemoryText(t).slice(0, 8192));
   if (!CFG.memoryUseEmbeddings) {
-    return { kind: "lexical", vector: [...termVector(text).entries()] };
+    return cleaned.map((t) => ({ kind: "lexical", vector: [...termVector(t).entries()] }));
   }
-  const json = await createEmbeddings({
-    model: modelId(ModelSlot.EMBED),
-    input: text.slice(0, 8192),
-    encoding_format: "float",
-  });
-  const vec = json?.data?.[0]?.embedding;
-  if (!Array.isArray(vec)) {
-    throw new Error("no embedding vector");
+  const model = modelId(ModelSlot.EMBED);
+  if (!model) {
+    throw new Error("lm.modelEmbed not set — load an embedding model in LM Studio");
   }
-  return { kind: "float", vector: vec };
+  const batchSize = Math.max(1, CFG.memoryEmbedBatchSize ?? 32);
+  const out = [];
+  for (let i = 0; i < cleaned.length; i += batchSize) {
+    const slice = cleaned.slice(i, i + batchSize);
+    const json = await createEmbeddings({
+      model,
+      input: slice.length === 1 ? slice[0] : slice,
+      encoding_format: "float",
+    });
+    const rows = [...(json?.data ?? [])].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+    if (rows.length !== slice.length) {
+      throw new Error(`embedding batch: expected ${slice.length} vectors, got ${rows.length}`);
+    }
+    for (const row of rows) {
+      const vec = row.embedding;
+      if (!Array.isArray(vec)) {
+        throw new Error("no embedding vector");
+      }
+      out.push({ kind: "float", vector: vec });
+    }
+  }
+  return out;
 }
 
 export function scorePair(queryEmbed, docEmbedJson) {
@@ -133,13 +231,67 @@ export function serializeEmbedding(embed) {
 }
 
 // --- indexing.mjs ---
+function flushUtteranceGroup(group, out, day) {
+  if (!group.length) {
+    return;
+  }
+  const parts = group.map((g) => g.text);
+  const merged = parts.join(" · ");
+  if (!isMemoryWorthyText(merged, "utterance")) {
+    return;
+  }
+  const first = group[0];
+  const last = group[group.length - 1];
+  out.push({
+    day,
+    kind: "utterance",
+    text: merged,
+    evidence_json: JSON.stringify({
+      utterance_ids: group.map((g) => g.utterance_id).filter(Boolean),
+      chunk_ids: group.map((g) => g.chunk_id).filter(Boolean),
+      at: first.at,
+      through: last.at,
+    }),
+    entity_id: first.entity_id ?? null,
+    weight: 1.2,
+  });
+}
+
 export function collectMemoryItems(db, day) {
   const items = timelineForDay(db, day);
   const out = [];
   const speakerCache = new Map();
+  const groupMs = Math.max(60_000, CFG.memoryUtteranceGroupMs ?? 300_000);
+  let utteranceGroup = [];
+  let groupStartMs = null;
+
+  const pushUtterance = (row) => {
+    const atMs = new Date(row.at).getTime();
+    if (
+      utteranceGroup.length &&
+      (Number.isNaN(atMs) ||
+        atMs - groupStartMs > groupMs ||
+        (row.entity_id && row.entity_id !== utteranceGroup[0].entity_id))
+    ) {
+      flushUtteranceGroup(utteranceGroup, out, day);
+      utteranceGroup = [];
+      groupStartMs = null;
+    }
+    if (!utteranceGroup.length) {
+      groupStartMs = atMs;
+    }
+    utteranceGroup.push(row);
+  };
 
   for (const item of items) {
-    if (item.type === "frame" && item.caption) {
+    if (item.type === "frame" && isMeaningfulFrameItem(item)) {
+      flushUtteranceGroup(utteranceGroup, out, day);
+      utteranceGroup = [];
+      groupStartMs = null;
+
+      if (isDarkHallucinationCaption(item.caption)) {
+        continue;
+      }
       out.push({
         day,
         kind: "frame",
@@ -157,35 +309,45 @@ export function collectMemoryItems(db, day) {
 
     if (item.text) {
       let speakerName = null;
-      let entityId = item.speaker_id ?? null;
+      let entityId = null;
       if (item.speaker_id) {
         if (!speakerCache.has(item.speaker_id)) {
           speakerCache.set(item.speaker_id, getSpeaker(db, item.speaker_id));
         }
         speakerName = speakerCache.get(item.speaker_id)?.display_name ?? item.speaker_id;
+        entityId =
+          entityBySpeakerId(db, item.speaker_id)?.id ??
+          getEntity(db, speakerEntityId(item.speaker_id))?.id ??
+          ensureSpeakerEntity(db, item.speaker_id, speakerName);
       }
       const prefix = speakerName ? `${speakerName}: ` : "";
-      out.push({
-        day,
-        kind: "utterance",
-        text: `${prefix}${item.text}`,
-        evidence_json: JSON.stringify({
-          utterance_id: item.utterance_id,
-          chunk_id: item.chunk_id,
-          at: item.at,
-          speaker_id: item.speaker_id,
-        }),
+      const text = cleanMemoryText(`${prefix}${item.text}`);
+      if (!isMemoryWorthyText(text, "utterance")) {
+        continue;
+      }
+      pushUtterance({
+        text,
+        at: item.at,
+        utterance_id: item.utterance_id,
+        chunk_id: item.chunk_id,
         entity_id: entityId,
-        weight: 1.2,
       });
       continue;
     }
 
     if (item.sound_label || item.sound_kind) {
+      flushUtteranceGroup(utteranceGroup, out, day);
+      utteranceGroup = [];
+      groupStartMs = null;
+
+      const text = `${item.sound_label || item.sound_kind} (E=${Number(item.energy ?? 0).toFixed(4)})`;
+      if (!isMemoryWorthyText(text, "sound")) {
+        continue;
+      }
       out.push({
         day,
         kind: item.sound_kind || "sound",
-        text: `${item.sound_label || item.sound_kind} (E=${Number(item.energy ?? 0).toFixed(4)})`,
+        text,
         evidence_json: JSON.stringify({ chunk_id: item.chunk_id, at: item.at }),
         entity_id: CFG.entitiesSoundKindEntity?.[item.sound_kind] ?? null,
         weight: 0.7,
@@ -193,30 +355,89 @@ export function collectMemoryItems(db, day) {
     }
   }
 
+  flushUtteranceGroup(utteranceGroup, out, day);
   return out;
 }
 
-export async function indexDayMemories(db, day) {
+function pruneLegacyMemoryChunks(db, day) {
+  const rows = db.prepare("SELECT id, evidence_json FROM memory_chunks WHERE day = ?").all(day);
+  let pruned = 0;
+  for (const row of rows) {
+    try {
+      const ev = JSON.parse(row.evidence_json || "{}");
+      if (ev.utterance_id != null && ev.utterance_ids == null) {
+        db.prepare("DELETE FROM memory_chunks WHERE id = ?").run(row.id);
+        pruned++;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return pruned;
+}
+
+function pruneJunkMemoryChunks(db, day) {
+  const rows = db.prepare("SELECT id, text FROM memory_chunks WHERE day = ?").all(day);
+  let pruned = 0;
+  for (const row of rows) {
+    if (
+      isSttHallucination(row.text, CFG.audioSttRejectPatterns) ||
+      isDarkSceneCaption(row.text)
+    ) {
+      db.prepare("DELETE FROM memory_chunks WHERE id = ?").run(row.id);
+      pruned++;
+    }
+  }
+  return pruned;
+}
+
+export async function indexDayMemories(db, day, { force = false } = {}) {
   if (!CFG.memoryEnabled) {
-    return { indexed: 0 };
+    return { indexed: 0, skipped: 0 };
+  }
+
+  if (force) {
+    deleteMemoryForDay(db, day);
+  } else {
+    const pruned = pruneLegacyMemoryChunks(db, day);
+    if (pruned) {
+      console.log(`[memory] pruned ${pruned} legacy chunks for ${day}`);
+    }
+    const junk = pruneJunkMemoryChunks(db, day);
+    if (junk) {
+      console.log(`[memory] pruned ${junk} junk chunks for ${day}`);
+    }
   }
 
   const items = collectMemoryItems(db, day);
-  deleteMemoryForDay(db, day);
+  const existing = force ? new Set() : memoryEvidenceSet(db, day);
+  const pending = items.filter((item) => !existing.has(item.evidence_json));
+  if (!pending.length) {
+    console.log(`[memory] ${day} up to date (${items.length} chunks)`);
+    return { indexed: 0, skipped: items.length };
+  }
 
+  const embeds = await embedTexts(pending.map((item) => item.text));
+  const now = new Date().toISOString();
   let indexed = 0;
-  for (const item of items) {
-    const embed = await embedText(item.text);
+  for (let i = 0; i < pending.length; i++) {
     insertMemoryChunk(db, {
-      ...item,
-      embedding_json: serializeEmbedding(embed),
-      created_at: new Date().toISOString(),
+      ...pending[i],
+      embedding_json: serializeEmbedding(embeds[i]),
+      created_at: now,
     });
     indexed++;
   }
 
-  console.log(`[memory] indexed ${indexed} chunks for ${day}`);
-  return { indexed };
+  const skipped = items.length - indexed;
+  console.log(
+    `[memory] indexed ${indexed} new for ${day}` +
+      (skipped ? ` (${skipped} already indexed)` : "") +
+      (CFG.memoryUseEmbeddings
+        ? ` · ${Math.ceil(indexed / Math.max(1, CFG.memoryEmbedBatchSize ?? 32))} embed batch(es)`
+        : ""),
+  );
+  return { indexed, skipped };
 }
 
 export async function reindexAllMemories(db = openDb()) {
@@ -232,7 +453,7 @@ export async function reindexAllMemories(db = openDb()) {
 
   let total = 0;
   for (const day of days) {
-    const { indexed } = await indexDayMemories(db, day);
+    const { indexed } = await indexDayMemories(db, day, { force: true });
     total += indexed;
   }
   return { days: days.length, chunks: total };

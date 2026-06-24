@@ -192,6 +192,20 @@ function migrateOpenAiToLm(file) {
     delete file.lm.modelFast;
     changed = true;
   }
+  if (!file.lm || typeof file.lm !== "object") {
+    file.lm = { ...DEFAULT_CONFIG.lm };
+    changed = true;
+  }
+  if (file.memory?.embeddingModel && !file.lm.modelEmbed) {
+    file.lm.modelEmbed = file.memory.embeddingModel;
+    delete file.memory.embeddingModel;
+    changed = true;
+  }
+  if (file.memory?.rerank?.model && !file.lm.modelRerank) {
+    file.lm.modelRerank = file.memory.rerank.model;
+    delete file.memory.rerank.model;
+    changed = true;
+  }
   return changed;
 }
 
@@ -234,6 +248,13 @@ function migrateConfigSchema(file) {
   if (!file.lm || typeof file.lm !== "object") {
     file.lm = { ...DEFAULT_CONFIG.lm };
     changed = true;
+  } else {
+    for (const [k, v] of Object.entries(DEFAULT_CONFIG.lm)) {
+      if (!(k in file.lm)) {
+        file.lm[k] = v;
+        changed = true;
+      }
+    }
   }
 
   if (!file.perception || typeof file.perception !== "object") {
@@ -277,6 +298,14 @@ function migrateConfigSchema(file) {
           changed = true;
         }
       }
+    }
+    const rejectDefaults = DEFAULT_CONFIG.audio?.sttRejectPatterns ?? [];
+    if (
+      rejectDefaults.length &&
+      (!Array.isArray(file.audio.sttRejectPatterns) || file.audio.sttRejectPatterns.length === 0)
+    ) {
+      file.audio.sttRejectPatterns = [...rejectDefaults];
+      changed = true;
     }
   }
 
@@ -481,8 +510,8 @@ function runtimeModels() {
     fast: CFG.modelFast,
     deep: CFG.modelDeep,
     whisper: CFG.whisperModel,
-    embed: CFG.memoryEmbeddingModel || CFG.modelFast,
-    rerank: CFG.memoryRerankModel,
+    embed: CFG.lmModelEmbed,
+    rerank: CFG.lmModelRerank,
     whisperDevice: CFG.whisperDevice,
   };
 }
@@ -512,6 +541,10 @@ export function nodeConfigPayload() {
     frames: {
       captureIntervalMs: frames.captureIntervalMs,
       jpegQuality: frames.jpegQuality,
+      motionCaptureMinMs: Math.max(
+        3000,
+        Math.min(30000, Math.floor((frames.captureIntervalMs ?? 60000) / 10)),
+      ),
       size,
       sizeId: frameSizeId(size),
     },
@@ -583,11 +616,19 @@ function resolveLmModels(file) {
     cfgStr(file, "lm.modelDeep", "LM_MODEL_DEEP") ||
     cfgStr(file, "openai.modelDeep", "OPENAI_MODEL_DEEP") ||
     model;
-  return { modelFast: model, modelDeep: deep };
+  const embed =
+    cfgStr(file, "lm.modelEmbed", "LM_MODEL_EMBED") ||
+    cfgStr(file, "memory.embeddingModel", "FOLIO_MEMORY_EMBED_MODEL") ||
+    null;
+  const rerank =
+    cfgStr(file, "lm.modelRerank", "LM_MODEL_RERANK") ||
+    cfgStr(file, "memory.rerank.model", "FOLIO_MEMORY_RERANK_MODEL") ||
+    null;
+  return { modelFast: model, modelDeep: deep, modelEmbed: embed, modelRerank: rerank };
 }
 
 function buildCfgFromFile(file = getFileData()) {
-  const { modelFast, modelDeep } = resolveLmModels(file);
+  const { modelFast, modelDeep, modelEmbed, modelRerank } = resolveLmModels(file);
   const dataDir =
     envStr(getPath(file, "dataDir"), "FOLIO_DATA_DIR", "") || join(homedir(), ".folio");
   return {
@@ -600,6 +641,8 @@ function buildCfgFromFile(file = getFileData()) {
     openaiApiKey: null,
     modelFast,
     modelDeep,
+    lmModelEmbed: modelEmbed,
+    lmModelRerank: modelRerank,
 
     vadFrameMs: cfgNum(file, "audio.vad.frameMs", "FOLIO_VAD_FRAME_MS"),
     vadDebounceMs: cfgNum(file, "audio.vad.debounceMs", "FOLIO_VAD_DEBOUNCE_MS"),
@@ -621,12 +664,18 @@ function buildCfgFromFile(file = getFileData()) {
 
     audioSttMaxAttempts: cfgNum(file, "audio.sttMaxAttempts", "FOLIO_STT_MAX_ATTEMPTS"),
     audioSttMaxNoSpeechProb: cfgNum(file, "audio.sttMaxNoSpeechProb", "FOLIO_STT_MAX_NO_SPEECH"),
-    audioSttRejectPatterns: cfgStrArray(
-      file,
-      "audio.sttRejectPatterns",
-      "FOLIO_STT_REJECT_PATTERNS",
-      { noFallback: true },
-    ),
+    audioSttRejectPatterns: (() => {
+      const custom = cfgStrArray(
+        file,
+        "audio.sttRejectPatterns",
+        "FOLIO_STT_REJECT_PATTERNS",
+        { noFallback: true },
+      );
+      if (custom.length) {
+        return custom;
+      }
+      return DEFAULT_CONFIG.audio?.sttRejectPatterns ?? [];
+    })(),
     audioChunkMs:
       cfgNum(file, "audio.vad.frameMs", "FOLIO_VAD_FRAME_MS") ||
       cfgNum(file, "audio.chunkMs", "FOLIO_AUDIO_CHUNK_MS"),
@@ -715,8 +764,9 @@ function buildCfgFromFile(file = getFileData()) {
     memoryRetrieveLimit: cfgNum(file, "memory.retrieveLimit", "FOLIO_MEMORY_RETRIEVE"),
     memoryMinScore: cfgNum(file, "memory.minScore", "FOLIO_MEMORY_MIN_SCORE"),
     memoryUseEmbeddings: cfgBool(file, "memory.useEmbeddings", "FOLIO_MEMORY_EMBEDDINGS"),
-    memoryEmbeddingModel: cfgStr(file, "memory.embeddingModel", "FOLIO_MEMORY_EMBED_MODEL") || null,
-    memoryEmbeddingsUrl: null,
+    memoryEmbedBatchSize: cfgNum(file, "memory.embedBatchSize", "FOLIO_MEMORY_EMBED_BATCH"),
+    memoryMinUtteranceChars: cfgNum(file, "memory.minUtteranceChars", "FOLIO_MEMORY_MIN_UTT_CHARS"),
+    memoryUtteranceGroupMs: cfgNum(file, "memory.utteranceGroupMs", "FOLIO_MEMORY_UTT_GROUP_MS"),
     memoryContextQueryTemplate: cfgStr(
       file,
       "memory.contextQueryTemplate",
@@ -739,8 +789,6 @@ function buildCfgFromFile(file = getFileData()) {
     memoryMinFactTextLength: cfgNum(file, "memory.minFactTextLength", "FOLIO_MEMORY_MIN_FACT_LEN"),
 
     memoryRerankEnabled: cfgBool(file, "memory.rerank.enabled", "FOLIO_MEMORY_RERANK"),
-    memoryRerankModel: cfgStr(file, "memory.rerank.model", "FOLIO_MEMORY_RERANK_MODEL") || null,
-    memoryRerankUrl: null,
     memoryRerankCandidateLimit: cfgNum(file, "memory.rerank.candidateLimit", "FOLIO_MEMORY_RERANK_CANDIDATES"),
     memoryRerankTopK: cfgNum(file, "memory.rerank.topK", "FOLIO_MEMORY_RERANK_TOPK"),
 

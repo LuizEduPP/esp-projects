@@ -244,10 +244,14 @@ function tryParse(raw) {
     return null;
   }
   const repaired = repairJsonKeyTypos(raw);
+  const quoted = quoteBareJsonValues(repaired);
   const attempts = [
     repaired,
+    quoted,
     stripTrailingCommas(stripJsonComments(repaired)),
+    stripTrailingCommas(stripJsonComments(quoted)),
     stripTrailingCommas(stripJsonComments(normalizeNewlinesInStrings(repaired))),
+    stripTrailingCommas(stripJsonComments(normalizeNewlinesInStrings(quoted))),
     raw,
     stripTrailingCommas(stripJsonComments(raw)),
     stripTrailingCommas(stripJsonComments(normalizeNewlinesInStrings(raw))),
@@ -397,4 +401,153 @@ export function parseVisionFallback(text) {
     note,
     summary,
   };
+}
+
+function extractLooseString(src, key) {
+  const re = new RegExp(`"${key}"\\s*:\\s*"`, "i");
+  const m = src.match(re);
+  if (!m || m.index == null) {
+    return "";
+  }
+  let i = m.index + m[0].length;
+  let out = "";
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "\\") {
+      const next = src[i + 1];
+      if (next === "n") {
+        out += " ";
+      } else if (next) {
+        out += next;
+      }
+      i += 2;
+      continue;
+    }
+    if (c === '"') {
+      break;
+    }
+    out += c === "\n" || c === "\r" ? " " : c;
+    i++;
+  }
+  return out.replace(/\s+/g, " ").trim();
+}
+
+function extractLooseObjects(src, key) {
+  const re = new RegExp(`"${key}"\\s*:\\s*\\[`, "i");
+  const m = src.match(re);
+  if (!m || m.index == null) {
+    return [];
+  }
+  const start = m.index + m[0].length - 1;
+  const block = extractBalanced(src, start);
+  if (!block) {
+    return [];
+  }
+  const inner = block.slice(1, -1);
+  const out = [];
+  for (let i = 0; i < inner.length; i++) {
+    if (inner[i] !== "{") {
+      continue;
+    }
+    const obj = extractBalanced(inner, i);
+    if (!obj) {
+      continue;
+    }
+    const parsed = tryParse(obj);
+    if (parsed && typeof parsed === "object") {
+      out.push(parsed);
+    }
+    i += obj.length - 1;
+  }
+  return out;
+}
+
+function quoteBareJsonValues(text) {
+  return text.replace(
+    /("(?:evidence|description|pattern|notes)"\s*:\s*)([^"{\[\d\n][^,\}\]]*?)(\s*[,}\]])/gi,
+    (_, pre, val, post) => `${pre}${JSON.stringify(String(val).trim())}${post}`,
+  );
+}
+
+/** Regex fallback when daily insights JSON is broken (multiline strings, bare values). */
+export function parseInsightsFallback(text) {
+  const src = String(text ?? "")
+    .replace(/```(?:json)?/gi, "")
+    .replace(/```/g, "")
+    .trim();
+  const repaired = quoteBareJsonValues(normalizeNewlinesInStrings(src));
+  const parsed = tryParse(repaired);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && parsed.summary) {
+    return parsed;
+  }
+
+  const summary = extractLooseString(src, "summary");
+  const insights = extractLooseString(src, "insights");
+  const moments = extractLooseObjects(src, "moments");
+  const patterns = extractLooseObjects(src, "patterns");
+  const entities = extractLooseObjects(src, "entities");
+
+  if (!summary && !insights && !moments.length && !patterns.length && !entities.length) {
+    return null;
+  }
+
+  return { summary, insights, moments, patterns, entities };
+}
+
+const STT_HALLUCINATION_HINTS = [
+  "legendas pela comunidade",
+  "legendas por ",
+  "amara.org",
+  "subtitles by",
+  "subtitle by",
+  "obrigado por assistir",
+  "thanks for watching",
+  "inscreva-se no canal",
+  "subscribe",
+  "www.",
+  "http://",
+  "https://",
+];
+
+/** Whisper/LM subtitle boilerplate and junk speech. */
+export function isSttHallucination(text, extraPatterns = []) {
+  const raw = String(text ?? "").trim();
+  if (!raw) {
+    return true;
+  }
+  const lower = raw.toLowerCase();
+  const patterns = [...STT_HALLUCINATION_HINTS, ...extraPatterns].filter(Boolean);
+  for (const pat of patterns) {
+    if (lower.includes(String(pat).toLowerCase())) {
+      return true;
+    }
+  }
+  if (/^legendas\b/i.test(raw) && raw.length < 120) {
+    return true;
+  }
+  const norm = lower
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .trim();
+  const tokens = norm.split(/\s+/).filter(Boolean);
+  if (tokens.length >= 3 && new Set(tokens).size === 1) {
+    return true;
+  }
+  return false;
+}
+
+/** Dark-room LM caption templates — not useful in the life log. */
+export function isDarkSceneCaption(caption) {
+  const c = String(caption ?? "").trim();
+  if (!c) {
+    return false;
+  }
+  if (/^parece que/i.test(c) && /escuro|dark|sem ilumina|dim|pouco vis|sala sem|ambiente escuro/i.test(c)) {
+    return true;
+  }
+  if (/movimento de uma pessoa ou objeto/i.test(c) && /escuro|dark|sem ilumina/i.test(c)) {
+    return true;
+  }
+  return false;
 }

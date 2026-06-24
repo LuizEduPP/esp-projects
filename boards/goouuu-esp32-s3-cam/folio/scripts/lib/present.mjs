@@ -1,6 +1,7 @@
 import { CFG } from "./config.mjs";
 import { activeLocale } from "./locale.mjs";
 import { formatSceneCaption, sceneFingerprint } from "./llm.mjs";
+import { isDarkSceneCaption, isSttHallucination } from "./util.mjs";
 
 function gapMs(a, b) {
   return Math.abs(new Date(a).getTime() - new Date(b).getTime());
@@ -68,6 +69,9 @@ export function isStaticFrameItem(item) {
   ) {
     return true;
   }
+  if (isDarkSceneCaption(item.caption)) {
+    return true;
+  }
   return false;
 }
 
@@ -116,7 +120,7 @@ export function groupTimelineItems(items, opts = {}) {
   for (const item of sorted) {
     if (item.type === "audio" && item.text) {
       const text = String(item.text).trim();
-      if (!text) {
+      if (!text || isSttHallucination(text, CFG.audioSttRejectPatterns)) {
         continue;
       }
       const last = groups.at(-1);

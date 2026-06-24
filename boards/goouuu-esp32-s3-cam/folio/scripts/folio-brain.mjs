@@ -42,13 +42,18 @@ function main() {
       `audio: chunk=${CFG.audioChunkMs}ms rate=${CFG.audioSampleRate} ` +
         `speech≥${CFG.speechEnergyThreshold} retention=${CFG.audioRetentionDays}d`,
     );
-    console.log(`lm: ${CFG.lmBaseUrl} · locale: ${activeLocale()} (${promptLanguageName()})`);
+    console.log(
+      `lm studio: ${CFG.lmBaseUrl} · vision=${CFG.modelFast}` +
+        `${CFG.modelDeep !== CFG.modelFast ? ` insights=${CFG.modelDeep}` : ""}` +
+        `${CFG.lmModelEmbed ? ` embed=${CFG.lmModelEmbed}` : ""}` +
+        `${CFG.lmModelRerank ? ` rerank=${CFG.lmModelRerank}` : ""}`,
+    );
     const whisperLang = CFG.whisperLanguage ? whisperLanguageCode() : "auto";
     console.log(
-      `whisper: ${CFG.whisperBin} model=${CFG.whisperModel} device=${CFG.whisperDevice} ` +
+      `whisper (local): ${CFG.whisperBin} model=${CFG.whisperModel} device=${CFG.whisperDevice} ` +
         `lang=${whisperLang} cuda=${isCudaAvailable() ? "yes" : "no"}`,
     );
-    console.log("[config] hot reload: LM/Whisper/locale apply on save — restart only for port/dataDir");
+    console.log("[config] hot reload: LM Studio/Whisper/locale apply on save — restart only for port/dataDir");
   });
 
   if (CFG.pipelineEnabled) {

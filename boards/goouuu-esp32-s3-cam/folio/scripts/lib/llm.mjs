@@ -49,14 +49,8 @@ export function openAiHeaders(extra = {}) {
   return headers;
 }
 
-/** Resolve full URL for an OpenAI-compatible resource. */
+/** Resolve full URL for LM Studio (OpenAI-compatible) resource. */
 export function openAiUrl(resource) {
-  if (resource === "embeddings" && CFG.memoryEmbeddingsUrl) {
-    return CFG.memoryEmbeddingsUrl;
-  }
-  if (resource === "rerank" && CFG.memoryRerankUrl) {
-    return CFG.memoryRerankUrl;
-  }
   const path = RESOURCE_PATH[resource] ?? String(resource).replace(/^\/+/, "");
   return joinOpenAiPath(openAiBaseUrl(), path);
 }
@@ -71,7 +65,7 @@ export async function openAiRequest(url, { method = "POST", body, timeoutMs = 18
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`OpenAI API ${res.status}: ${text.slice(0, 240)}`);
+    throw new Error(`LM Studio ${res.status}: ${text.slice(0, 240)}`);
   }
 
   return res.json();
@@ -165,7 +159,7 @@ export async function fetchOpenAiModels() {
   } catch (err) {
     return {
       ok: false,
-      error: err.message ?? "OpenAI API unreachable",
+      error: err.message ?? "LM Studio unreachable",
       baseUrl: openAiBaseUrl(),
     };
   }
@@ -181,7 +175,7 @@ export async function rerankDocuments(query, documents, { model, topN } = {}) {
   }
 
   const json = await rerank({
-    model: model ?? CFG.memoryRerankModel,
+    model: model ?? CFG.lmModelRerank,
     query,
     documents,
     top_n: topN ?? documents.length,

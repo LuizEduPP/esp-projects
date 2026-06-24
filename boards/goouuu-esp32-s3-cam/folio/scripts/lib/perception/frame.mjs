@@ -7,6 +7,7 @@ import {
   markFrameProcessed,
 } from "../db.mjs";
 import { captionFrame, formatSceneCaption } from "../llm.mjs";
+import { isDarkSceneCaption } from "../util.mjs";
 
 const MotionLevel = Object.freeze({ NONE: "none", LOW: "low", HIGH: "high" });
 const GREY_SAMPLES = 32;
@@ -510,6 +511,9 @@ export async function processFrame(db, frame) {
   const caption = formatSceneCaption(scene);
   if (!caption?.trim()) {
     return markQuietFrame(db, frame, motion, lmQuality, { reason: "empty_caption" });
+  }
+  if (isDarkSceneCaption(caption)) {
+    return markQuietFrame(db, frame, motion, lmQuality, { reason: "dark_caption" });
   }
   const tags = objectsSummary(scene);
   const finalCaption = tags && !caption.includes(tags) ? `${caption} (${tags})` : caption;
