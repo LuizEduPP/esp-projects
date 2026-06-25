@@ -1,6 +1,6 @@
 #pragma once
 
-// GOOUUU ESP32-S3-CAM — see firmware/PINOUT.md (ESP32-S3 map + Folio wiring).
+// GOOUUU ESP32-S3-CAM — see HARDWARE.md (ESP32-S3 map + Folio wiring).
 //
 // INMP441 I2S (module pin "SD" = serial data, NOT the onboard microSD slot):
 //   WS=GPIO1  SCK=GPIO2  DOUT=GPIO21

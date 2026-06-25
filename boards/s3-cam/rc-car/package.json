@@ -1,5 +1,5 @@
 {
-  "name": "goouuu-s3-cam-mini-games",
+  "name": "s3-cam-rc-car",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -8,6 +8,9 @@
     "fw:upload": "cd firmware && bash ../../../scripts/pio.sh run -t upload",
     "fw:flash": "cd firmware && bash ../../../scripts/pio.sh run && bash ../../../scripts/pio.sh run -t upload",
     "fw:monitor": "cd firmware && bash ../../../scripts/pio.sh device monitor -b 115200 --filter direct",
-    "fw:test": "cd firmware && bash ../../../scripts/pio.sh run -t upload && bash ../../../scripts/pio.sh device monitor -b 115200"
+    "fw:test": "cd firmware && bash ../../../scripts/pio.sh run -t upload && bash ../../../scripts/pio.sh device monitor -b 115200",
+    "ai:follow": "node scripts/ai-follow.mjs",
+    "motor:diag": "node scripts/motor-diag.mjs",
+    "motor:forever": "DRIVE_FOREVER=1 node scripts/motor-diag.mjs --forever"
   }
 }

@@ -9,16 +9,19 @@
 
 #include "audio_capture.h"
 #include "folio_config.h"
-#include "node_config.h"
 #include "pins.h"
-#include "motion_detect.h"
-#include "wifi_connect.h"
 
 #ifndef FOLIO_BRAIN_URL
 #define FOLIO_BRAIN_URL "http://192.168.1.28:8770"
 #endif
 #ifndef FOLIO_DEVICE_ID
 #define FOLIO_DEVICE_ID "folio-s3-01"
+#endif
+#ifndef WIFI_SSID
+#define WIFI_SSID "SUA_REDE_WIFI"
+#endif
+#ifndef WIFI_PASS
+#define WIFI_PASS "SUA_SENHA_WIFI"
 #endif
 
 static WebServer gServer(80);
@@ -34,21 +37,50 @@ static uint32_t gFramePushOk = 0;
 static uint32_t gFramePushFail = 0;
 static unsigned long gBootMs = 0;
 static unsigned long gLastFrameMs = 0;
-static unsigned long gLastMotionCaptureMs = 0;
 static unsigned long gPushBackoffUntilMs = 0;
 static uint32_t gPushBackoffMs = 0;
-static uint32_t gPushBackoffMaxMs = FOLIO_PUSH_BACKOFF_MAX_MS;
 
 static int16_t gPcmBuf[FOLIO_CHUNK_SAMPLES];
 
-static void cors() {
-  gServer.sendHeader("Access-Control-Allow-Origin", "*");
-}
+static void cors() { gServer.sendHeader("Access-Control-Allow-Origin", "*"); }
 
 static void logReq(const char *path) {
   Serial.printf("[http] %s %s | client=%s | uptime=%lums\n",
                 gServer.method() == HTTP_GET ? "GET" : "POST", path,
                 gServer.client().remoteIP().toString().c_str(), millis() - gBootMs);
+}
+
+static bool wifiConnect(uint32_t timeoutMs) {
+  if (WiFi.status() == WL_CONNECTED) {
+    return true;
+  }
+  Serial.printf("[wifi] connecting to %s…\n", WIFI_SSID);
+  WiFi.disconnect(true);
+  delay(100);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  const unsigned long deadline = millis() + timeoutMs;
+  while (millis() < deadline && WiFi.status() != WL_CONNECTED) {
+    delay(200);
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.printf("[wifi] up ip=%s rssi=%d\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
+    return true;
+  }
+  Serial.println("[wifi] connect failed");
+  return false;
+}
+
+static void wifiMaintain() {
+  static unsigned long lastTry = 0;
+  if (WiFi.status() == WL_CONNECTED) {
+    return;
+  }
+  const unsigned long now = millis();
+  if (now - lastTry < FOLIO_WIFI_RETRY_MS) {
+    return;
+  }
+  lastTry = now;
+  wifiConnect(FOLIO_WIFI_RETRY_MS);
 }
 
 static bool cameraBegin() {
@@ -91,7 +123,7 @@ static camera_fb_t *captureFrame() {
 static bool canPushNow() { return millis() >= gPushBackoffUntilMs; }
 
 static void onPushFail() {
-  gPushBackoffMs = min<uint32_t>(gPushBackoffMs + 2000UL, gPushBackoffMaxMs);
+  gPushBackoffMs = min<uint32_t>(gPushBackoffMs + 2000UL, (uint32_t)FOLIO_PUSH_BACKOFF_MAX_MS);
   gPushBackoffUntilMs = millis() + gPushBackoffMs;
 }
 
@@ -106,7 +138,7 @@ static bool brainPost(const char *path, const uint8_t *body, size_t len,
     return false;
   }
   HTTPClient http;
-  String url = String(nodeBrainUrl()) + path;
+  String url = String(FOLIO_BRAIN_URL) + path;
   if (!http.begin(url)) {
     Serial.printf("[push] HTTP begin failed %s\n", url.c_str());
     return false;
@@ -114,7 +146,6 @@ static bool brainPost(const char *path, const uint8_t *body, size_t len,
   http.setTimeout(15000);
   http.addHeader("Content-Type", contentType);
   http.addHeader("X-Folio-Device-Id", FOLIO_DEVICE_ID);
-  http.addHeader("X-Folio-Config-Version", nodeConfigVersionHeader());
   if (extraHeaders) {
     http.addHeader("X-Folio-Meta", extraHeaders);
   }
@@ -143,7 +174,6 @@ static bool trySendAudio(uint32_t seq, const int16_t *pcm, const char *meta) {
   }
   onPushFail();
   gAudioPushFail++;
-  Serial.printf("[push] audio seq=%lu fail backoff=%lums\n", seq, gPushBackoffMs);
   return false;
 }
 
@@ -160,7 +190,6 @@ static bool trySendFrame(uint32_t id, const uint8_t *jpeg, size_t len, const cha
   }
   onPushFail();
   gFramePushFail++;
-  Serial.printf("[push] frame id=%lu fail backoff=%lums\n", id, gPushBackoffMs);
   return false;
 }
 
@@ -175,7 +204,6 @@ static uint16_t pcmPeak(const int16_t *pcm, size_t count) {
   return peak;
 }
 
-/** RMS energy 0..1 — same formula as brain whisper.mjs pcmEnergy. */
 static float pcmEnergy(const int16_t *pcm, size_t count) {
   if (count == 0) {
     return 0.f;
@@ -188,7 +216,8 @@ static float pcmEnergy(const int16_t *pcm, size_t count) {
   return static_cast<float>(sqrt(sum / count));
 }
 
-static bool audioWorthCapture(const int16_t *pcm, size_t count, uint16_t *outPeak, float *outEnergy) {
+static bool audioWorthCapture(const int16_t *pcm, size_t count, uint16_t *outPeak,
+                              float *outEnergy) {
   const uint16_t peak = pcmPeak(pcm, count);
   const float energy = pcmEnergy(pcm, count);
   if (outPeak) {
@@ -200,106 +229,35 @@ static bool audioWorthCapture(const int16_t *pcm, size_t count, uint16_t *outPea
   if (peak == 0 || peak >= 30000) {
     return false;
   }
-  const NodeRuntimeConfig &cfg = nodeConfig();
-  return energy >= cfg.speechEnergyThreshold || energy >= cfg.soundMinEnergy;
+  return energy >= FOLIO_SPEECH_ENERGY;
 }
 
 static void captureAudioChunk() {
-  if (!gAudioOk) {
-    return;
-  }
-  if (!audioReadChunk(gPcmBuf, FOLIO_CHUNK_SAMPLES)) {
-    Serial.println("[capture] audio read failed");
+  if (!gAudioOk || !audioReadChunk(gPcmBuf, FOLIO_CHUNK_SAMPLES)) {
     return;
   }
 
   const uint32_t seq = gAudioSeq++;
   uint16_t peak = 0;
   float energy = 0.f;
-  const bool worthCapture = audioWorthCapture(gPcmBuf, FOLIO_CHUNK_SAMPLES, &peak, &energy);
-  if (seq < 3 || seq % 30 == 0) {
-    Serial.printf("[capture] audio seq=%lu peak=%u energy=%.4f\n", seq, peak, energy);
-    if (peak == 0) {
-      Serial.println("[capture] silence — tie L/R to mic GND");
-    } else if (peak >= 32000) {
-      Serial.println("[capture] saturated — check L/R+GND and WS/SCK/DOUT");
+  if (!audioWorthCapture(gPcmBuf, FOLIO_CHUNK_SAMPLES, &peak, &energy)) {
+    if (seq < 5 || seq % 30 == 0) {
+      Serial.printf("[capture] audio quiet peak=%u energy=%.4f\n", peak, energy);
     }
+    return;
+  }
+
+  if (!gWifiOk) {
+    return;
   }
 
   char meta[128];
   snprintf(meta, sizeof(meta), "seq=%lu;ts_ms=%lu;rate=%d;energy=%.4f", seq, millis(),
            FOLIO_SAMPLE_RATE, energy);
-
-  static uint8_t lowPeakStreak = 0;
-
-  if (!worthCapture) {
-    if (seq < 5 || seq % 30 == 0) {
-      Serial.println("[capture] quiet — below energy threshold (not pushed)");
-    }
-    if (!audioDoutStuck() && peak < 50) {
-      if (++lowPeakStreak >= 30) {
-        lowPeakStreak = 0;
-        gAudioOk = audioRecover();
-      }
-    } else {
-      lowPeakStreak = 0;
-    }
-    return;
-  }
-
-  lowPeakStreak = 0;
-
-  if (!gWifiOk) {
-    static unsigned long lastOfflineLog = 0;
-    if (millis() - lastOfflineLog > 30000) {
-      Serial.println("[capture] audio skipped — wifi offline");
-      lastOfflineLog = millis();
-    }
-    return;
-  }
-
   trySendAudio(seq, gPcmBuf, meta);
 }
 
-static bool persistFrame(camera_fb_t *fb, const char *reason) {
-  if (!fb) {
-    return false;
-  }
-
-  bool motionChanged = false;
-  const float motion = motionScoreJpeg(fb->buf, fb->len, &motionChanged);
-  const unsigned long now = millis();
-
-  if (strcmp(reason, "interval") == 0 && !motionChanged &&
-      now - gLastMotionCaptureMs < 120000UL) {
-    return false;
-  }
-
-  if (motionChanged) {
-    gLastMotionCaptureMs = now;
-    Serial.printf("[capture] motion=%.2f reason=%s\n", motion, reason);
-  }
-
-  const uint32_t id = gFrameSeq++;
-  char meta[128];
-  snprintf(meta, sizeof(meta), "reason=%s;ts_ms=%lu;motion=%.3f", reason, millis(), motion);
-
-  bool ok = false;
-  if (gWifiOk) {
-    ok = trySendFrame(id, fb->buf, fb->len, meta);
-  } else {
-    static unsigned long lastOfflineLog = 0;
-    if (millis() - lastOfflineLog > 30000) {
-      Serial.println("[capture] frame skipped — wifi offline");
-      lastOfflineLog = millis();
-    }
-  }
-
-  gLastFrameMs = millis();
-  return ok;
-}
-
-static void captureFrameChunk(const char *reason) {
+static void captureFrameChunk() {
   if (!gCamOk) {
     return;
   }
@@ -308,26 +266,17 @@ static void captureFrameChunk(const char *reason) {
     Serial.println("[capture] frame failed");
     return;
   }
-  persistFrame(fb, reason);
+
+  const uint32_t id = gFrameSeq++;
+  char meta[96];
+  snprintf(meta, sizeof(meta), "reason=interval;ts_ms=%lu", millis());
+
+  if (gWifiOk) {
+    trySendFrame(id, fb->buf, fb->len, meta);
+  }
+
+  gLastFrameMs = millis();
   esp_camera_fb_return(fb);
-}
-
-static void pushEvent(const char *kind, const char *payload) {
-  if (!gWifiOk || !canPushNow()) {
-    return;
-  }
-  char body[256];
-  snprintf(body, sizeof(body), "{\"kind\":\"%s\",\"payload\":%s,\"ts_ms\":%lu}", kind,
-           payload ? payload : "{}", millis());
-  if (!brainPost("/ingest/event", reinterpret_cast<const uint8_t *>(body), strlen(body),
-                 "application/json", nullptr)) {
-    Serial.printf("[push] event %s failed\n", kind);
-  }
-}
-
-static void ensureWifi() {
-  folioWifiMaintain(nodeConfig().wifiRetryMs);
-  gWifiOk = folioWifiConnected();
 }
 
 static void handleCapture() {
@@ -351,27 +300,17 @@ static void handleHealth() {
   j += WiFi.localIP().toString();
   j += "\",\"wifi\":";
   j += gWifiOk ? "true" : "false";
-  j += ",\"wifi_ssid\":\"";
-  j += folioWifiSsid();
-  j += "\",\"brain\":\"";
-  j += nodeBrainUrl();
+  j += ",\"brain\":\"";
+  j += FOLIO_BRAIN_URL;
   j += "\",\"camera\":";
   j += gCamOk ? "true" : "false";
   j += ",\"audio\":";
   j += gAudioOk ? "true" : "false";
-  j += ",\"audio_seq\":";
-  j += gAudioSeq;
   j += ",\"audio_push_ok\":";
   j += gAudioPushOk;
-  j += ",\"audio_push_fail\":";
-  j += gAudioPushFail;
   j += ",\"frame_push_ok\":";
   j += gFramePushOk;
-  j += ",\"frame_push_fail\":";
-  j += gFramePushFail;
-  j += ",\"config_version\":\"";
-  j += nodeConfigVersionHeader();
-  j += "\",\"heap\":";
+  j += ",\"heap\":";
   j += ESP.getFreeHeap();
   j += "}";
   gServer.send(200, "application/json", j);
@@ -381,82 +320,49 @@ void setup() {
   Serial.begin(115200);
   delay(300);
   gBootMs = millis();
-  Serial.println("\n[boot] ========== folio-node ==========");
-  Serial.printf("[boot] device=%s brain=%s\n", FOLIO_DEVICE_ID, nodeBrainUrl());
-  Serial.printf("[boot] heap=%u psram=%u\n", ESP.getFreeHeap(), ESP.getFreePsram());
+  Serial.println("\n[boot] folio-node (basic)");
+  Serial.printf("[boot] device=%s brain=%s\n", FOLIO_DEVICE_ID, FOLIO_BRAIN_URL);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
 
   gCamOk = cameraBegin();
   gAudioOk = audioBegin();
-  Serial.printf("[boot] pipeline: wifi -> push brain\n");
   Serial.printf("[boot] audio %s | camera %s\n", gAudioOk ? "OK" : "FAIL",
                 gCamOk ? "OK" : "FAIL");
-  Serial.printf("[boot] frame every %ums jpegQ=%d size_id=%d\n", FOLIO_FRAME_INTERVAL_MS,
-                FOLIO_JPEG_QUALITY, FOLIO_FRAME_SIZE_ID);
-  Serial.printf("[boot] audio %dHz chunk %dms\n", FOLIO_SAMPLE_RATE, FOLIO_CHUNK_MS);
 
-  folioWifiBegin();
-  gWifiOk = folioWifiConnected();
-  if (gWifiOk) {
-    pushEvent("boot", "{\"ok\":true}");
-  } else {
-    Serial.println("[boot] wifi offline — capture resumes when connected");
+  gWifiOk = wifiConnect(15000);
+  if (!gWifiOk) {
+    Serial.println("[boot] wifi offline — will retry");
   }
-
-  nodeConfigBegin();
-  gPushBackoffMaxMs = nodeConfig().pushBackoffMaxMs;
 
   gServer.on("/capture", HTTP_GET, handleCapture);
   gServer.on("/health", HTTP_GET, handleHealth);
   gServer.begin();
 
   gLastFrameMs = millis();
-  Serial.println("[boot] capture -> wifi push brain");
-  Serial.println("[boot] =====================================");
 }
 
 void loop() {
   gServer.handleClient();
-  ensureWifi();
-  nodeConfigPoll();
-
-  const NodeRuntimeConfig &cfg = nodeConfig();
-  gPushBackoffMaxMs = cfg.pushBackoffMaxMs;
+  wifiMaintain();
+  gWifiOk = WiFi.status() == WL_CONNECTED;
 
   const unsigned long now = millis();
 
   static unsigned long lastHeartbeat = 0;
-  if (now - lastHeartbeat >= cfg.statusIntervalMs) {
+  if (now - lastHeartbeat >= FOLIO_STATUS_INTERVAL_MS) {
     lastHeartbeat = now;
-    Serial.printf(
-        "[status] up=%lums wifi=%s cfg=%s frame=%lums push ok=%lu/%lu fail=%lu/%lu heap=%u\n",
-        now - gBootMs, gWifiOk ? "up" : "down", cfg.version, cfg.frameIntervalMs,
-        gAudioPushOk, gFramePushOk, gAudioPushFail, gFramePushFail, ESP.getFreeHeap());
+    Serial.printf("[status] wifi=%s audio_ok=%lu frame_ok=%lu heap=%u\n", gWifiOk ? "up" : "down",
+                  gAudioPushOk, gFramePushOk, ESP.getFreeHeap());
   }
 
   if (gAudioOk) {
     captureAudioChunk();
   }
 
-  if (gCamOk) {
-    const unsigned long frameEvery = cfg.frameIntervalMs;
-    const unsigned long motionEvery = cfg.motionCaptureMinMs;
-    if (now - gLastFrameMs >= frameEvery) {
-      captureFrameChunk("interval");
-    } else if (now - gLastFrameMs >= motionEvery) {
-      static unsigned long gLastMotionSampleMs = 0;
-      if (now - gLastMotionSampleMs >= 2500UL) {
-        gLastMotionSampleMs = now;
-        camera_fb_t *fb = captureFrame();
-        if (fb) {
-          bool motionChanged = false;
-          motionScoreJpeg(fb->buf, fb->len, &motionChanged);
-          if (motionChanged) {
-            persistFrame(fb, "motion");
-          }
-          esp_camera_fb_return(fb);
-        }
-      }
-    }
+  if (gCamOk && now - gLastFrameMs >= FOLIO_FRAME_INTERVAL_MS) {
+    captureFrameChunk();
   }
 
   esp_task_wdt_reset();
