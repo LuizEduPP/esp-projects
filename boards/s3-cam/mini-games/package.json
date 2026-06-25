@@ -1,12 +1,13 @@
 {
-  "name": "esp32-cyd-arcade",
+  "name": "s3-cam-mini-games",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
+    "fw:setup": "bash ../../../scripts/fw-setup-linux.sh",
     "fw:build": "cd firmware && bash ../../../scripts/pio.sh run",
-    "fw:erase": "cd firmware && bash ../../../scripts/pio.sh run -t erase",
+    "fw:upload": "cd firmware && bash ../../../scripts/pio.sh run -t upload",
     "fw:flash": "cd firmware && bash ../../../scripts/pio.sh run && bash ../../../scripts/pio.sh run -t upload",
-    "fw:install": "cd firmware && bash ../../../scripts/pio.sh run -t erase && bash ../../../scripts/pio.sh run -t upload",
     "fw:monitor": "cd firmware && bash ../../../scripts/pio.sh device monitor -b 115200 --filter direct",
-    "preview:circus": "python3 -m http.server 8765"
+    "fw:test": "cd firmware && bash ../../../scripts/pio.sh run -t upload && bash ../../../scripts/pio.sh device monitor -b 115200"
   }
 }

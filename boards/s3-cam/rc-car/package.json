@@ -1,5 +1,6 @@
 {
-  "name": "goouuu-s3-cam-rc-car",
+  "name": "s3-cam-rc-car",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "fw:setup": "bash ../../../scripts/fw-setup-linux.sh",

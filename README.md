@@ -1,109 +1,56 @@
 # esp-projects
 
-Public firmware monorepo for **ESP32** boards: [github.com/LuizEduPP/esp-projects](https://github.com/LuizEduPP/esp-projects)
-
-Each board lives under `boards/<board-id>/`; each app is a self-contained [PlatformIO](https://platformio.org/) project with Yarn scripts for build and flash.
+Firmware monorepo for ESP32 boards — [github.com/LuizEduPP/esp-projects](https://github.com/LuizEduPP/esp-projects)
 
 ```bash
-git clone https://github.com/LuizEduPP/esp-projects.git
-cd esp-projects
+git clone https://github.com/LuizEduPP/esp-projects.git && cd esp-projects
+yarn install && yarn setup          # Linux: udev, once
+yarn mini-games:flash               # pick any project below
 ```
 
 ## Projects
 
-| Board | Project | Description | Docs |
-|-------|---------|-------------|------|
-| GOOUUU ESP32-S3-CAM | [**mini-games**](boards/goouuu-esp32-s3-cam/mini-games/) | 12 arcade games on a 128×64 OLED + 5 buttons | [README](boards/goouuu-esp32-s3-cam/mini-games/README.md) |
-| GOOUUU ESP32-S3-CAM | [**rc-car**](boards/goouuu-esp32-s3-cam/rc-car/) | 4WD AI follower — camera + LM Studio | [README](boards/goouuu-esp32-s3-cam/rc-car/README.md) |
-| ESP32-2432S028 (CYD) | [**cyd-gb**](boards/esp32-cyd/cyd-gb/) | Game Boy / GBC emulator — touch controls, SD ROMs, saves ([upstream](https://github.com/artanergin44-collab/cyd-gb)) | [README](boards/esp32-cyd/cyd-gb/README.md) |
-| ESP32-2432S028 (CYD) | [**cyd-arcade**](boards/esp32-cyd/cyd-arcade/) | Casual games (Snake, Flappy, Arkanoid, Tetris) — no SD required | [README](boards/esp32-cyd/cyd-arcade/README.md) |
+| Board | Folder | App | Flash |
+|-------|--------|-----|-------|
+| **S3-CAM** | [`boards/s3-cam/`](boards/s3-cam/) | [mini-games](boards/s3-cam/mini-games/) — OLED arcade | `yarn mini-games:flash` |
+| | | [rc-car](boards/s3-cam/rc-car/) — AI follower + LM Studio | `yarn rc-car:flash` |
+| | | [folio](boards/s3-cam/folio/) — mic + camera push | `yarn folio:flash` |
+| **CYD** | [`boards/cyd/`](boards/cyd/) | [gb](boards/cyd/gb/) — Game Boy emulator | `yarn gb:flash` |
+| | | [arcade](boards/cyd/arcade/) — 12 touch games | `yarn arcade:flash` |
 
-Board index: [boards/](boards/) · [goouuu-esp32-s3-cam](boards/goouuu-esp32-s3-cam/) · [esp32-cyd](boards/esp32-cyd/) ([CYD docs](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display))
+Each app = `README.md` + `package.json` + `firmware/` (+ optional `scripts/`).
 
-## Requirements
-
-- [PlatformIO](https://platformio.org/) — IDE extension or CLI (`pio` on `PATH`)
-- [Yarn](https://yarnpkg.com/) 1.x
-- Linux: `dialout` group + udev rules (see setup below)
-- USB cable with data lines (native CDC on supported boards)
-
-## Quick start
-
-From the repository root:
-
-```bash
-# Linux only, once — serial port permissions (all boards)
-yarn setup
-
-# mini-games: build, flash, and open serial monitor
-yarn mini-games:build
-yarn mini-games:flash
-yarn mini-games:monitor
-```
-
-CYD Game Boy emulator:
-
-```bash
-yarn cyd-gb:build
-yarn cyd-gb:flash
-yarn cyd-gb:monitor
-```
-
-Prepare a **FAT32** SD card with `roms/gb/` and `roms/gbc/` — see [cyd-gb/README.md](boards/esp32-cyd/cyd-gb/README.md).
-
-Or work inside a project directory:
-
-```bash
-cd boards/goouuu-esp32-s3-cam/mini-games
-yarn fw:flash
-yarn fw:monitor
-```
-
-## Root scripts
-
-Shortcuts that delegate to workspace `package.json` files:
-
-| Script | Action |
-|--------|--------|
-| `yarn setup` | Install udev rules (Linux, all boards) |
-| `yarn mini-games:*` | Build / flash / monitor mini-games |
-| `yarn rc-car:*` | Build / flash / monitor rc-car + AI tools |
-| `yarn cyd-gb:*` | Build / flash / install / monitor cyd-gb |
-| `yarn cyd-arcade:*` | Build / flash / install / monitor cyd-arcade |
-
-## Repository layout
+## Layout
 
 ```
 esp-projects/
-├── README.md
-├── package.json              # Yarn workspaces + root shortcuts
-├── scripts/                  # shared tooling (pio, udev setup)
-├── docs/                     # hardware notes, misc docs
+├── README.md           ← you are here
+├── package.json        ← yarn shortcuts
+├── scripts/            ← pio.sh, udev setup (shared)
+├── docs/               ← guide + hardware list
 └── boards/
-    └── <board-id>/           # e.g. goouuu-esp32-s3-cam, esp32-cyd
-        ├── README.md         # board overview
-        └── <project-name>/   # e.g. mini-games, cyd-gb
-            ├── README.md     # project docs
-            ├── package.json  # fw:* scripts
-            ├── scripts/      # project-specific tooling
-            └── firmware/     # PlatformIO project
+    ├── s3-cam/         ← GOOUUU ESP32-S3-CAM
+    │   ├── mini-games/
+    │   ├── rc-car/
+    │   └── folio/
+    └── cyd/            ← ESP32-2432S028R (Cheap Yellow Display)
+        ├── gb/
+        └── arcade/
 ```
 
-## Adding a project
+Details: [docs/guide.md](docs/guide.md) · Parts: [docs/hardware-inventory.md](docs/hardware-inventory.md)
 
-1. Create `boards/<board-id>/<project-name>/` with `firmware/`, `scripts/` (if needed), and `package.json` (copy from an existing project).
-2. Register the workspace path in root `package.json` if the board folder pattern does not match `boards/<board-id>/*`.
-3. Add a row to the **Projects** table in this README.
-4. Optionally add a root shortcut in `package.json`.
+## All commands
 
-## Contributing
+| Prefix | Build | Flash | Monitor |
+|--------|-------|-------|---------|
+| `mini-games:` | ✓ | ✓ | ✓ |
+| `rc-car:` | ✓ | ✓ | ✓ (+ `ai`, `diag`) |
+| `folio:` | ✓ | ✓ | ✓ |
+| `gb:` | ✓ | ✓ | ✓ (+ `install`, `icons`) |
+| `arcade:` | ✓ | ✓ | ✓ (+ `install`, `preview`) |
 
-Issues and pull requests are welcome on [GitHub](https://github.com/LuizEduPP/esp-projects/issues).
-
-## Credits
-
-- **CYD hardware** — witnessmenow/ESP32-Cheap-Yellow-Display (MIT). Pin map, setup, and community docs for the Cheap Yellow Display.
-- **cyd-gb** — derived from artanergin44-collab/cyd-gb (MIT). Emulator core: Peanut-GB.
+Inside any app folder: `yarn fw:flash` · `yarn fw:monitor`
 
 ## License
 

@@ -104,16 +104,16 @@ Saved when confirming Settings or completing calibration.
 From the monorepo root:
 
 ```bash
-yarn cyd-gb:build
-yarn cyd-gb:flash      # build + upload
-yarn cyd-gb:monitor    # serial @ 115200
-yarn cyd-gb:icons      # regenerate icons from SVG
+yarn gb:build
+yarn gb:flash      # build + upload
+yarn gb:monitor    # serial @ 115200
+yarn gb:icons      # regenerate icons from SVG
 ```
 
 First install (erases flash and recreates partitions):
 
 ```bash
-yarn cyd-gb:install
+yarn gb:install
 ```
 
 Inside this directory:
@@ -132,7 +132,7 @@ Adjust the serial port in `firmware/platformio.ini` (`upload_port` / `monitor_po
 Icons are sourced from `mock/ui-icons-sheet.svg`. Requires Python 3 with `cairosvg` and `Pillow`:
 
 ```bash
-yarn cyd-gb:icons
+yarn gb:icons
 ```
 
 Outputs PNGs to `firmware/assets/icons/` and the alpha mask to `firmware/include/ui_icon_data.h`.
@@ -143,7 +143,7 @@ Outputs PNGs to `firmware/assets/icons/` and the alpha mask to `firmware/include
 |---------|-----|
 | Black screen | Switch `-DILI9341_2_DRIVER` to `-DILI9341_DRIVER` in `firmware/platformio.ini` |
 | Imprecise touch | Pause menu → **Calibrate** |
-| SPIFFS mount failed | Run `yarn cyd-gb:install` (erase + flash) |
+| SPIFFS mount failed | Run `yarn gb:install` (erase + flash) |
 | SD Card Error | Insert FAT32 card; reset |
 | No audio | Check onboard jumper/speaker; GPIO 26 must not conflict with touch CLK (25) |
 | Cover not shown | 24-bit BMP; filename matches ROM; correct `covers/` folder (gb vs gbc) |
@@ -151,31 +151,12 @@ Outputs PNGs to `firmware/assets/icons/` and the alpha mask to `firmware/include
 ## Project layout
 
 ```
-cyd-gb/
+gb/
 ├── README.md
-├── package.json              # fw:* and icons scripts
-├── mock/
-│   ├── ui-wireframe.svg      # layout reference
-│   └── ui-icons-sheet.svg    # icon sprites
-├── scripts/
-│   ├── pio.sh                # PlatformIO wrapper
-│   └── gen_ui_icons.py       # SVG → embedded bitmap
+├── package.json
+├── mock/                 ui-wireframe.svg, ui-icons-sheet.svg
+├── scripts/gen_ui_icons.py
 └── firmware/
-    ├── platformio.ini
-    ├── partitions.csv        # 2 MB app + ~2 MB SPIFFS
-    ├── boards/
-    ├── assets/icons/         # generated PNGs
-    ├── include/              # headers + peanut_gb.h + ui_icon_data.h
-    └── src/
-        ├── main.cpp
-        ├── emulator_bridge.cpp
-        ├── display.cpp
-        ├── touch_input.cpp
-        ├── sd_manager.cpp
-        ├── ui_launcher.cpp
-        ├── ui_theme.cpp
-        ├── ui_icons.cpp
-        └── ...
 ```
 
 ## Limitations
