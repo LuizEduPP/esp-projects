@@ -2,110 +2,110 @@
 
 | Qty | Item |
 |-----|------|
-| 1 | Placa ATmega328P (compatível Arduino) |
-| 1 | Cabo USB |
-| 30 | Pinos header |
-| 1 | Protoboard |
-| 80 | Cabos jumper |
-| 15 | LEDs várias cores |
-| 210 | Resistores |
-| 4 | Botões push-button |
-| 4 | Capas para botões coloridas |
-| 1 | LDR (fotorresistor) |
-| 1 | LED RGB 4 terminais |
+| 1 | ATmega328P board (Arduino-compatible) |
+| 1 | USB cable |
+| 30 | Header pins |
+| 1 | Breadboard |
+| 80 | Jumper wires |
+| 15 | LEDs assorted colors |
+| 210 | Resistors |
+| 4 | Push-buttons |
+| 4 | Colored button caps |
+| 1 | LDR (photoresistor) |
+| 1 | RGB LED 4-pin |
 | 1 | TCRT5000 |
-| 1 | Diodo 1N4007 |
+| 1 | 1N4007 diode |
 | 1 | VS1838B |
-| 1 | Termistor NTC 10 kΩ |
-| 1 | Capacitor eletrolítico |
-| 2 | CI microcontroladora |
-| 1 | Capacitor cerâmico |
-| 1 | Potenciômetro |
-| 1 | Conector borne KRE 2 vias |
+| 1 | NTC 10 kΩ thermistor |
+| 1 | Electrolytic capacitor |
+| 2 | Microcontroller ICs |
+| 1 | Ceramic capacitor |
+| 1 | Potentiometer |
+| 1 | KRE 2-pin terminal block |
 | 1 | Buzzer |
-| 1 | Cabo 9 V |
-| 1 | Display 7 segmentos |
-| 1 | KY-001 Sensor de temperatura (DS18B20) |
-| 1 | KY-002 Interruptor de vibração |
-| 1 | KY-003 Sensor magnético (Hall) |
-| 1 | KY-004 Interruptor de chave |
-| 1 | KY-005 Emissor infravermelho |
-| 1 | KY-006 Buzzer passivo |
+| 1 | 9 V cable |
+| 1 | 7-segment display |
+| 1 | KY-001 Temperature sensor (DS18B20) |
+| 1 | KY-002 Vibration switch |
+| 1 | KY-003 Magnetic sensor (Hall) |
+| 1 | KY-004 Key switch |
+| 1 | KY-005 Infrared emitter |
+| 1 | KY-006 Passive buzzer |
 | 1 | KY-008 Laser |
-| 1 | KY-009 LED SMD RGB |
-| 1 | KY-010 Óptico quebrado (feixe) |
-| 1 | KY-011 LED 2 cores |
-| 1 | KY-012 Buzzer ativo |
-| 1 | KY-013 Sensor de temperatura digital |
-| 1 | KY-015 DHT11 temperatura e umidade |
-| 1 | KY-016 LED RGB 5 mm |
-| 1 | KY-017 Óptico aberto mercúrio (inclinação) |
-| 1 | KY-018 Fotorresistência (LDR) |
-| 1 | KY-019 Relé 5 V |
-| 1 | KY-020 Chave de inclinação |
-| 1 | KY-021 Reed mini |
-| 1 | KY-022 Receptor IR (VS1838) |
-| 1 | KY-023 Joystick X/Y + botão |
-| 1 | KY-024 Hall linear |
+| 1 | KY-009 RGB SMD LED |
+| 1 | KY-010 Broken-beam optical |
+| 1 | KY-011 Dual-color LED |
+| 1 | KY-012 Active buzzer |
+| 1 | KY-013 Digital temperature sensor |
+| 1 | KY-015 DHT11 temperature and humidity |
+| 1 | KY-016 RGB LED 5 mm |
+| 1 | KY-017 Mercury tilt switch |
+| 1 | KY-018 Photoresistor (LDR) |
+| 1 | KY-019 5 V relay |
+| 1 | KY-020 Tilt switch |
+| 1 | KY-021 Mini reed |
+| 1 | KY-022 IR receiver (VS1838) |
+| 1 | KY-023 Joystick X/Y + button |
+| 1 | KY-024 Linear Hall |
 | 1 | KY-025 Reed switch |
-| 1 | KY-026 Sensor de chama |
-| 1 | KY-027 Copo de luz mágica (inclinação) |
-| 1 | KY-028 Sensor de temperatura digital |
-| 1 | KY-029 LED Yin Yi 2 cores 3 mm |
-| 1 | KY-031 Sensor de impacto |
-| 1 | KY-032 Sensor de obstáculo (ultrassom) |
-| 1 | KY-033 Sensor de linha |
-| 1 | KY-034 LED flash automático RGB |
-| 1 | KY-035 Hall digital |
-| 1 | KY-036 Toque capacitivo |
-| 1 | KY-037 Microfone sensível |
-| 1 | KY-038 Sensor de som |
-| 1 | KY-039 Pulsação (BPM) |
-| 1 | KY-040 Encoder rotativo + botão |
-| 1 | ESP32-S3-CAM + OV2640 + conversor USB (GOOUUU) |
-| 1 | ESP32-S3-CAM + conversor USB (GOOUUU) — sem câmera |
-| 1 | ESP32-2432S028R (CYD) + cabo USB |
+| 1 | KY-026 Flame sensor |
+| 1 | KY-027 Magic light cup (tilt) |
+| 1 | KY-028 Digital temperature sensor |
+| 1 | KY-029 Dual-color LED 3 mm |
+| 1 | KY-031 Knock sensor |
+| 1 | KY-032 Obstacle sensor (ultrasonic) |
+| 1 | KY-033 Line sensor |
+| 1 | KY-034 Auto-flash RGB LED |
+| 1 | KY-035 Digital Hall |
+| 1 | KY-036 Capacitive touch |
+| 1 | KY-037 Sensitive microphone |
+| 1 | KY-038 Sound sensor |
+| 1 | KY-039 Pulse (BPM) |
+| 1 | KY-040 Rotary encoder + button |
+| 1 | ESP32-S3-CAM + OV2640 + USB converter (GOOUUU) |
+| 1 | ESP32-S3-CAM + USB converter (GOOUUU) — no camera |
+| 1 | ESP32-2432S028R CYD2USB + USB cable |
 | 1 | OLED 0.96″ SSD1306 I2C |
 | 1 | TF28QS006A |
-| 1 | Breadboard 830 pontos |
+| 1 | Breadboard 830 points |
 | 1 | Breadboard |
-| 5 | Breadboard 400 pontos |
-| 1 | Módulo fonte para protoboard |
-| 5 | LED difuso azul |
-| 5 | LED difuso vermelho |
-| 5 | LED difuso verde |
-| 5 | LED difuso amarelo |
-| 1 | LED RGB 5 mm |
-| 1 | LED RGB SMD |
-| 1 | LED RG 5 mm |
-| 1 | LED RG 3 mm |
-| 1 | LED RGB automático 5 mm |
-| 1 | LED IR 5 mm |
+| 5 | Breadboard 400 points |
+| 1 | Breadboard power module |
+| 5 | Diffuse blue LED |
+| 5 | Diffuse red LED |
+| 5 | Diffuse green LED |
+| 5 | Diffuse yellow LED |
+| 1 | RGB LED 5 mm |
+| 1 | RGB SMD LED |
+| 1 | RG LED 5 mm |
+| 1 | RG LED 3 mm |
+| 1 | Auto RGB LED 5 mm |
+| 1 | IR LED 5 mm |
 | 5 | Push-button |
-| 1 | Botão |
-| 5 | Ponte H dupla L9110S |
-| 4 | Motor DC com redutor 1:48 |
-| 4 | Roda Ø 65 mm |
-| 4 | Disco encoder 20 linhas |
-| 2 | Chassi acrílico 25,6 × 14,9 cm |
-| 8 | Suporte de motor acrílico |
-| 4 | Espaçador L 30 mm |
-| 4 | Espaçador L 60 mm |
-| 1 | Amplificador I2S MAX98357 |
-| 1 | Alto-falante 4 Ω 3 W |
-| 1 | Microfone I2S INMP441 |
+| 1 | Button |
+| 5 | Dual H-bridge L9110S |
+| 4 | DC gear motor 1:48 |
+| 4 | Wheel Ø 65 mm |
+| 4 | Encoder disc 20 slots |
+| 2 | Acrylic chassis 25.6 × 14.9 cm |
+| 8 | Acrylic motor mount |
+| 4 | L spacer 30 mm |
+| 4 | L spacer 60 mm |
+| 1 | I2S amplifier MAX98357 |
+| 1 | Speaker 4 Ω 3 W |
+| 1 | I2S microphone INMP441 |
 | 1 | LM324N |
 | 1 | MOC3010 513Q |
-| 100 | Resistores 1/4 W |
-| 1 | Fonte 12 V 3 A dupla tensão |
-| 1 | Suporte 2× pilha AA |
-| 2 | Suporte 4× pilha AA |
-| 1 | Pilhas AA recarregáveis |
-| 5 | Cartão microSD FAT32 |
-| 100 | Parafuso M3 × 12 mm |
-| 8 | Parafuso M3 × 30 mm |
-| 8 | Parafuso M3 × 8 mm |
-| 16 | Porca M3 |
-| 1 | Caixa organizadora |
-| 1 | Multímetro digital |
-| 1 | Kit espaguete termo retrátil 560 pçs + isqueiro 127/220 V multicores |
+| 100 | Resistors 1/4 W |
+| 1 | Dual-voltage 12 V 3 A supply |
+| 1 | 2× AA battery holder |
+| 2 | 4× AA battery holder |
+| 1 | Rechargeable AA batteries |
+| 5 | microSD card FAT32 |
+| 100 | Screw M3 × 12 mm |
+| 8 | Screw M3 × 30 mm |
+| 8 | Screw M3 × 8 mm |
+| 16 | Nut M3 |
+| 1 | Organizer box |
+| 1 | Digital multimeter |
+| 1 | Heat-shrink tubing kit 560 pcs + 127/220 V multicolor lighter |
