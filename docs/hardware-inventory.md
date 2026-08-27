@@ -64,8 +64,14 @@
 | 1 | KY-040 Rotary encoder + button |
 | 1 | ESP32-S3-CAM + OV2640 + USB converter (GOOUUU) |
 | 1 | ESP32-S3-CAM + USB converter (GOOUUU) — no camera |
-| 1 | ESP32-2432S028R CYD2USB + USB cable |
-| 1 | OLED 0.96″ SSD1306 I2C |
+| 2 | ESP32-2432S028R CYD2USB + USB cable |
+| 1 | ESP8266 NodeMCU ESP-12E V3 USB-C |
+| 2 | OLED 0.96″ SSD1306 I2C |
+| 1 | LCD 16×2 1602 green backlight + I2C adapter |
+| 1 | TFT IPS 1.47″ 172×320 |
+| 1 | LED matrix 8×32 MAX7219 |
+| 6 | Mini protoboard 170 points |
+| 1 | JST 1.25 4-pin male–female 10 cm extension |
 | 1 | TF28QS006A |
 | 1 | Breadboard 830 points |
 | 1 | Breadboard |
