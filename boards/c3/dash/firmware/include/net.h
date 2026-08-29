@@ -4,6 +4,13 @@
 
 #include "dash_config.h"
 
+struct Forecast {
+  float minC = 0;
+  float maxC = 0;
+  int code = -1;
+  int weekday = 0;
+};
+
 struct Weather {
   bool valid = false;
   float tempC = 0;
@@ -15,6 +22,16 @@ struct Weather {
   int rainProb = 0;
   int code = -1;
   const char *desc = "--";
+
+  Forecast days[3];
+  int dayCount = 0;
+
+  float hourly[24] = {0};
+  int hourlyCount = 0;
+  int hourNow = 0;
+
+  char sunrise[6] = "--:--";
+  char sunset[6] = "--:--";
 };
 
 struct Place {

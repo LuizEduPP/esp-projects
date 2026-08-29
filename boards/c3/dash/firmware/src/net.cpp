@@ -249,8 +249,9 @@ bool netFetchWeather(Place &place, Weather &out) {
            "http://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
            "&current=temperature_2m,relative_humidity_2m,apparent_temperature,"
            "weather_code,wind_speed_10m"
-           "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max"
-           "&forecast_days=1&timezone=auto",
+           "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,"
+           "weather_code,sunrise,sunset"
+           "&hourly=temperature_2m&forecast_days=4&timezone=auto",
            place.lat, place.lon);
 
   HTTPClient http;
@@ -289,6 +290,35 @@ bool netFetchWeather(Place &place, Weather &out) {
     out.maxC = daily["temperature_2m_max"][0] | out.tempC;
     out.minC = daily["temperature_2m_min"][0] | out.tempC;
     out.rainProb = daily["precipitation_probability_max"][0] | 0;
+
+    const char *rise = daily["sunrise"][0] | "";
+    const char *set = daily["sunset"][0] | "";
+    if (strlen(rise) >= 16) snprintf(out.sunrise, sizeof(out.sunrise), "%.5s", rise + 11);
+    if (strlen(set) >= 16) snprintf(out.sunset, sizeof(out.sunset), "%.5s", set + 11);
+
+    struct tm today;
+    const bool haveDate = getLocalTime(&today, 20);
+    out.dayCount = 0;
+    for (int i = 1; i <= 3; ++i) {
+      JsonVariant hi = daily["temperature_2m_max"][i];
+      if (hi.isNull()) break;
+      Forecast &f = out.days[out.dayCount];
+      f.maxC = hi | 0.0f;
+      f.minC = daily["temperature_2m_min"][i] | 0.0f;
+      f.code = daily["weather_code"][i] | -1;
+      f.weekday = haveDate ? (today.tm_wday + i) % 7 : -1;
+      ++out.dayCount;
+    }
+  }
+
+  JsonArray hours = doc["hourly"]["temperature_2m"];
+  if (!hours.isNull()) {
+    struct tm now;
+    out.hourNow = getLocalTime(&now, 20) ? now.tm_hour : 0;
+    out.hourlyCount = 0;
+    for (int i = 0; i < 24 && i < (int)hours.size(); ++i) {
+      out.hourly[out.hourlyCount++] = hours[i] | 0.0f;
+    }
   }
 
   const long offset = doc["utc_offset_seconds"] | 0;

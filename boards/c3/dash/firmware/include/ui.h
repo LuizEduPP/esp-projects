@@ -2,20 +2,25 @@
 
 #include <Arduino.h>
 
+#include "display.h"
 #include "net.h"
 
-#define UI_W 128
-#define UI_H 128
 #define UI_PAGES 4
 
 void uiBegin();
-void uiPush();
-void uiIntro();
+void uiTask();
 
 void uiSplash(const char *line1, const char *line2);
-void uiProvisioning(bool armed);
-void uiClock(const struct tm &now, bool timeReady, int page);
-void uiWeather(const Place &p, const Weather &w, int page);
-void uiInsight(const char *text, bool pending, int page);
-void uiSystem(const Place &p, int page);
-void uiNight(const struct tm &now, bool timeReady);
+void uiShowProvisioning(bool armed);
+void uiShowDash();
+
+void uiTurnPage(int delta);
+int uiPage();
+
+void uiSetNight(bool on);
+bool uiIsNight();
+
+void uiUpdateClock(const struct tm &now, bool timeReady);
+void uiUpdateWeather(const Weather &w);
+void uiUpdateInsight(const char *text, bool pending);
+void uiUpdateSystem();

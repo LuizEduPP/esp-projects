@@ -1,417 +1,472 @@
 #include "ui.h"
 
-#include <Adafruit_GFX.h>
-#include <Adafruit_ST7735.h>
-#include <Fonts/FreeSans9pt7b.h>
-#include <Fonts/FreeSansBold9pt7b.h>
-#include <Fonts/FreeSansBold12pt7b.h>
-#include <Fonts/FreeSansBold24pt7b.h>
-#include <SPI.h>
 #include <WiFi.h>
+#include <lvgl.h>
 
-#include "pins.h"
+#define COL_BG 0x05070A
+#define COL_CARD_TOP 0x161D28
+#define COL_CARD_BOT 0x0D131B
+#define COL_BORDER 0x243040
+#define COL_FG 0xFFFFFF
+#define COL_DIM 0x8A97A8
+#define COL_ACCENT 0x22D3EE
+#define COL_HOT 0xFB923C
+#define COL_COLD 0x60A5FA
+#define COL_SUN 0xFACC15
+#define COL_CLOUD 0x94A3B8
+#define COL_RAIN 0x38BDF8
+#define COL_GREEN 0x34D399
+#define COL_NIGHT 0x161C24
 
-#define COL_BG 0x0000
-#define COL_CARD 0x10C4
-#define COL_EDGE 0x2166
-#define COL_FG 0xFFFF
-#define COL_DIM 0x9D36
-#define COL_FAINT 0x3209
-#define COL_NIGHT 0x2104
-#define COL_ACCENT 0x073F
-#define COL_HOT 0xFC40
-#define COL_COLD 0x2DBE
-#define COL_GREEN 0x072E
-#define COL_PINK 0xF8B2
-#define COL_SUN 0xFEA0
-#define COL_CLOUD 0xAD75
-#define COL_RAIN 0x2DBE
+static lv_obj_t *sDash = nullptr;
+static lv_obj_t *sTiles = nullptr;
+static lv_obj_t *sProv = nullptr;
+static lv_obj_t *sNightScr = nullptr;
+static lv_obj_t *sDots[UI_PAGES];
 
-#define UI_PAD 6
-#define UI_FOOTER_Y 122
+static lv_obj_t *sLblTime, *sBarSec, *sLblWeekday, *sLblDate;
+static lv_obj_t *sLblTemp, *sLblDesc, *sLblHum, *sLblMin, *sLblMax, *sBarRange;
+static lv_obj_t *sIconBox;
+static lv_obj_t *sLblInsight, *sLblInsightTime;
+static lv_obj_t *sLblSsid, *sLblRssi, *sLblIp, *sLblHeap, *sLblUp;
+static lv_obj_t *sLblProv, *sBarProv;
+static lv_obj_t *sLblNightTime;
 
-static Adafruit_ST7735 tft(&SPI, TFT_CS, TFT_DC, TFT_RST);
-static GFXcanvas16 canvas(UI_W, UI_H);
-static uint8_t sIntro = 0;
+static int sPage = 0;
+static bool sNight = false;
+static int sIconCode = -1;
 
-static const char *const kWeekdays[] = {"DOMINGO", "SEGUNDA", "TERCA",  "QUARTA",
-                                        "QUINTA",  "SEXTA",   "SABADO"};
+static const char *const kWeekdays[] = {"DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"};
 static const char *const kMonths[] = {"jan", "fev", "mar", "abr", "mai", "jun",
                                       "jul", "ago", "set", "out", "nov", "dez"};
 
-void uiBegin() {
-  SPI.begin(TFT_SCLK, -1, TFT_MOSI, TFT_CS);
-  tft.initR(INITR_144GREENTAB);
-  tft.setSPISpeed(20000000);
-  tft.setRotation(2);
-  tft.fillScreen(COL_BG);
-  canvas.setTextWrap(false);
+static lv_obj_t *makeCard(lv_obj_t *parent, int x, int y, int w, int h) {
+  lv_obj_t *c = lv_obj_create(parent);
+  lv_obj_set_pos(c, x, y);
+  lv_obj_set_size(c, w, h);
+  lv_obj_remove_flag(c, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_style_radius(c, 10, 0);
+  lv_obj_set_style_bg_color(c, lv_color_hex(COL_CARD_TOP), 0);
+  lv_obj_set_style_bg_grad_color(c, lv_color_hex(COL_CARD_BOT), 0);
+  lv_obj_set_style_bg_grad_dir(c, LV_GRAD_DIR_VER, 0);
+  lv_obj_set_style_border_width(c, 1, 0);
+  lv_obj_set_style_border_color(c, lv_color_hex(COL_BORDER), 0);
+  lv_obj_set_style_border_opa(c, LV_OPA_60, 0);
+  lv_obj_set_style_pad_all(c, 6, 0);
+  return c;
 }
 
-static void scaleBuffer(uint8_t num, uint8_t den) {
-  uint16_t *buf = canvas.getBuffer();
-  for (int i = 0; i < UI_W * UI_H; ++i) {
-    const uint16_t c = buf[i];
-    if (!c) continue;
-    uint16_t r = ((c >> 11) & 0x1F) * num / den;
-    uint16_t g = ((c >> 5) & 0x3F) * num / den;
-    uint16_t b = (c & 0x1F) * num / den;
-    if (r > 0x1F) r = 0x1F;
-    if (g > 0x3F) g = 0x3F;
-    if (b > 0x1F) b = 0x1F;
-    buf[i] = (r << 11) | (g << 5) | b;
-  }
+static lv_obj_t *makeLabel(lv_obj_t *parent, const lv_font_t *font, uint32_t color,
+                           const char *text) {
+  lv_obj_t *l = lv_label_create(parent);
+  lv_obj_set_style_text_font(l, font, 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(color), 0);
+  lv_label_set_text(l, text);
+  return l;
 }
 
-void uiPush() {
-  if (sIntro) {
-    sIntro = 0;
-    scaleBuffer(1, 5);
-    tft.drawRGBBitmap(0, 0, canvas.getBuffer(), UI_W, UI_H);
-    scaleBuffer(5, 2);
-    tft.drawRGBBitmap(0, 0, canvas.getBuffer(), UI_W, UI_H);
-    scaleBuffer(5, 2);
-  }
-  tft.drawRGBBitmap(0, 0, canvas.getBuffer(), UI_W, UI_H);
+static lv_obj_t *makeTag(lv_obj_t *parent, const char *text) {
+  lv_obj_t *l = makeLabel(parent, &lv_font_montserrat_12, COL_DIM, text);
+  lv_obj_set_style_text_opa(l, LV_OPA_70, 0);
+  lv_obj_set_style_text_letter_space(l, 1, 0);
+  lv_obj_align(l, LV_ALIGN_TOP_LEFT, 0, -2);
+  return l;
 }
 
-void uiIntro() { sIntro = 1; }
-
-static void micro(const char *s, int x, int y, uint16_t color) {
-  canvas.setFont(nullptr);
-  canvas.setTextSize(1);
-  canvas.setTextColor(color);
-  canvas.setCursor(x, y);
-  canvas.print(s);
+static void animSize(void *var, int32_t v) {
+  lv_obj_set_size((lv_obj_t *)var, v, v);
+  lv_obj_set_style_radius((lv_obj_t *)var, LV_RADIUS_CIRCLE, 0);
 }
 
-static void microRight(const char *s, int right, int y, uint16_t color) {
-  micro(s, right - (int)strlen(s) * 6, y, color);
+static void animate(lv_obj_t *obj, lv_anim_exec_xcb_t cb, int32_t from, int32_t to,
+                    uint32_t time, uint32_t delay, bool pingpong) {
+  lv_anim_t a;
+  lv_anim_init(&a);
+  lv_anim_set_var(&a, obj);
+  lv_anim_set_exec_cb(&a, cb);
+  lv_anim_set_values(&a, from, to);
+  lv_anim_set_duration(&a, time);
+  lv_anim_set_delay(&a, delay);
+  lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+  lv_anim_set_path_cb(&a, pingpong ? lv_anim_path_ease_in_out : lv_anim_path_linear);
+  if (pingpong) lv_anim_set_playback_duration(&a, time);
+  lv_anim_start(&a);
 }
 
-static int widthOf(const char *s, const GFXfont *font) {
-  int16_t x1, y1;
-  uint16_t w, h;
-  canvas.setFont(font);
-  canvas.getTextBounds(s, 0, 0, &x1, &y1, &w, &h);
-  return w;
+static lv_obj_t *makeDot(lv_obj_t *parent, int size, uint32_t color) {
+  lv_obj_t *d = lv_obj_create(parent);
+  lv_obj_remove_style_all(d);
+  lv_obj_set_size(d, size, size);
+  lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(d, lv_color_hex(color), 0);
+  lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
+  return d;
 }
 
-static void draw(const char *s, int x, int baseline, const GFXfont *font, uint16_t color) {
-  canvas.setFont(font);
-  canvas.setTextColor(color);
-  canvas.setCursor(x, baseline);
-  canvas.print(s);
+static void buildSun(lv_obj_t *par, int cx, int cy) {
+  lv_obj_t *s = makeDot(par, 18, COL_SUN);
+  lv_obj_align(s, LV_ALIGN_CENTER, cx, cy);
+  lv_obj_set_style_shadow_color(s, lv_color_hex(COL_SUN), 0);
+  lv_obj_set_style_shadow_width(s, 12, 0);
+  lv_obj_set_style_shadow_opa(s, LV_OPA_50, 0);
+  animate(s, animSize, 16, 22, 1600, 0, true);
 }
 
-static void drawRight(const char *s, int right, int baseline, const GFXfont *font,
-                      uint16_t color) {
-  draw(s, right - widthOf(s, font), baseline, font, color);
+static void buildCloud(lv_obj_t *par, int cx, int cy, uint32_t color) {
+  lv_obj_t *g = lv_obj_create(par);
+  lv_obj_remove_style_all(g);
+  lv_obj_set_size(g, 34, 18);
+  lv_obj_align(g, LV_ALIGN_CENTER, cx, cy);
+
+  lv_obj_t *a = makeDot(g, 14, color);
+  lv_obj_align(a, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+  lv_obj_t *b = makeDot(g, 20, color);
+  lv_obj_align(b, LV_ALIGN_TOP_MID, 0, 0);
+  lv_obj_t *c = makeDot(g, 14, color);
+  lv_obj_align(c, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+
+  lv_obj_t *base = lv_obj_create(g);
+  lv_obj_remove_style_all(base);
+  lv_obj_set_size(base, 32, 9);
+  lv_obj_set_style_radius(base, 4, 0);
+  lv_obj_set_style_bg_color(base, lv_color_hex(color), 0);
+  lv_obj_set_style_bg_opa(base, LV_OPA_COVER, 0);
+  lv_obj_align(base, LV_ALIGN_BOTTOM_MID, 0, 0);
+
+  animate(g, (lv_anim_exec_xcb_t)lv_obj_set_x, lv_obj_get_x(g) - 3, lv_obj_get_x(g) + 3, 2600,
+          0, true);
 }
 
-static void drawCentered(const char *s, int baseline, const GFXfont *font, uint16_t color) {
-  draw(s, (UI_W - widthOf(s, font)) / 2, baseline, font, color);
-}
-
-static int card(int x, int y, int w, int h, const char *label) {
-  canvas.fillRoundRect(x, y, w, h, 4, COL_CARD);
-  canvas.drawRoundRect(x, y, w, h, 4, COL_EDGE);
-  if (!label) return y + 8;
-  micro(label, x + UI_PAD, y + 6, COL_DIM);
-  return y + 17;
-}
-
-static void pager(int page) {
-  const int seg = (UI_W - 2 * UI_PAD) / UI_PAGES;
-  for (int i = 0; i < UI_PAGES; ++i) {
-    canvas.fillRect(UI_PAD + i * seg, UI_FOOTER_Y, seg - 4, 2,
-                    i == page ? COL_ACCENT : COL_FAINT);
-  }
-}
-
-static void signalBars(int x, int y, int bars, unsigned long t) {
-  const int pulse = (t / 300) % 4;
+static void buildDrops(lv_obj_t *par, int cx, int cy, uint32_t color, int size) {
   for (int i = 0; i < 3; ++i) {
-    const int h = 3 + i * 3;
-    uint16_t c = COL_FAINT;
-    if (i < bars) c = COL_ACCENT;
-    else if (bars == 0 && i == pulse) c = COL_DIM;
-    canvas.fillRect(x + i * 5, y - h, 3, h, c);
+    lv_obj_t *d = makeDot(par, size, color);
+    lv_obj_align(d, LV_ALIGN_CENTER, cx - 8 + i * 8, cy);
+    animate(d, (lv_anim_exec_xcb_t)lv_obj_set_y, lv_obj_get_y(d), lv_obj_get_y(d) + 14, 900,
+            i * 300, false);
   }
 }
 
-static void iconSun(int cx, int cy, unsigned long t) {
-  const float a0 = (t % 8000) * (PI / 4000.0f);
-  const int r = 6 + ((t / 400) % 2);
-  for (int i = 0; i < 8; ++i) {
-    const float a = a0 + i * PI / 4;
-    canvas.drawLine(cx + cos(a) * (r + 2), cy + sin(a) * (r + 2), cx + cos(a) * (r + 6),
-                    cy + sin(a) * (r + 6), COL_SUN);
-  }
-  canvas.fillCircle(cx, cy, r, COL_SUN);
-}
+static void buildIcon(int code) {
+  if (!sIconBox || code == sIconCode) return;
+  sIconCode = code;
+  lv_obj_clean(sIconBox);
 
-static void puff(int cx, int cy, uint16_t color) {
-  canvas.fillCircle(cx - 6, cy + 2, 5, color);
-  canvas.fillCircle(cx + 1, cy - 3, 7, color);
-  canvas.fillCircle(cx + 8, cy + 2, 5, color);
-  canvas.fillRect(cx - 6, cy + 1, 15, 6, color);
-}
-
-static void iconCloud(int cx, int cy, unsigned long t, uint16_t color) {
-  const int drift = (int)(sin(t / 900.0f) * 2.0f);
-  puff(cx + drift, cy, color);
-}
-
-static void iconRain(int cx, int cy, unsigned long t, uint16_t color) {
-  iconCloud(cx, cy - 4, t, COL_CLOUD);
-  for (int i = 0; i < 3; ++i) {
-    const int phase = (t / 55 + i * 7) % 18;
-    const int y = cy + 5 + phase / 2;
-    if (phase < 14) canvas.drawLine(cx - 7 + i * 7, y, cx - 9 + i * 7, y + 4, color);
-  }
-}
-
-static void iconStorm(int cx, int cy, unsigned long t) {
-  iconCloud(cx, cy - 4, t, COL_DIM);
-  if ((t / 220) % 5) canvas.fillTriangle(cx - 1, cy + 4, cx + 5, cy + 4, cx, cy + 15, COL_SUN);
-}
-
-static void iconSnow(int cx, int cy, unsigned long t) {
-  iconCloud(cx, cy - 4, t, COL_CLOUD);
-  for (int i = 0; i < 3; ++i) {
-    const int phase = (t / 90 + i * 6) % 16;
-    canvas.fillCircle(cx - 7 + i * 7, cy + 5 + phase / 2, 1, COL_FG);
-  }
-}
-
-static void weatherIcon(int code, int cx, int cy, unsigned long t) {
   if (code <= 1) {
-    iconSun(cx, cy, t);
+    buildSun(sIconBox, 0, -6);
   } else if (code == 2) {
-    iconSun(cx + 6, cy - 6, t);
-    iconCloud(cx - 2, cy + 3, t, COL_CLOUD);
+    buildSun(sIconBox, 8, -12);
+    buildCloud(sIconBox, -4, 0, COL_CLOUD);
   } else if (code == 3 || code == 45 || code == 48) {
-    iconCloud(cx, cy, t, COL_CLOUD);
+    buildCloud(sIconBox, 0, -4, COL_CLOUD);
   } else if (code >= 95) {
-    iconStorm(cx, cy, t);
+    buildCloud(sIconBox, 0, -10, 0x64748B);
+    lv_obj_t *bolt = makeDot(sIconBox, 6, COL_SUN);
+    lv_obj_set_style_radius(bolt, 2, 0);
+    lv_obj_align(bolt, LV_ALIGN_CENTER, 0, 8);
+    animate(bolt, animSize, 4, 9, 500, 0, true);
   } else if (code >= 71 && code <= 86) {
-    iconSnow(cx, cy, t);
+    buildCloud(sIconBox, 0, -10, COL_CLOUD);
+    buildDrops(sIconBox, 0, 6, COL_FG, 4);
   } else {
-    iconRain(cx, cy, t, COL_RAIN);
+    buildCloud(sIconBox, 0, -10, COL_CLOUD);
+    buildDrops(sIconBox, 0, 6, COL_RAIN, 3);
   }
 }
 
-static uint16_t tempColor(float t) {
-  if (t >= 28) return COL_HOT;
-  if (t >= 20) return COL_SUN;
-  if (t <= 12) return COL_COLD;
-  return COL_GREEN;
+static void buildClockTile(lv_obj_t *tile) {
+  lv_obj_t *c = makeCard(tile, 4, 4, 120, 56);
+  sLblTime = makeLabel(c, &lv_font_montserrat_44, COL_FG, "--:--");
+  lv_obj_align(sLblTime, LV_ALIGN_CENTER, 0, -4);
+
+  sBarSec = lv_bar_create(c);
+  lv_obj_set_size(sBarSec, 96, 3);
+  lv_obj_align(sBarSec, LV_ALIGN_BOTTOM_MID, 0, 2);
+  lv_bar_set_range(sBarSec, 0, 59);
+  lv_obj_set_style_bg_color(sBarSec, lv_color_hex(COL_BORDER), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(sBarSec, lv_color_hex(COL_ACCENT), LV_PART_INDICATOR);
+  lv_obj_set_style_radius(sBarSec, 2, LV_PART_MAIN);
+  lv_obj_set_style_radius(sBarSec, 2, LV_PART_INDICATOR);
+
+  lv_obj_t *d = makeCard(tile, 4, 64, 58, 52);
+  makeTag(d, "DIA");
+  sLblWeekday = makeLabel(d, &lv_font_montserrat_20, COL_ACCENT, "--");
+  lv_obj_align(sLblWeekday, LV_ALIGN_BOTTOM_LEFT, 0, 2);
+
+  lv_obj_t *e = makeCard(tile, 66, 64, 58, 52);
+  makeTag(e, "DATA");
+  sLblDate = makeLabel(e, &lv_font_montserrat_16, COL_FG, "--");
+  lv_obj_align(sLblDate, LV_ALIGN_BOTTOM_LEFT, 0, 2);
 }
+
+static void buildWeatherTile(lv_obj_t *tile) {
+  lv_obj_t *c = makeCard(tile, 4, 4, 74, 60);
+  sLblTemp = makeLabel(c, &lv_font_montserrat_44, COL_FG, "--");
+  lv_obj_align(sLblTemp, LV_ALIGN_TOP_LEFT, 0, -8);
+  sLblDesc = makeLabel(c, &lv_font_montserrat_12, COL_DIM, "");
+  lv_label_set_long_mode(sLblDesc, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(sLblDesc, 62);
+  lv_obj_align(sLblDesc, LV_ALIGN_BOTTOM_LEFT, 0, 2);
+
+  lv_obj_t *ic = makeCard(tile, 82, 4, 42, 60);
+  sIconBox = lv_obj_create(ic);
+  lv_obj_remove_style_all(sIconBox);
+  lv_obj_set_size(sIconBox, 40, 38);
+  lv_obj_align(sIconBox, LV_ALIGN_TOP_MID, 0, -2);
+  sLblHum = makeLabel(ic, &lv_font_montserrat_12, COL_ACCENT, "--%");
+  lv_obj_align(sLblHum, LV_ALIGN_BOTTOM_MID, 0, 2);
+
+  lv_obj_t *r = makeCard(tile, 4, 68, 120, 48);
+  makeTag(r, "MIN / MAX");
+  sBarRange = lv_bar_create(r);
+  lv_obj_set_size(sBarRange, 106, 5);
+  lv_obj_align(sBarRange, LV_ALIGN_CENTER, 0, 3);
+  lv_bar_set_range(sBarRange, 0, 100);
+  lv_obj_set_style_bg_color(sBarRange, lv_color_hex(COL_BORDER), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(sBarRange, lv_color_hex(COL_COLD), LV_PART_INDICATOR);
+  lv_obj_set_style_bg_grad_color(sBarRange, lv_color_hex(COL_HOT), LV_PART_INDICATOR);
+  lv_obj_set_style_bg_grad_dir(sBarRange, LV_GRAD_DIR_HOR, LV_PART_INDICATOR);
+  lv_obj_set_style_radius(sBarRange, 3, LV_PART_MAIN);
+  lv_obj_set_style_radius(sBarRange, 3, LV_PART_INDICATOR);
+
+  sLblMin = makeLabel(r, &lv_font_montserrat_14, COL_COLD, "--");
+  lv_obj_align(sLblMin, LV_ALIGN_BOTTOM_LEFT, 0, 2);
+  sLblMax = makeLabel(r, &lv_font_montserrat_14, COL_HOT, "--");
+  lv_obj_align(sLblMax, LV_ALIGN_BOTTOM_RIGHT, 0, 2);
+}
+
+static void buildInsightTile(lv_obj_t *tile) {
+  lv_obj_t *c = makeCard(tile, 4, 4, 120, 80);
+  sLblInsight = makeLabel(c, &lv_font_montserrat_12, COL_FG, "...");
+  lv_label_set_long_mode(sLblInsight, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(sLblInsight, 106);
+  lv_obj_set_style_text_line_space(sLblInsight, 3, 0);
+  lv_obj_align(sLblInsight, LV_ALIGN_LEFT_MID, 0, 0);
+
+  lv_obj_t *m = makeCard(tile, 4, 88, 120, 28);
+  lv_obj_t *tag = makeLabel(m, &lv_font_montserrat_12, COL_ACCENT, "AI");
+  lv_obj_align(tag, LV_ALIGN_LEFT_MID, 0, 0);
+  sLblInsightTime = makeLabel(m, &lv_font_montserrat_12, COL_DIM, "--:--");
+  lv_obj_align(sLblInsightTime, LV_ALIGN_RIGHT_MID, 0, 0);
+}
+
+static void buildSystemTile(lv_obj_t *tile) {
+  lv_obj_t *n = makeCard(tile, 4, 4, 74, 44);
+  makeTag(n, "REDE");
+  sLblSsid = makeLabel(n, &lv_font_montserrat_14, COL_FG, "--");
+  lv_label_set_long_mode(sLblSsid, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(sLblSsid, 62);
+  lv_obj_align(sLblSsid, LV_ALIGN_BOTTOM_LEFT, 0, 2);
+
+  lv_obj_t *s = makeCard(tile, 82, 4, 42, 44);
+  makeTag(s, "SINAL");
+  sLblRssi = makeLabel(s, &lv_font_montserrat_14, COL_ACCENT, "--");
+  lv_obj_align(sLblRssi, LV_ALIGN_BOTTOM_LEFT, 0, 2);
+
+  lv_obj_t *i = makeCard(tile, 4, 52, 120, 26);
+  lv_obj_t *tag = makeLabel(i, &lv_font_montserrat_12, COL_DIM, "IP");
+  lv_obj_set_style_text_opa(tag, LV_OPA_70, 0);
+  lv_obj_align(tag, LV_ALIGN_LEFT_MID, 0, 0);
+  sLblIp = makeLabel(i, &lv_font_montserrat_12, COL_FG, "--");
+  lv_obj_align(sLblIp, LV_ALIGN_RIGHT_MID, 0, 0);
+
+  lv_obj_t *h = makeCard(tile, 4, 82, 58, 34);
+  makeTag(h, "LIVRE");
+  sLblHeap = makeLabel(h, &lv_font_montserrat_12, COL_GREEN, "--");
+  lv_obj_align(sLblHeap, LV_ALIGN_BOTTOM_LEFT, 0, 2);
+
+  lv_obj_t *u = makeCard(tile, 66, 82, 58, 34);
+  makeTag(u, "LIGADO");
+  sLblUp = makeLabel(u, &lv_font_montserrat_12, COL_FG, "--");
+  lv_obj_align(sLblUp, LV_ALIGN_BOTTOM_LEFT, 0, 2);
+}
+
+static void buildDots(lv_obj_t *parent) {
+  for (int i = 0; i < UI_PAGES; ++i) {
+    sDots[i] = makeDot(parent, 4, COL_BORDER);
+    lv_obj_align(sDots[i], LV_ALIGN_BOTTOM_MID, -18 + i * 12, -2);
+  }
+}
+
+static void refreshDots() {
+  for (int i = 0; i < UI_PAGES; ++i) {
+    const bool on = i == sPage;
+    lv_obj_set_style_bg_color(sDots[i], lv_color_hex(on ? COL_ACCENT : COL_BORDER), 0);
+    lv_obj_set_size(sDots[i], on ? 10 : 4, 4);
+    lv_obj_set_style_radius(sDots[i], 2, 0);
+  }
+}
+
+static void styleScreen(lv_obj_t *scr) {
+  lv_obj_set_style_bg_color(scr, lv_color_hex(COL_BG), 0);
+  lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+  lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+}
+
+void uiBegin() {
+  displayBegin();
+
+  sDash = lv_obj_create(nullptr);
+  styleScreen(sDash);
+
+  sTiles = lv_tileview_create(sDash);
+  lv_obj_set_size(sTiles, UI_W, UI_H);
+  lv_obj_set_style_bg_opa(sTiles, LV_OPA_TRANSP, 0);
+  lv_obj_remove_flag(sTiles, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollbar_mode(sTiles, LV_SCROLLBAR_MODE_OFF);
+
+  buildClockTile(lv_tileview_add_tile(sTiles, 0, 0, LV_DIR_HOR));
+  buildWeatherTile(lv_tileview_add_tile(sTiles, 1, 0, LV_DIR_HOR));
+  buildInsightTile(lv_tileview_add_tile(sTiles, 2, 0, LV_DIR_HOR));
+  buildSystemTile(lv_tileview_add_tile(sTiles, 3, 0, LV_DIR_HOR));
+
+  buildDots(sDash);
+  refreshDots();
+
+  sProv = lv_obj_create(nullptr);
+  styleScreen(sProv);
+  lv_obj_t *pc = makeCard(sProv, 4, 20, 120, 88);
+  lv_obj_t *title = makeLabel(pc, &lv_font_montserrat_20, COL_ACCENT, "Wi-Fi");
+  lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
+  lv_obj_t *hint = makeLabel(pc, &lv_font_montserrat_12, COL_DIM,
+                             "Abra o app EspTouch\ne envie a senha");
+  lv_obj_align(hint, LV_ALIGN_TOP_LEFT, 0, 28);
+  sLblProv = makeLabel(pc, &lv_font_montserrat_12, COL_FG, "aguardando");
+  lv_obj_align(sLblProv, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+  sBarProv = lv_bar_create(pc);
+  lv_obj_set_size(sBarProv, 106, 3);
+  lv_obj_align(sBarProv, LV_ALIGN_BOTTOM_MID, 0, -16);
+  lv_bar_set_range(sBarProv, 0, 100);
+  lv_obj_set_style_bg_color(sBarProv, lv_color_hex(COL_BORDER), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(sBarProv, lv_color_hex(COL_ACCENT), LV_PART_INDICATOR);
+  lv_obj_set_style_radius(sBarProv, 2, LV_PART_MAIN);
+  lv_obj_set_style_radius(sBarProv, 2, LV_PART_INDICATOR);
+  animate(sBarProv, (lv_anim_exec_xcb_t)lv_bar_set_value, 0, 100, 1400, 0, true);
+
+  sNightScr = lv_obj_create(nullptr);
+  styleScreen(sNightScr);
+  sLblNightTime = makeLabel(sNightScr, &lv_font_montserrat_44, COL_NIGHT, "--:--");
+  lv_obj_center(sLblNightTime);
+
+  lv_screen_load(sDash);
+}
+
+void uiTask() { displayTask(); }
 
 void uiSplash(const char *line1, const char *line2) {
-  canvas.fillScreen(COL_BG);
-  drawCentered(line1, 66, &FreeSansBold24pt7b, COL_ACCENT);
-  micro(line2, (UI_W - (int)strlen(line2) * 6) / 2, 82, COL_DIM);
-  uiPush();
+  lv_obj_t *scr = lv_screen_active();
+  lv_obj_t *a = makeLabel(scr, &lv_font_montserrat_44, COL_ACCENT, line1);
+  lv_obj_align(a, LV_ALIGN_CENTER, 0, -8);
+  lv_obj_t *b = makeLabel(scr, &lv_font_montserrat_12, COL_DIM, line2);
+  lv_obj_align(b, LV_ALIGN_CENTER, 0, 26);
+  lv_timer_handler();
+  lv_obj_delete_delayed(a, 1200);
+  lv_obj_delete_delayed(b, 1200);
 }
 
-void uiProvisioning(bool armed) {
-  const unsigned long t = millis();
-  canvas.fillScreen(COL_BG);
-
-  int y = card(4, 4, 120, 58, "WI-FI");
-  draw("Conecte", 4 + UI_PAD, y + 14, &FreeSansBold12pt7b, COL_ACCENT);
-  micro("app EspTouch no celular", 4 + UI_PAD, y + 24, COL_DIM);
-
-  y = card(4, 68, 120, 50, nullptr);
-  micro(armed ? "aguardando senha" : "conectando", 4 + UI_PAD, y + 4, COL_FG);
-  const int w = 108;
-  const int fill = (t / 20) % w;
-  canvas.fillRect(4 + UI_PAD, y + 22, w, 3, COL_FAINT);
-  canvas.fillRect(4 + UI_PAD, y + 22, fill, 3, COL_ACCENT);
-  uiPush();
+void uiShowProvisioning(bool armed) {
+  lv_label_set_text(sLblProv, armed ? "aguardando senha" : "conectando");
+  if (lv_screen_active() != sProv) lv_screen_load_anim(sProv, LV_SCR_LOAD_ANIM_FADE_IN, 250, 0, false);
 }
 
-void uiClock(const struct tm &now, bool timeReady, int page) {
-  const unsigned long t = millis();
-  canvas.fillScreen(COL_BG);
+void uiShowDash() {
+  if (lv_screen_active() != sDash)
+    lv_screen_load_anim(sDash, LV_SCR_LOAD_ANIM_FADE_IN, 250, 0, false);
+}
 
-  card(4, 4, 120, 58, nullptr);
+void uiTurnPage(int delta) {
+  sPage = (sPage + delta + UI_PAGES) % UI_PAGES;
+  lv_tileview_set_tile_by_index(sTiles, sPage, 0, LV_ANIM_ON);
+  refreshDots();
+}
 
-  char hhmm[6];
-  snprintf(hhmm, sizeof(hhmm), "%02d:%02d", now.tm_hour, now.tm_min);
-  drawCentered(hhmm, 45, &FreeSansBold24pt7b, timeReady ? COL_FG : COL_FAINT);
+int uiPage() { return sPage; }
+
+void uiSetNight(bool on) {
+  if (sNight == on) return;
+  sNight = on;
+  if (on) {
+    lv_screen_load_anim(sNightScr, LV_SCR_LOAD_ANIM_FADE_IN, 600, 0, false);
+  } else {
+    lv_screen_load_anim(sDash, LV_SCR_LOAD_ANIM_FADE_IN, 300, 0, false);
+  }
+}
+
+bool uiIsNight() { return sNight; }
+
+void uiUpdateClock(const struct tm &now, bool timeReady) {
+  char buf[16];
+  if (timeReady) {
+    snprintf(buf, sizeof(buf), "%02d:%02d", now.tm_hour, now.tm_min);
+  } else {
+    snprintf(buf, sizeof(buf), "--:--");
+  }
+  lv_label_set_text(sLblTime, buf);
+  lv_label_set_text(sLblNightTime, buf);
+
+  lv_bar_set_value(sBarSec, timeReady ? now.tm_sec : 0, LV_ANIM_ON);
+  lv_label_set_text(sLblWeekday, timeReady ? kWeekdays[now.tm_wday % 7] : "--");
 
   if (timeReady) {
-    const int w = 108 * now.tm_sec / 59;
-    canvas.fillRect(10, 52, 108, 2, COL_FAINT);
-    canvas.fillRect(10, 52, w, 2, COL_ACCENT);
+    snprintf(buf, sizeof(buf), "%02d %s", now.tm_mday, kMonths[now.tm_mon % 12]);
+    lv_label_set_text(sLblDate, buf);
   }
-  if (!netOnline()) canvas.fillCircle(114, 12, 3, COL_PINK);
-
-  int y = card(4, 66, 66, 52, "DIA");
-  draw(timeReady ? kWeekdays[now.tm_wday % 7] : "--", 4 + UI_PAD, y + 20, &FreeSansBold9pt7b,
-       COL_ACCENT);
-
-  y = card(74, 66, 50, 52, "DATA");
-  char date[8];
-  snprintf(date, sizeof(date), "%02d/%s", now.tm_mday, kMonths[now.tm_mon % 12]);
-  draw(timeReady ? date : "--", 74 + UI_PAD, y + 20, &FreeSans9pt7b, COL_FG);
-
-  pager(page);
-  uiPush();
 }
 
-void uiWeather(const Place &p, const Weather &w, int page) {
-  const unsigned long t = millis();
-  canvas.fillScreen(COL_BG);
-
+void uiUpdateWeather(const Weather &w) {
+  char buf[24];
   if (!w.valid) {
-    card(4, 4, 120, 114, "CLIMA");
-    iconCloud(64, 60, t, COL_FAINT);
-    drawCentered("sem dados", 92, &FreeSans9pt7b, COL_DIM);
-    pager(page);
-    uiPush();
+    lv_label_set_text(sLblTemp, "--");
+    lv_label_set_text(sLblDesc, "sem dados");
     return;
   }
 
-  const uint16_t tc = tempColor(w.tempC);
-  card(4, 4, 74, 62, nullptr);
+  snprintf(buf, sizeof(buf), "%.0f", w.tempC);
+  lv_label_set_text(sLblTemp, buf);
+  lv_obj_set_style_text_color(sLblTemp,
+                              lv_color_hex(w.tempC >= 25 ? COL_HOT
+                                           : w.tempC <= 14 ? COL_COLD
+                                                           : COL_FG),
+                              0);
+  lv_label_set_text(sLblDesc, w.desc);
 
-  char temp[6];
-  snprintf(temp, sizeof(temp), "%.0f", w.tempC);
-  draw(temp, 4 + UI_PAD, 46, &FreeSansBold24pt7b, tc);
-  canvas.drawCircle(4 + UI_PAD + widthOf(temp, &FreeSansBold24pt7b) + 5, 22, 3, tc);
-  micro(w.desc, 4 + UI_PAD, 52, COL_DIM);
+  snprintf(buf, sizeof(buf), "%d%%", w.humidity);
+  lv_label_set_text(sLblHum, buf);
 
-  card(82, 4, 42, 32, nullptr);
-  weatherIcon(w.code, 103, 20, t);
+  snprintf(buf, sizeof(buf), "%.0f", w.minC);
+  lv_label_set_text(sLblMin, buf);
+  snprintf(buf, sizeof(buf), "%.0f", w.maxC);
+  lv_label_set_text(sLblMax, buf);
 
-  int y = card(82, 40, 42, 26, "UMID");
-  char hum[6];
-  snprintf(hum, sizeof(hum), "%d%%", w.humidity);
-  micro(hum, 82 + UI_PAD, y + 1, COL_FG);
-
-  y = card(4, 70, 120, 48, "MIN / MAX");
-  char lo[6], hi[6];
-  snprintf(lo, sizeof(lo), "%.0f", w.minC);
-  snprintf(hi, sizeof(hi), "%.0f", w.maxC);
-  draw(lo, 4 + UI_PAD, y + 27, &FreeSans9pt7b, COL_COLD);
-  drawRight(hi, 124 - UI_PAD, y + 27, &FreeSans9pt7b, COL_HOT);
-
-  const int bx = 30;
-  const int bw = 68;
-  canvas.fillRoundRect(bx, y + 12, bw, 4, 2, COL_FAINT);
   const float span = w.maxC - w.minC;
-  const float k = span > 0.5f ? (w.tempC - w.minC) / span : 0.5f;
-  const int mark = bx + (int)(bw * (k < 0 ? 0 : (k > 1 ? 1 : k)));
-  canvas.fillRoundRect(bx, y + 12, mark - bx, 4, 2, tc);
-  canvas.fillCircle(mark, y + 14, 3 + ((t / 500) % 2), tc);
+  float k = span > 0.5f ? (w.tempC - w.minC) / span : 0.5f;
+  if (k < 0) k = 0;
+  if (k > 1) k = 1;
+  lv_bar_set_value(sBarRange, (int)(k * 100), LV_ANIM_ON);
 
-  pager(page);
-  uiPush();
+  buildIcon(w.code);
 }
 
-void uiInsight(const char *text, bool pending, int page) {
-  const unsigned long t = millis();
-  canvas.fillScreen(COL_BG);
+void uiUpdateInsight(const char *text, bool pending) {
+  lv_label_set_text(sLblInsight, pending ? "pensando..." : text);
+  lv_obj_set_style_text_opa(sLblInsight, pending ? LV_OPA_50 : LV_OPA_COVER, 0);
 
-  card(4, 4, 120, 76, nullptr);
-
-  if (pending) {
-    for (int i = 0; i < 3; ++i) {
-      const bool on = ((t / 300) % 3) == (unsigned)i;
-      canvas.fillCircle(52 + i * 12, 42, on ? 4 : 2, on ? COL_ACCENT : COL_FAINT);
-    }
-  } else {
-    const int kMaxLines = 4;
-    char lines[kMaxLines][24];
-    int count = 0;
-
-    const char *p = text;
-    while (*p && count < kMaxLines) {
-      while (*p == ' ') ++p;
-      if (!*p) break;
-
-      char probe[24];
-      int take = 0;
-      int fit = 0;
-      while (p[take]) {
-        const int len = take + 1;
-        if (len >= (int)sizeof(probe)) break;
-        memcpy(probe, p, len);
-        probe[len] = '\0';
-        if (widthOf(probe, &FreeSans9pt7b) > 100) break;
-        if (p[take] == ' ') fit = take;
-        ++take;
-      }
-      if (p[take] && fit > 0) take = fit;
-
-      memcpy(lines[count], p, take);
-      lines[count][take] = '\0';
-      ++count;
-      p += take;
-    }
-
-    const int block = count * 15;
-    const int top = 10 + (60 - block > 0 ? (60 - block) / 2 : 0);
-    const int wave = (int)(sin(t / 400.0f) * 3.0f);
-    canvas.fillRect(10, top + 3 + wave, 2, block - 6, COL_ACCENT);
-    for (int i = 0; i < count; ++i) {
-      draw(lines[i], 18, top + 14 + i * 15, &FreeSans9pt7b, COL_FG);
-    }
-  }
-
-  const int y = card(4, 84, 120, 34, nullptr);
-  micro("AI", 4 + UI_PAD, y + 5, COL_ACCENT);
   struct tm now;
   if (getLocalTime(&now, 5)) {
-    char hhmm[6];
-    snprintf(hhmm, sizeof(hhmm), "%02d:%02d", now.tm_hour, now.tm_min);
-    microRight(hhmm, 124 - UI_PAD, y + 5, COL_DIM);
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%02d:%02d", now.tm_hour, now.tm_min);
+    lv_label_set_text(sLblInsightTime, buf);
   }
-
-  pager(page);
-  uiPush();
 }
 
-void uiSystem(const Place &p, int page) {
-  const unsigned long t = millis();
-  canvas.fillScreen(COL_BG);
-
-  int y = card(4, 4, 74, 44, "REDE");
-  draw(netSsid(), 4 + UI_PAD, y + 18, &FreeSans9pt7b, COL_FG);
-
-  y = card(82, 4, 42, 44, "SINAL");
-  char rssi[8];
-  snprintf(rssi, sizeof(rssi), "%d", (int)WiFi.RSSI());
-  draw(rssi, 82 + UI_PAD, y + 16, &FreeSansBold9pt7b, COL_ACCENT);
-  signalBars(82 + UI_PAD, y + 26, netRssiBars(), t);
-
-  y = card(4, 52, 120, 26, nullptr);
-  micro("IP", 4 + UI_PAD, y + 5, COL_DIM);
-  microRight(netIp(), 124 - UI_PAD, y + 5, COL_FG);
-
-  y = card(4, 82, 58, 36, "LIVRE");
-  char heap[10];
-  snprintf(heap, sizeof(heap), "%u KB", (unsigned)(ESP.getFreeHeap() / 1024));
-  micro(heap, 4 + UI_PAD, y + 4, COL_GREEN);
-
-  y = card(66, 82, 58, 36, "LIGADO");
+void uiUpdateSystem() {
+  char buf[24];
+  lv_label_set_text(sLblSsid, netSsid());
+  snprintf(buf, sizeof(buf), "%d", (int)WiFi.RSSI());
+  lv_label_set_text(sLblRssi, buf);
+  lv_label_set_text(sLblIp, netIp());
+  snprintf(buf, sizeof(buf), "%u KB", (unsigned)(ESP.getFreeHeap() / 1024));
+  lv_label_set_text(sLblHeap, buf);
   const unsigned long up = millis() / 1000;
-  char upt[12];
-  snprintf(upt, sizeof(upt), "%luh %02lum", up / 3600, (up % 3600) / 60);
-  micro(upt, 66 + UI_PAD, y + 4, COL_FG);
-
-  pager(page);
-  uiPush();
-}
-
-void uiNight(const struct tm &now, bool timeReady) {
-  canvas.fillScreen(COL_BG);
-  char hhmm[6];
-  snprintf(hhmm, sizeof(hhmm), "%02d:%02d", now.tm_hour, now.tm_min);
-  drawCentered(timeReady ? hhmm : "--:--", 72, &FreeSansBold24pt7b, COL_NIGHT);
-  uiPush();
+  snprintf(buf, sizeof(buf), "%luh %02lum", up / 3600, (up % 3600) / 60);
+  lv_label_set_text(sLblUp, buf);
 }

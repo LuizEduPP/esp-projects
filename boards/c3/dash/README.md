@@ -12,14 +12,23 @@ yarn dash:flash
 
 ## Controls
 
-Four screens in a loop — Clock, Weather, AI, System — laid out as a mosaic of cards, with a
-segmented bar at the bottom showing where you are. The UI redraws at 10 fps so the weather icons
-animate (drifting clouds, falling rain, a rotating sun) and page changes fade in.
+Four screens in a loop — Clock, Weather, AI, System — laid out as a mosaic of cards. The UI runs on
+**LVGL 9**, which is what buys antialiased text and shapes; Adafruit GFX only draws hard-edged
+pixels and made the panel look like an 8-bit console. Screens are tiles in an `lv_tileview`, so
+turning a page slides with easing, and the weather icons are real objects animated by `lv_anim`
+(drifting clouds, falling drops, a pulsing sun with a glow).
 
-After `DASH_SCREEN_TIMEOUT_MS` of no input the board enters night mode: only the clock, drawn in
-near-black. It is not a real dimmer — the backlight has no GPIO — but since the panel emits the
-same light either way, painting almost-black pixels is the closest thing to 1% brightness and
-keeps the time readable up close. Any button wakes it.
+Fonts are Montserrat 12/14/16/20/44. They cover ASCII only, which is why `net.cpp` strips accents
+before any text reaches a label.
+
+After `DASH_SCREEN_TIMEOUT_MS` of no input the board fades into night mode: a separate screen with
+only the clock, drawn in near-black. It is not a real dimmer — the backlight has no GPIO — but
+since the panel emits the same light either way, painting almost-black pixels is the closest thing
+to 1% brightness and keeps the time readable up close. Any button wakes it.
+
+LVGL is configured entirely through `build_flags` with `LV_CONF_SKIP`, so there is no `lv_conf.h`
+to maintain. Keep values free of parentheses: PlatformIO passes flags through a shell, and
+`-DLV_MEM_SIZE="(40U*1024U)"` fails to even start the compiler.
 
 There is no battery readout because the board exposes no way to measure it: the PL4054 charges the
 LiPo but neither its status pin nor a voltage divider reaches a GPIO. A charge level would require
