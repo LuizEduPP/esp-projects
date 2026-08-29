@@ -12,7 +12,9 @@ yarn dash:flash
 
 ## Controls
 
-Six screens in a loop — Clock, Weather, Forecast (3 days), Chart (next 24 h), AI, System. Each
+Fourteen screens in a loop — Clock, Weather, Forecast, 24 h chart, Rain (next 2 h), Wind, Air &
+UV, Sun, Moon, Market, GitHub, Pomodoro, AI and System. With that many pages the dot indicator
+became unreadable, so the footer is a thin progress bar instead. Each
 screen is a typographic hero (one large value, a small label above it) rather than a grid of
 boxes; surfaces appear only where values need grouping. Widgets are placed with explicit
 coordinates: LVGL's flex layout inside style-less containers produced overlapping labels here,
@@ -46,16 +48,30 @@ LVGL is configured entirely through `build_flags` with `LV_CONF_SKIP`, so there 
 to maintain. Keep values free of parentheses: PlatformIO passes flags through a shell, and
 `-DLV_MEM_SIZE="(40U*1024U)"` fails to even start the compiler.
 
+Memory comes from the system heap (`LV_USE_STDLIB_MALLOC=LV_STDLIB_CLIB`), not LVGL's fixed pool.
+The pool of 40 KB was enough for six screens and silently died at fourteen — the board would boot
+to a blank panel or freeze on the first page change, with nothing on serial. All screens are built
+up front at boot, so the object count grows with every page added.
+
 There is no battery readout because the board exposes no way to measure it: the PL4054 charges the
 LiPo but neither its status pin nor a voltage divider reaches a GPIO. A charge level would require
 soldering a 2:1 divider from BAT+ to GPIO 1.
 
 | Button | GPIO | Action |
 |--------|------|--------|
-| Top right | 8 | next screen |
-| Top left | 10 | previous screen |
-| BOOT | 9 | toggle night mode |
+| Upper | 10 | next screen |
+| Lower | 8 | previous screen |
+| BOOT | 9 | refresh the data behind the current screen |
+| BOOT (on the timer screen) | 9 | start / pause the pomodoro |
 | BOOT (hold 3 s) | 9 | forget WiFi and re-provision |
+
+The panel is rotated 180°, so the button the vendor calls "top right" (GPIO 8) is physically the
+lower one in use — hence GPIO 10 is the one that moves forward.
+
+Night mode is not a button any more: it arms itself after `DASH_SCREEN_TIMEOUT_MS` of silence and
+any button wakes it. That freed BOOT to be a contextual refresh, which fetches only what the
+current screen shows (weather, market, GitHub or a fresh AI line) and blinks a dot in the corner
+while the request is in flight.
 
 ## WiFi provisioning
 

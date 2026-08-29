@@ -142,6 +142,34 @@ static void timerTask() {
   uiUpdateTimer(sTimerLeft, timerTotal(), sTimerBreak, sTimerRunning);
 }
 
+static void refreshCurrentPage() {
+  if (!netOnline()) return;
+
+  uiBusy(true);
+  switch (uiPage()) {
+    case PAGE_MARKET:
+      refreshMarket();
+      break;
+    case PAGE_DEV:
+      refreshDev();
+      break;
+    case PAGE_AI:
+      refreshInsight();
+      break;
+    case PAGE_MOON:
+      uiUpdateMoon();
+      break;
+    case PAGE_CLOCK:
+    case PAGE_SYSTEM:
+      netSyncTime();
+      break;
+    default:
+      refreshWeather();
+      break;
+  }
+  uiBusy(false);
+}
+
 static void locate() {
   sNextGeo = millis() + 6UL * 3600000UL;
   if (netResolvePlace(sPlace)) {
