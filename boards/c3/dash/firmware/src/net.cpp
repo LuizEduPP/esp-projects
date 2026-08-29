@@ -250,7 +250,7 @@ bool netFetchWeather(Place &place, Weather &out) {
            "&current=temperature_2m,relative_humidity_2m,apparent_temperature,"
            "weather_code,wind_speed_10m"
            "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,"
-           "weather_code,sunrise,sunset"
+           "weather_code,sunrise,sunset,uv_index_max"
            "&hourly=temperature_2m&forecast_days=4&timezone=auto",
            place.lat, place.lon);
 
@@ -290,6 +290,8 @@ bool netFetchWeather(Place &place, Weather &out) {
     out.maxC = daily["temperature_2m_max"][0] | out.tempC;
     out.minC = daily["temperature_2m_min"][0] | out.tempC;
     out.rainProb = daily["precipitation_probability_max"][0] | 0;
+
+    out.uvMax = daily["uv_index_max"][0] | 0.0f;
 
     const char *rise = daily["sunrise"][0] | "";
     const char *set = daily["sunset"][0] | "";

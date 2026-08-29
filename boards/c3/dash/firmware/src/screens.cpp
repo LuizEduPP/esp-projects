@@ -5,18 +5,21 @@
 
 #include <lvgl.h>
 
-#define COL_BG 0x070910
-#define COL_SURFACE 0x151B29
-#define COL_LINE 0x232B3C
+#define COL_BG_TOP 0x0B1026
+#define COL_BG_BOT 0x1C0B30
+#define COL_GLASS 0xFFFFFF
+#define COL_LINE 0x3C4A66
 #define COL_FG 0xFFFFFF
-#define COL_MUTED 0x808FA8
-#define COL_ACCENT 0x00E5A0
-#define COL_HOT 0xFF7A5C
-#define COL_COLD 0x5AB8FF
-#define COL_SUN 0xFFD166
-#define COL_CLOUD 0x9AA8BD
-#define COL_RAIN 0x5AB8FF
-#define COL_NIGHT 0x1A2029
+#define COL_MUTED 0x9FB0CC
+#define COL_ACCENT 0x22D3EE
+#define COL_VIOLET 0xA78BFA
+#define COL_GREEN 0x34D399
+#define COL_HOT 0xFB7185
+#define COL_COLD 0x60A5FA
+#define COL_SUN 0xFBBF24
+#define COL_CLOUD 0xB6C4DA
+#define COL_RAIN 0x60A5FA
+#define COL_NIGHT 0x1B2440
 
 #define FONT_HERO &lv_font_montserrat_28
 #define FONT_L &lv_font_montserrat_20
@@ -71,10 +74,38 @@ static lv_obj_t *plate(lv_obj_t *par, int x, int y, int w, int h) {
   lv_obj_remove_style_all(o);
   lv_obj_set_pos(o, x, y);
   lv_obj_set_size(o, w, h);
-  lv_obj_set_style_bg_color(o, lv_color_hex(COL_SURFACE), 0);
-  lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(o, 12, 0);
+  lv_obj_set_style_bg_color(o, lv_color_hex(COL_GLASS), 0);
+  lv_obj_set_style_bg_opa(o, 28, 0);
+  lv_obj_set_style_bg_grad_color(o, lv_color_hex(COL_GLASS), 0);
+  lv_obj_set_style_bg_grad_dir(o, LV_GRAD_DIR_VER, 0);
+  lv_obj_set_style_bg_main_opa(o, 34, 0);
+  lv_obj_set_style_bg_grad_opa(o, 12, 0);
+  lv_obj_set_style_radius(o, 14, 0);
+  lv_obj_set_style_border_color(o, lv_color_hex(COL_GLASS), 0);
+  lv_obj_set_style_border_opa(o, 60, 0);
+  lv_obj_set_style_border_width(o, 1, 0);
+
+  lv_obj_t *gloss = lv_obj_create(o);
+  lv_obj_remove_style_all(gloss);
+  lv_obj_set_pos(gloss, 8, 1);
+  lv_obj_set_size(gloss, w - 16, 1);
+  lv_obj_set_style_bg_color(gloss, lv_color_hex(COL_GLASS), 0);
+  lv_obj_set_style_bg_opa(gloss, 90, 0);
+  lv_obj_set_style_radius(gloss, 1, 0);
   return o;
+}
+
+static void blob(lv_obj_t *par, int cx, int cy, int r, uint32_t color) {
+  for (int i = 3; i >= 1; --i) {
+    const int rr = r * i / 3;
+    lv_obj_t *b = lv_obj_create(par);
+    lv_obj_remove_style_all(b);
+    lv_obj_set_pos(b, cx - rr, cy - rr);
+    lv_obj_set_size(b, rr * 2, rr * 2);
+    lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_opa(b, 22, 0);
+  }
 }
 
 static lv_obj_t *dot(lv_obj_t *par, int size, uint32_t color, int x, int y) {
@@ -98,9 +129,14 @@ static void rule(lv_obj_t *par, int x, int y, int w, int h) {
 }
 
 static lv_obj_t *pageOf(int index) {
+  static const uint32_t glow[UI_PAGES] = {COL_VIOLET, COL_SUN,   COL_GREEN,
+                                          COL_ACCENT, COL_HOT,   COL_COLD};
   lv_obj_t *tile = lv_tileview_add_tile(sTiles, index, 0, LV_DIR_HOR);
   lv_obj_remove_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(tile, 0, 0);
+
+  blob(tile, index % 2 ? 8 : 118, 16, 46, glow[index]);
+  blob(tile, index % 2 ? 116 : 12, 116, 38, COL_ACCENT);
   return tile;
 }
 
@@ -112,14 +148,11 @@ static uint32_t codeColor(int code) {
   return COL_RAIN;
 }
 
-static void animSize(void *var, int32_t v) {
-  lv_obj_t *o = (lv_obj_t *)var;
-  const int32_t cx = lv_obj_get_x(o) + lv_obj_get_width(o) / 2;
-  const int32_t cy = lv_obj_get_y(o) + lv_obj_get_height(o) / 2;
-  lv_obj_set_size(o, v, v);
-  lv_obj_set_pos(o, cx - v / 2, cy - v / 2);
-  lv_obj_set_style_radius(o, LV_RADIUS_CIRCLE, 0);
+static void animScale(void *var, int32_t v) {
+  lv_obj_set_style_transform_scale((lv_obj_t *)var, v, 0);
 }
+
+static void pulse(lv_obj_t *o, int32_t from, int32_t to, uint32_t time);
 
 static void animate(lv_obj_t *obj, lv_anim_exec_xcb_t cb, int32_t from, int32_t to,
                     uint32_t time, uint32_t delay, bool pingpong) {
@@ -136,12 +169,19 @@ static void animate(lv_obj_t *obj, lv_anim_exec_xcb_t cb, int32_t from, int32_t 
   lv_anim_start(&a);
 }
 
+static void pulse(lv_obj_t *o, int32_t from, int32_t to, uint32_t time) {
+  const int32_t w = lv_obj_get_width(o);
+  lv_obj_set_style_transform_pivot_x(o, w / 2, 0);
+  lv_obj_set_style_transform_pivot_y(o, w / 2, 0);
+  animate(o, animScale, from, to, time, 0, true);
+}
+
 static void iconSun(lv_obj_t *par, int cx, int cy, int r) {
   lv_obj_t *halo = dot(par, r * 2 + 10, COL_SUN, cx - r - 5, cy - r - 5);
   lv_obj_set_style_bg_opa(halo, LV_OPA_20, 0);
   lv_obj_t *s = dot(par, r * 2, COL_SUN, cx - r, cy - r);
-  animate(s, animSize, r * 2 - 2, r * 2 + 2, 2000, 0, true);
-  animate(halo, animSize, r * 2 + 7, r * 2 + 13, 2000, 0, true);
+  pulse(s, 236, 276, 2000);
+  pulse(halo, 246, 296, 2000);
 }
 
 static void iconCloud(lv_obj_t *par, int cx, int cy, uint32_t color) {
@@ -187,8 +227,15 @@ static void buildIcon(int code) {
     iconCloud(sIconBox, cx, 24, COL_CLOUD);
   } else if (code >= 95) {
     iconCloud(sIconBox, cx, 17, 0x6B7A90);
-    lv_obj_t *bolt = dot(sIconBox, 7, COL_SUN, cx - 3, 32);
-    animate(bolt, animSize, 5, 10, 520, 0, true);
+    static lv_point_precise_t pts[] = {{4, 0}, {0, 7}, {5, 7}, {1, 15}};
+    lv_obj_t *bolt = lv_line_create(sIconBox);
+    lv_line_set_points(bolt, pts, 4);
+    lv_obj_set_pos(bolt, cx - 2, 29);
+    lv_obj_set_style_line_color(bolt, lv_color_hex(COL_SUN), 0);
+    lv_obj_set_style_line_width(bolt, 3, 0);
+    lv_obj_set_style_line_rounded(bolt, true, 0);
+    animate(bolt, (lv_anim_exec_xcb_t)lv_obj_set_style_opa, LV_OPA_30, LV_OPA_COVER, 700, 0,
+            true);
   } else if (code >= 71 && code <= 86) {
     iconCloud(sIconBox, cx, 16, COL_CLOUD);
     iconDrops(sIconBox, cx, 31, COL_FG, 4);
@@ -269,9 +316,9 @@ static void buildInsight(lv_obj_t *p) {
   tagText(p, "AI", W / 2, 8, INNER);
   sLblStamp = tagText(p, "--:--", W / 2, 108, INNER);
 
-  lv_obj_t *card = plate(p, MARGIN, 24, INNER, 78);
-  sLblInsight = text(card, FONT_XS, COL_FG, "...", INNER / 2, 0, INNER - 14);
-  lv_obj_set_height(sLblInsight, 66);
+  lv_obj_t *card = plate(p, MARGIN, 22, INNER, 82);
+  sLblInsight = text(card, FONT_XS, COL_FG, "...", INNER / 2, 0, INNER - 8);
+  lv_obj_set_height(sLblInsight, 76);
   lv_obj_align(sLblInsight, LV_ALIGN_CENTER, 0, 0);
 }
 
@@ -290,7 +337,7 @@ static void buildSystem(lv_obj_t *p) {
   sLblHeap = text(rightCard, FONT_S, COL_COLD, "--", 27, 4, 50);
   tagText(rightCard, "LIVRE", 27, 22, 50);
 
-  sLblUptime = tagText(p, "--", W / 2, 106, INNER);
+  sLblUptime = text(p, FONT_TAG, COL_MUTED, "--", W / 2, 106, INNER);
 }
 
 static void buildDots(lv_obj_t *parent) {
@@ -312,7 +359,9 @@ static void refreshDots(void) {
 }
 
 static void styleScreen(lv_obj_t *scr) {
-  lv_obj_set_style_bg_color(scr, lv_color_hex(COL_BG), 0);
+  lv_obj_set_style_bg_color(scr, lv_color_hex(COL_BG_TOP), 0);
+  lv_obj_set_style_bg_grad_color(scr, lv_color_hex(COL_BG_BOT), 0);
+  lv_obj_set_style_bg_grad_dir(scr, LV_GRAD_DIR_VER, 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(scr, 0, 0);
@@ -345,7 +394,7 @@ void screensBuild(void) {
                         INNER);
   lv_obj_set_height(hint, 34);
   lv_obj_set_style_text_line_space(hint, 4, 0);
-  sLblProv = tagText(sProv, "aguardando", W / 2, 108, INNER);
+  sLblProv = text(sProv, FONT_TAG, COL_FG, "aguardando", W / 2, 108, INNER);
 
   sNight = lv_obj_create(NULL);
   styleScreen(sNight);
@@ -470,8 +519,11 @@ void screensSplash(const char *title, const char *subtitle) {
   lv_obj_t *s = lv_obj_create(lv_screen_active());
   lv_obj_remove_style_all(s);
   lv_obj_set_size(s, W, 128);
-  lv_obj_set_style_bg_color(s, lv_color_hex(COL_BG), 0);
+  lv_obj_set_style_bg_color(s, lv_color_hex(COL_BG_TOP), 0);
+  lv_obj_set_style_bg_grad_color(s, lv_color_hex(COL_BG_BOT), 0);
+  lv_obj_set_style_bg_grad_dir(s, LV_GRAD_DIR_VER, 0);
   lv_obj_set_style_bg_opa(s, LV_OPA_COVER, 0);
+  blob(s, 100, 24, 44, COL_VIOLET);
   text(s, FONT_HERO, COL_ACCENT, title, W / 2, 48, INNER);
   text(s, FONT_XS, COL_MUTED, subtitle, W / 2, 84, INNER);
   lv_obj_delete_delayed(s, 1500);

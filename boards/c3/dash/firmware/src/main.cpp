@@ -142,7 +142,7 @@ void loop() {
     netForgetCredentials();
   }
 
-  if (btnDown.pressed()) {
+  if (btnUp.pressed()) {
     if (sNight) {
       setNight(false);
     } else {
@@ -151,7 +151,7 @@ void loop() {
     }
   }
 
-  if (btnUp.pressed()) {
+  if (btnDown.pressed()) {
     if (sNight) {
       setNight(false);
     } else {
