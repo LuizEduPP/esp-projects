@@ -12,14 +12,20 @@ yarn dash:flash
 
 ## Controls
 
-Four screens in a loop — Clock, Weather, AI, System — laid out as a mosaic of cards. The UI runs on
+Six screens in a loop — Clock, Weather, Forecast (3 days), Chart (next 24 h), AI, System — laid
+out as a mosaic of cards. Cards use flex layouts rather than fixed coordinates, so labels cannot
+overlap when text grows. The UI runs on
 **LVGL 9**, which is what buys antialiased text and shapes; Adafruit GFX only draws hard-edged
 pixels and made the panel look like an 8-bit console. Screens are tiles in an `lv_tileview`, so
 turning a page slides with easing, and the weather icons are real objects animated by `lv_anim`
 (drifting clouds, falling drops, a pulsing sun with a glow).
 
-Fonts are Montserrat 12/14/16/20/44. They cover ASCII only, which is why `net.cpp` strips accents
-before any text reaches a label.
+Fonts are Montserrat 10/12/14/16/20/28. They cover ASCII only, which is why `net.cpp` strips
+accents before any text reaches a label.
+
+The weather request now also asks Open-Meteo for `weather_code`, `sunrise`, `sunset`, four
+forecast days and hourly temperatures. Watch the URL buffer when adding parameters: it silently
+truncates and the API answers 400.
 
 After `DASH_SCREEN_TIMEOUT_MS` of no input the board fades into night mode: a separate screen with
 only the clock, drawn in near-black. It is not a real dimmer — the backlight has no GPIO — but
