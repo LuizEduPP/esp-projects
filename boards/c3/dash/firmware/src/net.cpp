@@ -248,10 +248,11 @@ bool netFetchWeather(Place &place, Weather &out) {
   snprintf(url, sizeof(url),
            "http://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
            "&current=temperature_2m,relative_humidity_2m,apparent_temperature,"
-           "weather_code,wind_speed_10m"
+           "weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,surface_pressure"
+           "&minutely_15=precipitation&forecast_minutely_15=8"
            "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,"
            "weather_code,sunrise,sunset,uv_index_max"
-           "&hourly=temperature_2m&forecast_days=4&timezone=auto",
+           "&hourly=temperature_2m,surface_pressure&forecast_days=4&timezone=auto",
            place.lat, place.lon);
 
   HTTPClient http;
@@ -282,6 +283,9 @@ bool netFetchWeather(Place &place, Weather &out) {
   out.feelsC = cur["apparent_temperature"] | out.tempC;
   out.humidity = cur["relative_humidity_2m"] | 0;
   out.windKph = cur["wind_speed_10m"] | 0.0f;
+  out.windDir = cur["wind_direction_10m"] | 0;
+  out.gustKph = cur["wind_gusts_10m"] | out.windKph;
+  out.pressure = cur["surface_pressure"] | 0.0f;
   out.code = cur["weather_code"] | -1;
   out.desc = describeCode(out.code);
 
@@ -320,6 +324,23 @@ bool netFetchWeather(Place &place, Weather &out) {
     out.hourlyCount = 0;
     for (int i = 0; i < 24 && i < (int)hours.size(); ++i) {
       out.hourly[out.hourlyCount++] = hours[i] | 0.0f;
+    }
+  }
+
+  JsonArray press = doc["hourly"]["surface_pressure"];
+  if (!press.isNull() && out.hourNow >= 3 && out.pressure > 0) {
+    const float before = press[out.hourNow - 3] | 0.0f;
+    if (before > 0) out.pressureDelta = out.pressure - before;
+  }
+
+  JsonArray rain = doc["minutely_15"]["precipitation"];
+  if (!rain.isNull()) {
+    out.rain15Count = 0;
+    out.rainStartsInMin = -1;
+    for (int i = 0; i < 8 && i < (int)rain.size(); ++i) {
+      const float mm = rain[i] | 0.0f;
+      out.rain15[out.rain15Count++] = mm;
+      if (mm > 0.05f && out.rainStartsInMin < 0) out.rainStartsInMin = i * 15;
     }
   }
 
@@ -387,6 +408,113 @@ bool netFetchAir(const Place &place, Air &out) {
   out.valid = true;
 
   Serial.printf("[air] aqi %d (%s) pm2.5 %.1f\n", out.aqi, out.label, out.pm25);
+  return true;
+}
+
+bool netFetchMarket(Market &out) {
+  if (!netOnline()) return false;
+
+  WiFiClient client;
+  HTTPClient http;
+  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
+  if (!http.begin(client, DASH_MARKET_URL)) return false;
+
+  const int status = http.GET();
+  if (status != HTTP_CODE_OK) {
+    Serial.printf("[market] HTTP %d\n", status);
+    http.end();
+    return false;
+  }
+
+  const String payload = http.getString();
+  http.end();
+
+  JsonDocument doc;
+  if (deserializeJson(doc, payload)) return false;
+
+  out.usd = atof(doc["USDBRL"]["bid"] | "0");
+  out.eur = atof(doc["EURBRL"]["bid"] | "0");
+  out.btc = atof(doc["BTCBRL"]["bid"] | "0");
+  out.usdPct = atof(doc["USDBRL"]["pctChange"] | "0");
+  out.eurPct = atof(doc["EURBRL"]["pctChange"] | "0");
+  out.btcPct = atof(doc["BTCBRL"]["pctChange"] | "0");
+  out.valid = out.usd > 0;
+
+  Serial.printf("[market] usd %.2f eur %.2f btc %.0f\n", out.usd, out.eur, out.btc);
+  return out.valid;
+}
+
+bool netFetchDev(DevStats &out) {
+  if (!netOnline()) return false;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  char url[160];
+  snprintf(url, sizeof(url), "https://api.github.com/users/%s/events/public?per_page=30",
+           DASH_GITHUB_USER);
+
+  HTTPClient http;
+  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
+  http.useHTTP10(true);
+  if (!http.begin(client, url)) return false;
+  http.addHeader("User-Agent", "esp32-dash");
+
+  const int status = http.GET();
+  if (status != HTTP_CODE_OK) {
+    Serial.printf("[dev] HTTP %d\n", status);
+    http.end();
+    return false;
+  }
+
+  JsonDocument filter;
+  JsonObject item = filter.add<JsonObject>();
+  item["type"] = true;
+  item["created_at"] = true;
+  item["repo"]["name"] = true;
+  item["payload"]["size"] = true;
+
+  JsonDocument doc;
+  const DeserializationError err =
+      deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
+  http.end();
+  if (err) {
+    Serial.printf("[dev] json: %s\n", err.c_str());
+    return false;
+  }
+
+  struct tm now;
+  char today[11] = "";
+  if (getLocalTime(&now, 20)) strftime(today, sizeof(today), "%Y-%m-%d", &now);
+
+  out.commitsToday = 0;
+  out.pushes = 0;
+  out.prs = 0;
+  bool gotRepo = false;
+
+  for (JsonObject ev : doc.as<JsonArray>()) {
+    const char *type = ev["type"] | "";
+    const char *at = ev["created_at"] | "";
+    const bool isToday = today[0] && strncmp(at, today, 10) == 0;
+
+    if (!gotRepo) {
+      const char *repo = ev["repo"]["name"] | "";
+      const char *slash = strchr(repo, '/');
+      snprintf(out.lastRepo, sizeof(out.lastRepo), "%s", slash ? slash + 1 : repo);
+      gotRepo = true;
+    }
+
+    if (strcmp(type, "PushEvent") == 0) {
+      ++out.pushes;
+      if (isToday) out.commitsToday += ev["payload"]["size"] | 1;
+    } else if (strcmp(type, "PullRequestEvent") == 0 && isToday) {
+      ++out.prs;
+    }
+  }
+
+  out.valid = true;
+  Serial.printf("[dev] commits hoje %d, pushes %d, repo %s\n", out.commitsToday, out.pushes,
+                out.lastRepo);
   return true;
 }
 

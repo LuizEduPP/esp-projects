@@ -33,6 +33,33 @@ struct Weather {
   char sunrise[6] = "--:--";
   char sunset[6] = "--:--";
   float uvMax = 0;
+
+  int windDir = 0;
+  float gustKph = 0;
+  float pressure = 0;
+  float pressureDelta = 0;
+
+  float rain15[8] = {0};
+  int rain15Count = 0;
+  int rainStartsInMin = -1;
+};
+
+struct Market {
+  bool valid = false;
+  float usd = 0;
+  float eur = 0;
+  float btc = 0;
+  float usdPct = 0;
+  float eurPct = 0;
+  float btcPct = 0;
+};
+
+struct DevStats {
+  bool valid = false;
+  int commitsToday = 0;
+  int pushes = 0;
+  int prs = 0;
+  char lastRepo[24] = "--";
 };
 
 struct Air {
@@ -78,5 +105,7 @@ void netApplyTimezone(long offsetSec);
 bool netResolvePlace(Place &out);
 bool netFetchWeather(Place &place, Weather &out);
 bool netFetchAir(const Place &place, Air &out);
+bool netFetchMarket(Market &out);
+bool netFetchDev(DevStats &out);
 void netMoonPhase(time_t when, Moon &out);
 bool netFetchInsight(const Place &p, const Weather &w, char *out, size_t outLen);
