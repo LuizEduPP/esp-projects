@@ -131,8 +131,8 @@ static void rule(lv_obj_t *par, int x, int y, int w, int h) {
 }
 
 static lv_obj_t *pageOf(int index) {
-  static const uint32_t glow[UI_PAGES] = {COL_VIOLET, COL_SUN,   COL_GREEN,
-                                          COL_ACCENT, COL_HOT,   COL_COLD};
+  static const uint32_t glow[UI_PAGES] = {COL_VIOLET, COL_SUN, COL_GREEN, COL_ACCENT,
+                                          COL_GREEN,  0xC7D2FE, COL_HOT,  COL_COLD};
   lv_obj_t *tile = lv_tileview_add_tile(sTiles, index, 0, LV_DIR_HOR);
   lv_obj_remove_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(tile, 0, 0);
@@ -314,6 +314,66 @@ static void buildChart(lv_obj_t *p) {
   sLblSun = tagText(p, "--", W / 2, 108, INNER);
 }
 
+static uint32_t aqiColor(int aqi) {
+  if (aqi <= 20) return COL_GREEN;
+  if (aqi <= 40) return COL_ACCENT;
+  if (aqi <= 60) return COL_SUN;
+  if (aqi <= 80) return 0xFB923C;
+  return COL_HOT;
+}
+
+static void buildAir(lv_obj_t *p) {
+  tagText(p, "AR & UV", W / 2, 8, INNER);
+
+  sAqiRing = lv_arc_create(p);
+  lv_obj_set_pos(sAqiRing, W / 2 - 30, 22);
+  lv_obj_set_size(sAqiRing, 60, 60);
+  lv_arc_set_rotation(sAqiRing, 135);
+  lv_arc_set_bg_angles(sAqiRing, 0, 270);
+  lv_arc_set_range(sAqiRing, 0, 100);
+  lv_obj_remove_style(sAqiRing, NULL, LV_PART_KNOB);
+  lv_obj_remove_flag(sAqiRing, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_style_arc_width(sAqiRing, 5, LV_PART_MAIN);
+  lv_obj_set_style_arc_width(sAqiRing, 5, LV_PART_INDICATOR);
+  lv_obj_set_style_arc_color(sAqiRing, lv_color_hex(COL_LINE), LV_PART_MAIN);
+  lv_obj_set_style_arc_rounded(sAqiRing, true, LV_PART_INDICATOR);
+
+  sLblAqi = text(p, FONT_L, COL_FG, "--", W / 2, 40, 52);
+  sLblAqiText = text(p, FONT_XS, COL_MUTED, "--", W / 2, 86, INNER);
+
+  lv_obj_t *strip = plate(p, MARGIN, 98, INNER, 24);
+  sLblPm25 = text(strip, FONT_XS, COL_VIOLET, "--", 28, 4, 52);
+  sLblUv = text(strip, FONT_XS, COL_SUN, "--", 84, 4, 52);
+  rule(strip, 55, 6, 1, 12);
+}
+
+static void buildMoon(lv_obj_t *p) {
+  tagText(p, "LUA", W / 2, 8, INNER);
+
+  sMoonDisc = lv_obj_create(p);
+  lv_obj_remove_style_all(sMoonDisc);
+  lv_obj_set_pos(sMoonDisc, W / 2 - 27, 24);
+  lv_obj_set_size(sMoonDisc, 54, 54);
+  lv_obj_set_style_radius(sMoonDisc, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(sMoonDisc, lv_color_hex(0x1E2740), 0);
+  lv_obj_set_style_bg_opa(sMoonDisc, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_color(sMoonDisc, lv_color_hex(COL_GLASS), 0);
+  lv_obj_set_style_border_opa(sMoonDisc, 50, 0);
+  lv_obj_set_style_border_width(sMoonDisc, 1, 0);
+  lv_obj_set_style_clip_corner(sMoonDisc, true, 0);
+
+  sMoonLit = lv_obj_create(sMoonDisc);
+  lv_obj_remove_style_all(sMoonLit);
+  lv_obj_set_size(sMoonLit, 54, 54);
+  lv_obj_set_pos(sMoonLit, 54, 0);
+  lv_obj_set_style_radius(sMoonLit, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(sMoonLit, lv_color_hex(0xF2F5FF), 0);
+  lv_obj_set_style_bg_opa(sMoonLit, LV_OPA_COVER, 0);
+
+  sLblMoon = text(p, FONT_S, COL_FG, "--", W / 2, 84, INNER);
+  sLblMoonPct = text(p, FONT_TAG, COL_MUTED, "--", W / 2, 104, INNER);
+}
+
 static void buildInsight(lv_obj_t *p) {
   tagText(p, "AI", W / 2, 8, INNER);
   sLblStamp = tagText(p, "--:--", W / 2, 108, INNER);
@@ -382,8 +442,10 @@ void screensBuild(void) {
   buildWeather(pageOf(1));
   buildForecast(pageOf(2));
   buildChart(pageOf(3));
-  buildInsight(pageOf(4));
-  buildSystem(pageOf(5));
+  buildAir(pageOf(4));
+  buildMoon(pageOf(5));
+  buildInsight(pageOf(6));
+  buildSystem(pageOf(7));
 
   buildDots(sDash);
   refreshDots();
