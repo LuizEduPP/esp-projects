@@ -79,6 +79,20 @@ void uiUpdateWeather(const Weather &w) {
   screensSun(w.sunrise, w.sunset);
 }
 
+void uiUpdateAir(const Air &a, const Weather &w) {
+  if (!a.valid) {
+    screensAir(0, "sem dados", 0, 0, w.uvMax);
+    return;
+  }
+  screensAir(a.aqi, a.label, a.pm25, a.pm10, w.uvMax);
+}
+
+void uiUpdateMoon() {
+  Moon m;
+  netMoonPhase(time(nullptr), m);
+  screensMoon(m.name, m.illum, m.waxing);
+}
+
 void uiUpdateInsight(const char *text, bool pending) {
   char stamp[8] = "--:--";
   struct tm now;

@@ -12,6 +12,7 @@ static unsigned long sNightAt = 0;
 
 static Place sPlace;
 static Weather sWeather;
+static Air sAir;
 static char sInsight[DASH_AI_TEXT_MAX] = "";
 
 static unsigned long sNextWeather = 0;
@@ -74,11 +75,13 @@ static void tickClock() {
   if (!ok) memset(&now, 0, sizeof(now));
   uiUpdateClock(now, netTimeReady() && ok);
   uiUpdateSystem();
+  if (ok) uiUpdateMoon();
 }
 
 static void refreshWeather() {
   sNextWeather = millis() + DASH_WEATHER_INTERVAL_MS;
   if (netFetchWeather(sPlace, sWeather)) uiUpdateWeather(sWeather);
+  if (netFetchAir(sPlace, sAir)) uiUpdateAir(sAir, sWeather);
 }
 
 static void refreshInsight() {

@@ -544,6 +544,40 @@ void screensSun(const char *sunrise, const char *sunset) {
   lv_label_set_text(sLblSun, buf);
 }
 
+void screensAir(int aqi, const char *label, float pm25, float pm10, float uv) {
+  char buf[24];
+  const uint32_t color = aqiColor(aqi);
+
+  snprintf(buf, sizeof(buf), "%d", aqi);
+  lv_label_set_text(sLblAqi, buf);
+  lv_obj_set_style_text_color(sLblAqi, lv_color_hex(color), 0);
+  lv_label_set_text(sLblAqiText, label);
+
+  lv_arc_set_value(sAqiRing, aqi > 100 ? 100 : aqi);
+  lv_obj_set_style_arc_color(sAqiRing, lv_color_hex(color), LV_PART_INDICATOR);
+
+  snprintf(buf, sizeof(buf), "PM %.0f", pm25);
+  lv_label_set_text(sLblPm25, buf);
+  snprintf(buf, sizeof(buf), "UV %.0f", uv);
+  lv_label_set_text(sLblUv, buf);
+  (void)pm10;
+}
+
+void screensMoon(const char *phase, float illum, bool waxing) {
+  if (illum < 0) illum = 0;
+  if (illum > 1) illum = 1;
+
+  const int d = 54;
+  const int offset = (int)((1.0f - illum) * d + 0.5f);
+  lv_obj_set_pos(sMoonLit, waxing ? offset : -offset, 0);
+
+  lv_label_set_text(sLblMoon, phase);
+
+  char buf[24];
+  snprintf(buf, sizeof(buf), "%.0f%% iluminada", illum * 100.0f);
+  lv_label_set_text(sLblMoonPct, buf);
+}
+
 void screensInsight(const char *txt, bool pending, const char *stamp) {
   lv_label_set_text(sLblInsight, pending ? "pensando..." : txt);
   lv_obj_set_style_text_opa(sLblInsight, pending ? LV_OPA_50 : LV_OPA_COVER, 0);
