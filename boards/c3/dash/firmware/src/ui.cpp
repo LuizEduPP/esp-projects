@@ -141,10 +141,15 @@ void uiUpdateMarket(const Market &m) {
 
 void uiUpdateDev(const DevStats &d) {
   if (!d.valid) {
-    screensDev(0, 0, 0, "sem dados");
+    screensDev(0, 0, 0, 0, 0, "sem dados");
     return;
   }
-  screensDev(d.commitsToday, d.pushes, d.prs, d.lastRepo);
+  screensDev(d.commitsToday, d.commitsWeek, d.activeDays, d.repos, d.followers, d.lastRepo);
+}
+
+void uiBusy(bool on) {
+  screensBusy(on);
+  displayTask();
 }
 
 void uiUpdateTimer(int remainingSec, int totalSec, bool breakMode, bool running) {

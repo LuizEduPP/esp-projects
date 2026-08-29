@@ -48,7 +48,8 @@ static lv_obj_t *sWindNeedle, *sLblWind, *sLblGust, *sLblPress, *sLblPressTrend;
 static lv_obj_t *sRainBar[8], *sLblRain, *sLblRainSub;
 static lv_obj_t *sLblRise, *sLblSet, *sLblDaylight, *sSunArc;
 static lv_obj_t *sLblCur[3], *sLblCurPct[3];
-static lv_obj_t *sLblCommits, *sLblPushes, *sLblRepo;
+static lv_obj_t *sLblCommits, *sLblPushes, *sLblRepo, *sLblWeek, *sLblRepos;
+static lv_obj_t *sBusy;
 static lv_obj_t *sLblTimer, *sLblTimerMode, *sTimerArc, *sLblTimerHint;
 static lv_obj_t *sLblAqi, *sLblAqiText, *sLblPm25, *sLblUv, *sAqiRing;
 static lv_obj_t *sMoonDisc, *sMoonLit, *sLblMoon, *sLblMoonPct;
@@ -429,12 +430,15 @@ static void buildMarket(lv_obj_t *p) {
 static void buildDev(lv_obj_t *p) {
   tagText(p, "GITHUB", W / 2, 8, INNER);
 
-  sLblCommits = text(p, FONT_HERO, COL_GREEN, "--", W / 2, 28, INNER);
-  text(p, FONT_TAG, COL_MUTED, "commits hoje", W / 2, 66, INNER);
+  sLblCommits = text(p, FONT_HERO, COL_GREEN, "--", W / 2, 22, INNER);
+  sLblPushes = text(p, FONT_TAG, COL_MUTED, "commits hoje", W / 2, 58, INNER);
 
-  lv_obj_t *strip = plate(p, MARGIN, 84, INNER, 36);
-  sLblRepo = text(strip, FONT_XS, COL_FG, "--", INNER / 2, 4, INNER - 12);
-  sLblPushes = text(strip, FONT_TAG, COL_MUTED, "--", INNER / 2, 20, INNER - 12);
+  lv_obj_t *strip = plate(p, MARGIN, 74, INNER, 28);
+  sLblWeek = text(strip, FONT_XS, COL_ACCENT, "--", 26, 5, 48);
+  rule(strip, 52, 5, 1, 16);
+  sLblRepos = text(strip, FONT_XS, COL_VIOLET, "--", 78, 5, 48);
+
+  sLblRepo = text(p, FONT_TAG, COL_MUTED, "--", W / 2, 106, INNER);
 }
 
 static void buildTimer(lv_obj_t *p) {
@@ -591,6 +595,10 @@ void screensBuild(void) {
 
   buildDots(sDash);
   refreshDots();
+
+  sBusy = dot(sDash, 5, COL_ACCENT, 116, 7);
+  pulse(sBusy, 200, 300, 500);
+  lv_obj_add_flag(sBusy, LV_OBJ_FLAG_HIDDEN);
 
   sProv = lv_obj_create(NULL);
   styleScreen(sProv);
@@ -822,16 +830,39 @@ void screensMarket(float usd, float usdPct, float eur, float eurPct, float btc, 
   setQuote(sLblCur[2], sLblCurPct[2], btc / 1000.0f, btcPct, 0);
 }
 
-void screensDev(int commitsToday, int pushes, int prs, const char *repo) {
+void screensDev(int commitsToday, int commitsWeek, int activeDays, int repos, int followers,
+                const char *repo) {
   char buf[32];
   snprintf(buf, sizeof(buf), "%d", commitsToday);
   lv_label_set_text(sLblCommits, buf);
   lv_obj_set_style_text_color(
       sLblCommits, lv_color_hex(commitsToday > 0 ? COL_GREEN : COL_MUTED), 0);
 
-  lv_label_set_text(sLblRepo, repo);
-  snprintf(buf, sizeof(buf), "%d pushes  %d PRs", pushes, prs);
+  snprintf(buf, sizeof(buf), commitsToday == 1 ? "commit hoje" : "commits hoje");
   lv_label_set_text(sLblPushes, buf);
+
+  snprintf(buf, sizeof(buf), "%d / 7d", commitsWeek);
+  lv_label_set_text(sLblWeek, buf);
+
+  snprintf(buf, sizeof(buf), "%d repos", repos);
+  lv_label_set_text(sLblRepos, buf);
+
+  if (activeDays > 0) {
+    snprintf(buf, sizeof(buf), "%s  %dd ativos", repo, activeDays);
+  } else {
+    snprintf(buf, sizeof(buf), "%s", repo);
+  }
+  lv_label_set_text(sLblRepo, buf);
+  (void)followers;
+}
+
+void screensBusy(bool on) {
+  if (!sBusy) return;
+  if (on) {
+    lv_obj_remove_flag(sBusy, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_add_flag(sBusy, LV_OBJ_FLAG_HIDDEN);
+  }
 }
 
 void screensTimer(const char *clock, const char *mode, int percent, bool running) {

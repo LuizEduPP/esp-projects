@@ -39,7 +39,9 @@ void screensWind(float kph, int dir, float gust, float pressure, float delta);
 void screensRain(const float *mm, int count, int startsInMin);
 void screensSun2(const char *sunrise, const char *sunset, const char *daylight, int progress);
 void screensMarket(float usd, float usdPct, float eur, float eurPct, float btc, float btcPct);
-void screensDev(int commitsToday, int pushes, int prs, const char *repo);
+void screensDev(int commitsToday, int commitsWeek, int activeDays, int repos, int followers,
+                const char *repo);
+void screensBusy(bool on);
 void screensTimer(const char *clock, const char *mode, int percent, bool running);
 void screensInsight(const char *text, bool pending, const char *stamp);
 void screensSystem(const char *ssid, int rssi, const char *ip, unsigned heapKb,

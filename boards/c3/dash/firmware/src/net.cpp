@@ -447,14 +447,43 @@ bool netFetchMarket(Market &out) {
   return out.valid;
 }
 
+static void fetchProfile(DevStats &out) {
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  char url[128];
+  snprintf(url, sizeof(url), "https://api.github.com/users/%s", DASH_GITHUB_USER);
+
+  HTTPClient http;
+  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
+  http.useHTTP10(true);
+  if (!http.begin(client, url)) return;
+  http.addHeader("User-Agent", "esp32-dash");
+
+  if (http.GET() == HTTP_CODE_OK) {
+    JsonDocument filter;
+    filter["public_repos"] = true;
+    filter["followers"] = true;
+
+    JsonDocument doc;
+    if (!deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter))) {
+      out.repos = doc["public_repos"] | 0;
+      out.followers = doc["followers"] | 0;
+    }
+  }
+  http.end();
+}
+
 bool netFetchDev(DevStats &out) {
   if (!netOnline()) return false;
+
+  fetchProfile(out);
 
   WiFiClientSecure client;
   client.setInsecure();
 
   char url[160];
-  snprintf(url, sizeof(url), "https://api.github.com/users/%s/events/public?per_page=30",
+  snprintf(url, sizeof(url), "https://api.github.com/users/%s/events/public?per_page=100",
            DASH_GITHUB_USER);
 
   HTTPClient http;
@@ -488,17 +517,32 @@ bool netFetchDev(DevStats &out) {
 
   struct tm now;
   char today[11] = "";
-  if (getLocalTime(&now, 20)) strftime(today, sizeof(today), "%Y-%m-%d", &now);
+  char weekAgo[11] = "";
+  if (getLocalTime(&now, 20)) {
+    strftime(today, sizeof(today), "%Y-%m-%d", &now);
+    time_t past = mktime(&now) - 7 * 86400;
+    struct tm *p = localtime(&past);
+    if (p) strftime(weekAgo, sizeof(weekAgo), "%Y-%m-%d", p);
+  }
 
   out.commitsToday = 0;
+  out.commitsWeek = 0;
   out.pushes = 0;
   out.prs = 0;
+  out.issues = 0;
+  out.activeDays = 0;
+
+  char days[8][11] = {{0}};
+  int dayCount = 0;
   bool gotRepo = false;
 
   for (JsonObject ev : doc.as<JsonArray>()) {
     const char *type = ev["type"] | "";
     const char *at = ev["created_at"] | "";
+    if (strlen(at) < 10) continue;
+
     const bool isToday = today[0] && strncmp(at, today, 10) == 0;
+    const bool inWeek = weekAgo[0] && strncmp(at, weekAgo, 10) >= 0;
 
     if (!gotRepo) {
       const char *repo = ev["repo"]["name"] | "";
@@ -508,15 +552,35 @@ bool netFetchDev(DevStats &out) {
     }
 
     if (strcmp(type, "PushEvent") == 0) {
+      const int size = ev["payload"]["size"] | 1;
       ++out.pushes;
-      if (isToday) out.commitsToday += ev["payload"]["size"] | 1;
-    } else if (strcmp(type, "PullRequestEvent") == 0 && isToday) {
+      if (isToday) out.commitsToday += size;
+      if (inWeek) {
+        out.commitsWeek += size;
+
+        bool seen = false;
+        for (int i = 0; i < dayCount; ++i) {
+          if (strncmp(days[i], at, 10) == 0) {
+            seen = true;
+            break;
+          }
+        }
+        if (!seen && dayCount < 8) {
+          snprintf(days[dayCount], sizeof(days[0]), "%.10s", at);
+          ++dayCount;
+        }
+      }
+    } else if (strcmp(type, "PullRequestEvent") == 0 && inWeek) {
       ++out.prs;
+    } else if (strcmp(type, "IssuesEvent") == 0 && inWeek) {
+      ++out.issues;
     }
   }
 
+  out.activeDays = dayCount;
   out.valid = true;
-  Serial.printf("[dev] commits hoje %d, pushes %d, repo %s\n", out.commitsToday, out.pushes,
+  Serial.printf("[dev] hoje %d, semana %d em %d dias, %d repos, %d seguidores, repo %s\n",
+                out.commitsToday, out.commitsWeek, out.activeDays, out.repos, out.followers,
                 out.lastRepo);
   return true;
 }

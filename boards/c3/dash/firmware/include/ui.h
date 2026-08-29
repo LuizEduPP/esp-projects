@@ -30,5 +30,6 @@ void uiUpdateSun(const Weather &w);
 void uiUpdateMarket(const Market &m);
 void uiUpdateDev(const DevStats &d);
 void uiUpdateTimer(int remainingSec, int totalSec, bool breakMode, bool running);
+void uiBusy(bool on);
 void uiUpdateInsight(const char *text, bool pending);
 void uiUpdateSystem();

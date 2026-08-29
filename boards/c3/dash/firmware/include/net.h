@@ -57,8 +57,13 @@ struct Market {
 struct DevStats {
   bool valid = false;
   int commitsToday = 0;
+  int commitsWeek = 0;
   int pushes = 0;
   int prs = 0;
+  int issues = 0;
+  int repos = 0;
+  int followers = 0;
+  int activeDays = 0;
   char lastRepo[24] = "--";
 };
 

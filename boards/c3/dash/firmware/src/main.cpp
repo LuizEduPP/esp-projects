@@ -189,13 +189,16 @@ void loop() {
   }
 
   if (btnBoot.pressed()) {
-    if (!sNight && uiPage() == PAGE_TIMER) {
+    if (sNight) {
+      setNight(false);
+    } else if (uiPage() == PAGE_TIMER) {
       sTimerRunning = !sTimerRunning;
       sTimerTick = millis() + 1000;
       uiUpdateTimer(sTimerLeft, timerTotal(), sTimerBreak, sTimerRunning);
       keepAwake();
     } else {
-      setNight(!sNight);
+      refreshCurrentPage();
+      keepAwake();
     }
   }
   if (btnBoot.heldFor(3000)) {
