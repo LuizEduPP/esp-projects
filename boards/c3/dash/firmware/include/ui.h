@@ -4,8 +4,7 @@
 
 #include "display.h"
 #include "net.h"
-
-#define UI_PAGES 6
+#include "screens.h"
 
 void uiBegin();
 void uiTask();
@@ -21,6 +20,7 @@ void uiSetNight(bool on);
 bool uiIsNight();
 
 void uiUpdateClock(const struct tm &now, bool timeReady);
+void uiUpdatePlace(const Place &p);
 void uiUpdateWeather(const Weather &w);
 void uiUpdateInsight(const char *text, bool pending);
 void uiUpdateSystem();

@@ -8,3 +8,4 @@ __pycache__/
 icons/
 boards/c3/dash/preview/*.png
 boards/c3/dash/preview/*.html
+boards/c3/dash/preview/.build/*
