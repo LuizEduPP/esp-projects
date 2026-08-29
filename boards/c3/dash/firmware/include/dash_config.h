@@ -33,7 +33,7 @@
 #define DASH_OLLAMA_URL "https://ollama.kmali.online/api/chat"
 #endif
 #ifndef DASH_OLLAMA_MODEL
-#define DASH_OLLAMA_MODEL "llama3.2:3b"
+#define DASH_OLLAMA_MODEL "gemma4:e4b"
 #endif
 
 #ifndef DASH_WEATHER_INTERVAL_MS
@@ -68,11 +68,11 @@
 #endif
 
 #ifndef DASH_MARKET_URL
-#define DASH_MARKET_URL "http://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,BTC-BRL"
+#define DASH_MARKET_URL "https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,BTC-BRL"
 #endif
 
 #ifndef DASH_GITHUB_USER
-#define DASH_GITHUB_USER "luizpichau"
+#define DASH_GITHUB_USER "luizedupp"
 #endif
 
 #ifndef DASH_POMODORO_WORK_S

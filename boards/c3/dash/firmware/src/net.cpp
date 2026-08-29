@@ -414,9 +414,12 @@ bool netFetchAir(const Place &place, Air &out) {
 bool netFetchMarket(Market &out) {
   if (!netOnline()) return false;
 
-  WiFiClient client;
+  WiFiClientSecure client;
+  client.setInsecure();
+
   HTTPClient http;
   http.setTimeout(DASH_HTTP_TIMEOUT_MS);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   if (!http.begin(client, DASH_MARKET_URL)) return false;
 
   const int status = http.GET();
