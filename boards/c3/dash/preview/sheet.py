@@ -13,7 +13,7 @@ out = os.path.join(
     "screens.png" if prefix == "page" else prefix + ".png",
 )
 
-names = [prefix + str(i) for i in range(8)]
+names = [prefix + str(i) for i in range(14)]
 if prefix == "page":
     names.append("prov")
 

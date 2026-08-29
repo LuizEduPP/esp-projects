@@ -75,6 +75,14 @@ int main(int argc, char **argv) {
   screensSun("06:21", "18:04");
   screensAir(34, "boa", 8.4f, 14.0f, 9.0f);
   screensMoon("gibosa crescente", 0.72f, true);
+  screensWind(18.0f, 135, 34.0f, 1013.0f, 1.4f);
+
+  const float rain[8] = {0, 0, 0.2f, 1.4f, 2.8f, 1.1f, 0.3f, 0};
+  screensRain(rain, 8, 30);
+  screensSun2("06:21", "18:04", "11h 43min de sol", 62);
+  screensMarket(5.42f, 0.37f, 5.91f, -0.22f, 348000.0f, 2.4f);
+  screensDev(7, 12, 2, "015-esp-projects");
+  screensTimer("18:24", "foco", 26, true);
   screensInsight("O ceu encoberto promete uma tarde quente e umida.", false, "15:40");
   screensSystem("hotspot", -58, "10.31.254.103", 187, "0h 12m");
 
@@ -95,6 +103,14 @@ int main(int argc, char **argv) {
   screensSun("06:21", "18:04");
   screensAir(142, "pessima", 188.6f, 240.0f, 12.0f);
   screensMoon("quarto minguante", 0.5f, false);
+  screensWind(128.0f, 315, 180.0f, 998.0f, -3.2f);
+
+  const float storm[8] = {8.4f, 12.2f, 15.0f, 9.9f, 4.2f, 2.0f, 0.5f, 0};
+  screensRain(storm, 8, 0);
+  screensSun2("05:59", "19:12", "13h 13min de sol", 100);
+  screensMarket(19.99f, -12.5f, 21.44f, -8.7f, 1200000.0f, 15.2f);
+  screensDev(0, 0, 0, "monorepo-com-nome-gigante");
+  screensTimer("00:00", "pausa", 100, false);
   screensInsight(
       "Uma frente fria bastante intensa chega durante a madrugada e derruba a temperatura de "
       "forma abrupta em toda a regiao, entao leve agasalho.",

@@ -1,5 +1,6 @@
 #include "screens.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -36,7 +37,7 @@ static lv_obj_t *sDash;
 static lv_obj_t *sTiles;
 static lv_obj_t *sProv;
 static lv_obj_t *sNight;
-static lv_obj_t *sDots[UI_PAGES];
+static lv_obj_t *sDots[1];
 
 static lv_obj_t *sLblCity, *sLblTime, *sLblWeekday, *sLblDate, *sBarDay;
 static lv_obj_t *sIconBox, *sLblTemp, *sLblDesc, *sQuick[3];
@@ -137,8 +138,9 @@ static void rule(lv_obj_t *par, int x, int y, int w, int h) {
 }
 
 static lv_obj_t *pageOf(int index) {
-  static const uint32_t glow[UI_PAGES] = {COL_VIOLET, COL_SUN, COL_GREEN, COL_ACCENT,
-                                          COL_GREEN,  0xC7D2FE, COL_HOT,  COL_COLD};
+  static const uint32_t glow[UI_PAGES] = {
+      COL_VIOLET, COL_SUN,   COL_GREEN, COL_ACCENT, COL_RAIN, COL_ACCENT, COL_GREEN,
+      COL_SUN,    0xC7D2FE,  COL_GREEN, COL_VIOLET, COL_HOT,  COL_HOT,    COL_COLD};
   lv_obj_t *tile = lv_tileview_add_tile(sTiles, index, 0, LV_DIR_HOR);
   lv_obj_remove_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(tile, 0, 0);
@@ -320,6 +322,130 @@ static void buildChart(lv_obj_t *p) {
   sLblSun = tagText(p, "--", W / 2, 108, INNER);
 }
 
+static lv_obj_t *ring(lv_obj_t *par, int cx, int cy, int d, uint32_t color, int width) {
+  lv_obj_t *a = lv_arc_create(par);
+  lv_obj_set_pos(a, cx - d / 2, cy - d / 2);
+  lv_obj_set_size(a, d, d);
+  lv_arc_set_rotation(a, 135);
+  lv_arc_set_bg_angles(a, 0, 270);
+  lv_arc_set_range(a, 0, 100);
+  lv_obj_remove_style(a, NULL, LV_PART_KNOB);
+  lv_obj_remove_flag(a, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_style_arc_width(a, width, LV_PART_MAIN);
+  lv_obj_set_style_arc_width(a, width, LV_PART_INDICATOR);
+  lv_obj_set_style_arc_color(a, lv_color_hex(COL_LINE), LV_PART_MAIN);
+  lv_obj_set_style_arc_color(a, lv_color_hex(color), LV_PART_INDICATOR);
+  lv_obj_set_style_arc_rounded(a, true, LV_PART_INDICATOR);
+  return a;
+}
+
+static void buildWind(lv_obj_t *p) {
+  tagText(p, "VENTO", W / 2, 8, INNER);
+
+  lv_obj_t *rose = lv_obj_create(p);
+  lv_obj_remove_style_all(rose);
+  lv_obj_set_pos(rose, W / 2 - 26, 22);
+  lv_obj_set_size(rose, 52, 52);
+  lv_obj_set_style_radius(rose, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_border_color(rose, lv_color_hex(COL_LINE), 0);
+  lv_obj_set_style_border_opa(rose, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(rose, 1, 0);
+  lv_obj_set_style_bg_color(rose, lv_color_hex(COL_GLASS), 0);
+  lv_obj_set_style_bg_opa(rose, 16, 0);
+
+  static lv_point_precise_t pts[] = {{0, 0}, {0, 0}, {0, 0}};
+  sWindNeedle = lv_line_create(rose);
+  lv_line_set_points(sWindNeedle, pts, 3);
+  lv_obj_set_style_line_color(sWindNeedle, lv_color_hex(COL_ACCENT), 0);
+  lv_obj_set_style_line_width(sWindNeedle, 3, 0);
+  lv_obj_set_style_line_rounded(sWindNeedle, true, 0);
+
+  sLblWind = text(p, FONT_S, COL_FG, "--", W / 2, 36, 46);
+  sLblGust = text(p, FONT_TAG, COL_MUTED, "--", W / 2, 78, INNER);
+
+  lv_obj_t *strip = plate(p, MARGIN, 94, INNER, 26);
+  sLblPress = text(strip, FONT_XS, COL_FG, "--", 46, 5, 76);
+  sLblPressTrend = text(strip, FONT_XS, COL_ACCENT, "--", 92, 5, 30);
+}
+
+static void buildRain(lv_obj_t *p) {
+  tagText(p, "CHUVA 2H", W / 2, 8, INNER);
+
+  sLblRain = text(p, FONT_M, COL_FG, "--", W / 2, 26, INNER);
+  sLblRainSub = text(p, FONT_TAG, COL_MUTED, "--", W / 2, 48, INNER);
+
+  for (int i = 0; i < 8; ++i) {
+    lv_obj_t *slot = lv_obj_create(p);
+    lv_obj_remove_style_all(slot);
+    lv_obj_set_pos(slot, MARGIN + i * 14, 68);
+    lv_obj_set_size(slot, 11, 38);
+    lv_obj_set_style_radius(slot, 3, 0);
+    lv_obj_set_style_bg_color(slot, lv_color_hex(COL_GLASS), 0);
+    lv_obj_set_style_bg_opa(slot, 20, 0);
+
+    sRainBar[i] = lv_obj_create(slot);
+    lv_obj_remove_style_all(sRainBar[i]);
+    lv_obj_set_size(sRainBar[i], 11, 2);
+    lv_obj_set_pos(sRainBar[i], 0, 36);
+    lv_obj_set_style_radius(sRainBar[i], 3, 0);
+    lv_obj_set_style_bg_color(sRainBar[i], lv_color_hex(COL_RAIN), 0);
+    lv_obj_set_style_bg_opa(sRainBar[i], LV_OPA_COVER, 0);
+  }
+
+  text(p, FONT_TAG, COL_MUTED, "agora", 20, 108, 40);
+  text(p, FONT_TAG, COL_MUTED, "+2h", 106, 108, 34);
+}
+
+static void buildSun(lv_obj_t *p) {
+  tagText(p, "SOL", W / 2, 8, INNER);
+
+  sSunArc = ring(p, W / 2, 56, 62, COL_SUN, 5);
+
+  lv_obj_t *disc = dot(p, 18, COL_SUN, W / 2 - 9, 47);
+  lv_obj_set_style_bg_opa(disc, 220, 0);
+  pulse(disc, 240, 280, 2400);
+
+  sLblDaylight = text(p, FONT_XS, COL_FG, "--", W / 2, 82, INNER);
+
+  lv_obj_t *strip = plate(p, MARGIN, 98, INNER, 24);
+  sLblRise = text(strip, FONT_XS, COL_SUN, "--", 28, 4, 52);
+  sLblSet = text(strip, FONT_XS, COL_VIOLET, "--", 84, 4, 52);
+  rule(strip, 55, 6, 1, 12);
+}
+
+static void buildMarket(lv_obj_t *p) {
+  tagText(p, "MERCADO", W / 2, 8, INNER);
+  static const char *names[3] = {"USD", "EUR", "BTC"};
+  for (int i = 0; i < 3; ++i) {
+    const int y = 24 + i * 32;
+    lv_obj_t *card = plate(p, MARGIN, y, INNER, 28);
+    text(card, FONT_TAG, COL_MUTED, names[i], 20, 8, 32);
+    rule(card, 40, 5, 1, 16);
+    sLblCur[i] = text(card, FONT_S, COL_FG, "--", 72, 4, 54);
+    sLblCurPct[i] = text(card, FONT_TAG, COL_GREEN, "--", 105, 8, 34);
+  }
+}
+
+static void buildDev(lv_obj_t *p) {
+  tagText(p, "GITHUB", W / 2, 8, INNER);
+
+  sLblCommits = text(p, FONT_HERO, COL_GREEN, "--", W / 2, 28, INNER);
+  text(p, FONT_TAG, COL_MUTED, "commits hoje", W / 2, 66, INNER);
+
+  lv_obj_t *strip = plate(p, MARGIN, 84, INNER, 36);
+  sLblRepo = text(strip, FONT_XS, COL_FG, "--", INNER / 2, 4, INNER - 12);
+  sLblPushes = text(strip, FONT_TAG, COL_MUTED, "--", INNER / 2, 20, INNER - 12);
+}
+
+static void buildTimer(lv_obj_t *p) {
+  tagText(p, "POMODORO", W / 2, 8, INNER);
+
+  sTimerArc = ring(p, W / 2, 60, 72, COL_HOT, 6);
+  sLblTimer = text(p, FONT_L, COL_FG, "25:00", W / 2, 48, 72);
+  sLblTimerMode = text(p, FONT_TAG, COL_MUTED, "foco", W / 2, 70, 72);
+  sLblTimerHint = text(p, FONT_TAG, COL_ACCENT, "BOOT para iniciar", W / 2, 104, INNER);
+}
+
 static uint32_t aqiColor(int aqi) {
   if (aqi <= 20) return COL_GREEN;
   if (aqi <= 40) return COL_ACCENT;
@@ -409,21 +535,25 @@ static void buildSystem(lv_obj_t *p) {
 }
 
 static void buildDots(lv_obj_t *parent) {
-  const int step = 9;
-  const int total = (UI_PAGES - 1) * step + 3;
-  const int start = (W - total) / 2;
-  for (int i = 0; i < UI_PAGES; ++i) {
-    sDots[i] = dot(parent, 3, COL_LINE, start + i * step, 121);
-  }
+  lv_obj_t *track = lv_obj_create(parent);
+  lv_obj_remove_style_all(track);
+  lv_obj_set_pos(track, 34, 122);
+  lv_obj_set_size(track, 60, 2);
+  lv_obj_set_style_radius(track, 1, 0);
+  lv_obj_set_style_bg_color(track, lv_color_hex(COL_GLASS), 0);
+  lv_obj_set_style_bg_opa(track, 40, 0);
+
+  sDots[0] = lv_obj_create(track);
+  lv_obj_remove_style_all(sDots[0]);
+  lv_obj_set_size(sDots[0], 60 / UI_PAGES + 4, 2);
+  lv_obj_set_style_radius(sDots[0], 1, 0);
+  lv_obj_set_style_bg_color(sDots[0], lv_color_hex(COL_ACCENT), 0);
+  lv_obj_set_style_bg_opa(sDots[0], LV_OPA_COVER, 0);
 }
 
 static void refreshDots(void) {
-  for (int i = 0; i < UI_PAGES; ++i) {
-    const bool on = i == sPage;
-    lv_obj_set_style_bg_color(sDots[i], lv_color_hex(on ? COL_ACCENT : COL_LINE), 0);
-    lv_obj_set_size(sDots[i], on ? 8 : 3, 3);
-    lv_obj_set_style_radius(sDots[i], 2, 0);
-  }
+  const int span = 60 - (60 / UI_PAGES + 4);
+  lv_obj_set_x(sDots[0], span * sPage / (UI_PAGES - 1));
 }
 
 static void styleScreen(lv_obj_t *scr) {
@@ -444,14 +574,20 @@ void screensBuild(void) {
   lv_obj_set_style_bg_opa(sTiles, LV_OPA_TRANSP, 0);
   lv_obj_set_scrollbar_mode(sTiles, LV_SCROLLBAR_MODE_OFF);
 
-  buildClock(pageOf(0));
-  buildWeather(pageOf(1));
-  buildForecast(pageOf(2));
-  buildChart(pageOf(3));
-  buildAir(pageOf(4));
-  buildMoon(pageOf(5));
-  buildInsight(pageOf(6));
-  buildSystem(pageOf(7));
+  buildClock(pageOf(PAGE_CLOCK));
+  buildWeather(pageOf(PAGE_WEATHER));
+  buildForecast(pageOf(PAGE_FORECAST));
+  buildChart(pageOf(PAGE_CHART));
+  buildRain(pageOf(PAGE_RAIN));
+  buildWind(pageOf(PAGE_WIND));
+  buildAir(pageOf(PAGE_AIR));
+  buildSun(pageOf(PAGE_SUN));
+  buildMoon(pageOf(PAGE_MOON));
+  buildMarket(pageOf(PAGE_MARKET));
+  buildDev(pageOf(PAGE_DEV));
+  buildTimer(pageOf(PAGE_TIMER));
+  buildInsight(pageOf(PAGE_AI));
+  buildSystem(pageOf(PAGE_SYSTEM));
 
   buildDots(sDash);
   refreshDots();
@@ -582,6 +718,130 @@ void screensMoon(const char *phase, float illum, bool waxing) {
   char buf[24];
   snprintf(buf, sizeof(buf), "%.0f%% iluminada", illum * 100.0f);
   lv_label_set_text(sLblMoonPct, buf);
+}
+
+void screensWind(float kph, int dir, float gust, float pressure, float delta) {
+  static lv_point_precise_t pts[3];
+  static const char *kCompass[8] = {"N", "NE", "L", "SE", "S", "SO", "O", "NO"};
+
+  const float rad = (float)((dir + 180) % 360) * 3.14159265f / 180.0f;
+  const int cx = 25;
+  const int cy = 25;
+  const int len = 18;
+  const float tipX = cx + sinf(rad) * len;
+  const float tipY = cy - cosf(rad) * len;
+
+  pts[0].x = (int32_t)(cx - sinf(rad) * 8);
+  pts[0].y = (int32_t)(cy + cosf(rad) * 8);
+  pts[1].x = cx;
+  pts[1].y = cy;
+  pts[2].x = (int32_t)tipX;
+  pts[2].y = (int32_t)tipY;
+  lv_line_set_points(sWindNeedle, pts, 3);
+
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%.0f", kph);
+  lv_label_set_text(sLblWind, buf);
+
+  snprintf(buf, sizeof(buf), "%s  km/h   rajada %.0f", kCompass[((dir + 22) % 360) / 45], gust);
+  lv_label_set_text(sLblGust, buf);
+
+  snprintf(buf, sizeof(buf), "%.0f hPa", pressure);
+  lv_label_set_text(sLblPress, buf);
+
+  if (delta > 0.6f) {
+    snprintf(buf, sizeof(buf), "subindo");
+    lv_obj_set_style_text_color(sLblPressTrend, lv_color_hex(COL_GREEN), 0);
+  } else if (delta < -0.6f) {
+    snprintf(buf, sizeof(buf), "caindo");
+    lv_obj_set_style_text_color(sLblPressTrend, lv_color_hex(COL_HOT), 0);
+  } else {
+    snprintf(buf, sizeof(buf), "estavel");
+    lv_obj_set_style_text_color(sLblPressTrend, lv_color_hex(COL_MUTED), 0);
+  }
+  lv_label_set_text(sLblPressTrend, buf);
+}
+
+void screensRain(const float *mm, int count, int startsInMin) {
+  float peak = 0.4f;
+  for (int i = 0; i < count; ++i) {
+    if (mm[i] > peak) peak = mm[i];
+  }
+
+  for (int i = 0; i < 8; ++i) {
+    const float v = i < count ? mm[i] : 0.0f;
+    int h = (int)(v / peak * 34.0f + 0.5f);
+    if (h < 2) h = 2;
+    lv_obj_set_size(sRainBar[i], 11, h);
+    lv_obj_set_pos(sRainBar[i], 0, 38 - h);
+    lv_obj_set_style_bg_opa(sRainBar[i], v > 0.05f ? LV_OPA_COVER : 90, 0);
+    lv_obj_set_style_bg_color(sRainBar[i], lv_color_hex(v > 0.05f ? COL_RAIN : COL_LINE), 0);
+  }
+
+  char buf[32];
+  if (startsInMin < 0) {
+    lv_label_set_text(sLblRain, "sem chuva");
+    lv_obj_set_style_text_color(sLblRain, lv_color_hex(COL_GREEN), 0);
+    lv_label_set_text(sLblRainSub, "nas proximas 2 horas");
+  } else if (startsInMin == 0) {
+    lv_label_set_text(sLblRain, "chovendo");
+    lv_obj_set_style_text_color(sLblRain, lv_color_hex(COL_RAIN), 0);
+    lv_label_set_text(sLblRainSub, "agora");
+  } else {
+    lv_label_set_text(sLblRain, "vai chover");
+    lv_obj_set_style_text_color(sLblRain, lv_color_hex(COL_RAIN), 0);
+    snprintf(buf, sizeof(buf), "em cerca de %d min", startsInMin);
+    lv_label_set_text(sLblRainSub, buf);
+  }
+}
+
+void screensSun2(const char *sunrise, const char *sunset, const char *daylight, int progress) {
+  lv_label_set_text(sLblRise, sunrise);
+  lv_label_set_text(sLblSet, sunset);
+  lv_label_set_text(sLblDaylight, daylight);
+  lv_arc_set_value(sSunArc, progress < 0 ? 0 : (progress > 100 ? 100 : progress));
+}
+
+static void setQuote(lv_obj_t *value, lv_obj_t *pct, float v, float p, int decimals) {
+  char buf[24];
+  if (decimals == 0) {
+    snprintf(buf, sizeof(buf), "%.0f", v);
+  } else {
+    snprintf(buf, sizeof(buf), "%.2f", v);
+  }
+  lv_label_set_text(value, buf);
+
+  snprintf(buf, sizeof(buf), "%+.1f%%", p);
+  lv_label_set_text(pct, buf);
+  lv_obj_set_style_text_color(pct, lv_color_hex(p >= 0 ? COL_GREEN : COL_HOT), 0);
+}
+
+void screensMarket(float usd, float usdPct, float eur, float eurPct, float btc, float btcPct) {
+  setQuote(sLblCur[0], sLblCurPct[0], usd, usdPct, 2);
+  setQuote(sLblCur[1], sLblCurPct[1], eur, eurPct, 2);
+  setQuote(sLblCur[2], sLblCurPct[2], btc / 1000.0f, btcPct, 0);
+}
+
+void screensDev(int commitsToday, int pushes, int prs, const char *repo) {
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%d", commitsToday);
+  lv_label_set_text(sLblCommits, buf);
+  lv_obj_set_style_text_color(
+      sLblCommits, lv_color_hex(commitsToday > 0 ? COL_GREEN : COL_MUTED), 0);
+
+  lv_label_set_text(sLblRepo, repo);
+  snprintf(buf, sizeof(buf), "%d pushes  %d PRs", pushes, prs);
+  lv_label_set_text(sLblPushes, buf);
+}
+
+void screensTimer(const char *clock, const char *mode, int percent, bool running) {
+  lv_label_set_text(sLblTimer, clock);
+  lv_label_set_text(sLblTimerMode, mode);
+  lv_arc_set_value(sTimerArc, percent < 0 ? 0 : (percent > 100 ? 100 : percent));
+  lv_obj_set_style_arc_color(sTimerArc,
+                             lv_color_hex(strcmp(mode, "pausa") == 0 ? COL_GREEN : COL_HOT),
+                             LV_PART_INDICATOR);
+  lv_label_set_text(sLblTimerHint, running ? "BOOT para pausar" : "BOOT para iniciar");
 }
 
 void screensInsight(const char *txt, bool pending, const char *stamp) {

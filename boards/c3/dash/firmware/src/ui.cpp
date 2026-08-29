@@ -77,6 +77,9 @@ void uiUpdateWeather(const Weather &w) {
 
   if (w.hourlyCount > 0) screensChart(w.hourly, w.hourlyCount);
   screensSun(w.sunrise, w.sunset);
+  uiUpdateWind(w);
+  uiUpdateRain(w);
+  uiUpdateSun(w);
 }
 
 void uiUpdateAir(const Air &a, const Weather &w) {
@@ -91,6 +94,64 @@ void uiUpdateMoon() {
   Moon m;
   netMoonPhase(time(nullptr), m);
   screensMoon(m.name, m.illum, m.waxing);
+}
+
+void uiUpdateWind(const Weather &w) {
+  screensWind(w.windKph, w.windDir, w.gustKph, w.pressure, w.pressureDelta);
+}
+
+void uiUpdateRain(const Weather &w) {
+  screensRain(w.rain15, w.rain15Count, w.rainStartsInMin);
+}
+
+void uiUpdateSun(const Weather &w) {
+  int rh = 0;
+  int rm = 0;
+  int sh = 0;
+  int sm = 0;
+  if (sscanf(w.sunrise, "%d:%d", &rh, &rm) != 2 ||
+      sscanf(w.sunset, "%d:%d", &sh, &sm) != 2) {
+    screensSun2(w.sunrise, w.sunset, "--", 0);
+    return;
+  }
+
+  const int rise = rh * 60 + rm;
+  const int set = sh * 60 + sm;
+  const int span = set - rise;
+
+  char daylight[24];
+  snprintf(daylight, sizeof(daylight), "%dh %02dmin de sol", span / 60, span % 60);
+
+  int progress = 0;
+  struct tm now;
+  if (getLocalTime(&now, 20) && span > 0) {
+    const int mins = now.tm_hour * 60 + now.tm_min;
+    progress = (mins - rise) * 100 / span;
+    if (progress < 0) progress = 0;
+    if (progress > 100) progress = 100;
+  }
+
+  screensSun2(w.sunrise, w.sunset, daylight, progress);
+}
+
+void uiUpdateMarket(const Market &m) {
+  if (!m.valid) return;
+  screensMarket(m.usd, m.usdPct, m.eur, m.eurPct, m.btc, m.btcPct);
+}
+
+void uiUpdateDev(const DevStats &d) {
+  if (!d.valid) {
+    screensDev(0, 0, 0, "sem dados");
+    return;
+  }
+  screensDev(d.commitsToday, d.pushes, d.prs, d.lastRepo);
+}
+
+void uiUpdateTimer(int remainingSec, int totalSec, bool breakMode, bool running) {
+  char clock[8];
+  snprintf(clock, sizeof(clock), "%02d:%02d", remainingSec / 60, remainingSec % 60);
+  const int percent = totalSec > 0 ? (totalSec - remainingSec) * 100 / totalSec : 0;
+  screensTimer(clock, breakMode ? "pausa" : "foco", percent, running);
 }
 
 void uiUpdateInsight(const char *text, bool pending) {

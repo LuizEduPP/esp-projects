@@ -13,10 +13,19 @@ static unsigned long sNightAt = 0;
 static Place sPlace;
 static Weather sWeather;
 static Air sAir;
+static Market sMarket;
+static DevStats sDev;
+
+static bool sTimerRunning = false;
+static bool sTimerBreak = false;
+static int sTimerLeft = DASH_POMODORO_WORK_S;
+static unsigned long sTimerTick = 0;
 static char sInsight[DASH_AI_TEXT_MAX] = "";
 
 static unsigned long sNextWeather = 0;
 static unsigned long sNextInsight = 0;
+static unsigned long sNextMarket = 0;
+static unsigned long sNextDev = 0;
 static unsigned long sNextTimeSync = 0;
 static unsigned long sNextGeo = 0;
 static unsigned long sNextTick = 0;
@@ -97,6 +106,42 @@ static void refreshInsight() {
   uiUpdateInsight(sInsight, false);
 }
 
+static void refreshMarket() {
+  sNextMarket = millis() + DASH_MARKET_INTERVAL_MS;
+  if (netFetchMarket(sMarket)) uiUpdateMarket(sMarket);
+}
+
+static void refreshDev() {
+  sNextDev = millis() + DASH_DEV_INTERVAL_MS;
+  netFetchDev(sDev);
+  uiUpdateDev(sDev);
+}
+
+static int timerTotal() {
+  return sTimerBreak ? DASH_POMODORO_BREAK_S : DASH_POMODORO_WORK_S;
+}
+
+static void timerReset(bool breakMode) {
+  sTimerBreak = breakMode;
+  sTimerLeft = timerTotal();
+  uiUpdateTimer(sTimerLeft, timerTotal(), sTimerBreak, sTimerRunning);
+}
+
+static void timerTask() {
+  if (!sTimerRunning) return;
+  const unsigned long now = millis();
+  if ((long)(now - sTimerTick) < 0) return;
+  sTimerTick = now + 1000;
+
+  if (sTimerLeft > 0) --sTimerLeft;
+  if (sTimerLeft == 0) {
+    sTimerRunning = false;
+    timerReset(!sTimerBreak);
+    return;
+  }
+  uiUpdateTimer(sTimerLeft, timerTotal(), sTimerBreak, sTimerRunning);
+}
+
 static void locate() {
   sNextGeo = millis() + 6UL * 3600000UL;
   if (netResolvePlace(sPlace)) {
@@ -113,6 +158,8 @@ void setup() {
 
   uiBegin();
   uiSplash("dash", "iniciando");
+
+  timerReset(false);
 
   netBegin();
   sNextTimeSync = millis();
@@ -135,11 +182,22 @@ void loop() {
       netSyncTime();
       locate();
       sNextWeather = millis();
+      sNextMarket = millis() + 2000;
+      sNextDev = millis() + 4000;
       sNextTimeSync = millis() + DASH_TIME_SYNC_INTERVAL_MS;
     }
   }
 
-  if (btnBoot.pressed()) setNight(!sNight);
+  if (btnBoot.pressed()) {
+    if (!sNight && uiPage() == PAGE_TIMER) {
+      sTimerRunning = !sTimerRunning;
+      sTimerTick = millis() + 1000;
+      uiUpdateTimer(sTimerLeft, timerTotal(), sTimerBreak, sTimerRunning);
+      keepAwake();
+    } else {
+      setNight(!sNight);
+    }
+  }
   if (btnBoot.heldFor(3000)) {
     setNight(false);
     netForgetCredentials();
@@ -171,8 +229,12 @@ void loop() {
     }
     if ((long)(now - sNextGeo) >= 0) locate();
     if ((long)(now - sNextWeather) >= 0) refreshWeather();
+    if ((long)(now - sNextMarket) >= 0) refreshMarket();
+    if ((long)(now - sNextDev) >= 0) refreshDev();
     if ((long)(now - sNextInsight) >= 0 && sWeather.valid) refreshInsight();
   }
+
+  timerTask();
 
   if (!sNight && (long)(now - sNightAt) >= 0) setNight(true);
 
