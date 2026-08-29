@@ -42,6 +42,6 @@ bool netTimeReady();
 void netSyncTime();
 void netApplyTimezone(long offsetSec);
 
-bool netGeolocate(Place &out);
+bool netResolvePlace(Place &out);
 bool netFetchWeather(Place &place, Weather &out);
 bool netFetchInsight(const Place &p, const Weather &w, char *out, size_t outLen);

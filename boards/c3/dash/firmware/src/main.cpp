@@ -95,7 +95,7 @@ static void refreshInsight() {
 
 static void locate() {
   sNextGeo = millis() + 6UL * 3600000UL;
-  if (netGeolocate(sPlace)) {
+  if (netResolvePlace(sPlace)) {
     sWeather.valid = false;
     sNextWeather = millis();
     sDirty = true;

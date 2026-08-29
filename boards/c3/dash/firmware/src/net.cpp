@@ -149,35 +149,59 @@ void netSyncTime() {
   }
 }
 
-bool netGeolocate(Place &out) {
-  if (!netOnline()) return false;
-
+static bool httpGetJson(const char *url, JsonDocument &doc) {
   WiFiClient client;
   HTTPClient http;
   http.setTimeout(DASH_HTTP_TIMEOUT_MS);
-  if (!http.begin(client, DASH_GEO_URL)) return false;
+  if (!http.begin(client, url)) return false;
 
   const int status = http.GET();
   if (status != HTTP_CODE_OK) {
-    Serial.printf("[geo] HTTP %d\n", status);
+    Serial.printf("[http] %s -> %d\n", url, status);
     http.end();
     return false;
   }
 
   const String payload = http.getString();
   http.end();
+  return !deserializeJson(doc, payload);
+}
+
+static bool geocodeCity(Place &out) {
+  if (!strlen(DASH_CITY)) return false;
+
+  String url = DASH_GEOCODE_URL;
+  for (const char *p = DASH_CITY; *p; ++p) url += (*p == ' ') ? '+' : *p;
 
   JsonDocument doc;
-  const DeserializationError err = deserializeJson(doc, payload);
-  if (err) return false;
+  if (!httpGetJson(url.c_str(), doc)) return false;
 
+  JsonObject hit = doc["results"][0];
+  if (hit.isNull()) return false;
+
+  out.lat = hit["latitude"] | out.lat;
+  out.lon = hit["longitude"] | out.lon;
+  snprintf(out.city, sizeof(out.city), "%s", DASH_CITY);
+  out.valid = true;
+  return true;
+}
+
+static bool geolocateByIp(Place &out) {
+  JsonDocument doc;
+  if (!httpGetJson(DASH_GEO_URL, doc)) return false;
   if (strcmp(doc["status"] | "fail", "success") != 0) return false;
 
   out.lat = doc["lat"] | out.lat;
   out.lon = doc["lon"] | out.lon;
   snprintf(out.city, sizeof(out.city), "%s", doc["city"] | out.city);
   out.valid = true;
-  Serial.printf("[geo] %s %.3f %.3f\n", out.city, out.lat, out.lon);
+  return true;
+}
+
+bool netResolvePlace(Place &out) {
+  if (!netOnline()) return false;
+  if (!geocodeCity(out) && !geolocateByIp(out)) return false;
+  Serial.printf("[geo] %s %.4f %.4f\n", out.city, out.lat, out.lon);
   return true;
 }
 

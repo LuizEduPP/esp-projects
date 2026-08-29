@@ -11,26 +11,24 @@
 #include "pins.h"
 
 #define COL_BG 0x0000
-#define COL_CARD 0x18E3
-#define COL_FG 0xFFFF
-#define COL_DIM 0x7BEF
-#define COL_FAINT 0x39E7
-#define COL_ACCENT 0x07FF
-#define COL_WARM 0xFD00
-#define COL_COOL 0x347F
-#define COL_GOOD 0x07E6
-#define COL_BAD 0xF9A6
-#define COL_SUN 0xFEA0
-#define COL_CLOUD 0xC618
-#define COL_RAIN 0x3D7F
+#define COL_FG 0xE73C
+#define COL_DIM 0x7BCF
+#define COL_FAINT 0x31A6
+#define COL_ACCENT 0x279F
+#define COL_WARM 0xFCAF
+#define COL_COOL 0x62FF
+#define COL_SUN 0xFE64
+#define COL_CLOUD 0x94B2
+#define COL_RAIN 0x3C1F
 
 static Adafruit_ST7735 tft(&SPI, TFT_CS, TFT_DC, TFT_RST);
 static GFXcanvas16 canvas(UI_W, UI_H);
 
 static const char *const kWeekdays[] = {"DOMINGO", "SEGUNDA", "TERCA",  "QUARTA",
                                         "QUINTA",  "SEXTA",   "SABADO"};
-static const char *const kMonths[] = {"jan", "fev", "mar", "abr", "mai", "jun",
-                                      "jul", "ago", "set", "out", "nov", "dez"};
+static const char *const kMonths[] = {"janeiro", "fevereiro", "marco",    "abril",
+                                      "maio",    "junho",     "julho",    "agosto",
+                                      "setembro", "outubro",  "novembro", "dezembro"};
 
 void uiBegin() {
   SPI.begin(TFT_SCLK, -1, TFT_MOSI, TFT_CS);
@@ -47,26 +45,7 @@ void uiScreenPower(bool on) {
   tft.enableSleep(!on);
 }
 
-static void textAt(const char *s, int x, int y, const GFXfont *font, uint16_t color) {
-  canvas.setFont(font);
-  canvas.setTextColor(color);
-  canvas.setCursor(x, y);
-  canvas.print(s);
-}
-
-static int textWidth(const char *s, const GFXfont *font) {
-  int16_t x1, y1;
-  uint16_t w, h;
-  canvas.setFont(font);
-  canvas.getTextBounds(s, 0, 0, &x1, &y1, &w, &h);
-  return w;
-}
-
-static void textCentered(const char *s, int y, const GFXfont *font, uint16_t color) {
-  textAt(s, (UI_W - textWidth(s, font)) / 2, y, font, color);
-}
-
-static void smallAt(const char *s, int x, int y, uint16_t color) {
+static void micro(const char *s, int x, int y, uint16_t color) {
   canvas.setFont(nullptr);
   canvas.setTextSize(1);
   canvas.setTextColor(color);
@@ -74,23 +53,38 @@ static void smallAt(const char *s, int x, int y, uint16_t color) {
   canvas.print(s);
 }
 
-static void wifiGlyph(int x, int y, int bars) {
-  for (int i = 0; i < 3; ++i) {
-    const int h = 3 + i * 3;
-    const uint16_t c = (i < bars) ? COL_GOOD : COL_FAINT;
-    canvas.fillRect(x + i * 4, y + (9 - h), 3, h, c);
-  }
+static int widthOf(const char *s, const GFXfont *font) {
+  int16_t x1, y1;
+  uint16_t w, h;
+  canvas.setFont(font);
+  canvas.getTextBounds(s, 0, 0, &x1, &y1, &w, &h);
+  return w;
 }
 
-static void statusBar(const char *title, int page) {
-  canvas.fillScreen(COL_BG);
-  canvas.fillRect(0, 0, UI_W, 15, COL_CARD);
-  smallAt(title, 5, 4, COL_DIM);
-  wifiGlyph(UI_W - 18, 3, netRssiBars());
+static void draw(const char *s, int x, int baseline, const GFXfont *font, uint16_t color) {
+  canvas.setFont(font);
+  canvas.setTextColor(color);
+  canvas.setCursor(x, baseline);
+  canvas.print(s);
+}
 
+static void drawCentered(const char *s, int baseline, const GFXfont *font, uint16_t color) {
+  draw(s, (UI_W - widthOf(s, font)) / 2, baseline, font, color);
+}
+
+static void chrome(const char *label, int page) {
+  canvas.fillScreen(COL_BG);
+  micro(label, 6, 5, COL_DIM);
+
+  const int bars = netRssiBars();
+  for (int i = 0; i < 3; ++i) {
+    const int h = 3 + i * 3;
+    canvas.fillRect(UI_W - 22 + i * 5, 12 - h, 3, h, i < bars ? COL_ACCENT : COL_FAINT);
+  }
+
+  const int seg = (UI_W - 12) / 4;
   for (int i = 0; i < UI_PAGES; ++i) {
-    const int x = 5 + i * 7;
-    canvas.fillRect(x, 18, 5, 2, i == page ? COL_ACCENT : COL_FAINT);
+    canvas.fillRect(6 + i * seg, UI_H - 4, seg - 4, 2, i == page ? COL_ACCENT : COL_FAINT);
   }
 }
 
@@ -104,183 +98,165 @@ static void iconSun(int cx, int cy, int r) {
 }
 
 static void iconCloud(int cx, int cy, uint16_t color) {
-  canvas.fillCircle(cx - 7, cy + 2, 6, color);
+  canvas.fillCircle(cx - 7, cy + 3, 6, color);
   canvas.fillCircle(cx + 1, cy - 3, 8, color);
-  canvas.fillCircle(cx + 9, cy + 2, 6, color);
-  canvas.fillRect(cx - 7, cy + 2, 17, 6, color);
+  canvas.fillCircle(cx + 9, cy + 3, 6, color);
+  canvas.fillRect(cx - 7, cy + 2, 17, 7, color);
 }
 
-static void iconDrops(int cx, int cy, int count, uint16_t color) {
-  for (int i = 0; i < count; ++i) {
-    const int x = cx - 7 + i * 7;
-    canvas.drawLine(x, cy, x - 2, cy + 6, color);
+static void iconRain(int cx, int cy, uint16_t color) {
+  iconCloud(cx, cy - 4, COL_CLOUD);
+  for (int i = 0; i < 3; ++i) {
+    const int x = cx - 8 + i * 8;
+    canvas.drawLine(x, cy + 8, x - 3, cy + 15, color);
   }
 }
 
 static void weatherIcon(int code, int cx, int cy) {
   if (code <= 1) {
-    iconSun(cx, cy, 11);
-    return;
-  }
-  if (code == 2) {
-    iconSun(cx + 6, cy - 6, 7);
-    iconCloud(cx - 2, cy + 4, COL_CLOUD);
-    return;
-  }
-  if (code == 3 || code == 45 || code == 48) {
+    iconSun(cx, cy, 10);
+  } else if (code == 2) {
+    iconSun(cx + 7, cy - 7, 6);
+    iconCloud(cx - 2, cy + 3, COL_CLOUD);
+  } else if (code == 3 || code == 45 || code == 48) {
     iconCloud(cx, cy, COL_CLOUD);
-    return;
+  } else if (code >= 95) {
+    iconCloud(cx, cy - 5, COL_DIM);
+    canvas.fillTriangle(cx - 2, cy + 5, cx + 4, cy + 5, cx - 1, cy + 16, COL_SUN);
+  } else if (code >= 71 && code <= 86) {
+    iconRain(cx, cy, COL_FG);
+  } else {
+    iconRain(cx, cy, COL_RAIN);
   }
-  if (code >= 95) {
-    iconCloud(cx, cy - 4, COL_DIM);
-    canvas.fillTriangle(cx - 1, cy + 4, cx + 5, cy + 4, cx, cy + 14, COL_SUN);
-    return;
-  }
-  if (code >= 71 && code <= 86) {
-    iconCloud(cx, cy - 4, COL_CLOUD);
-    iconDrops(cx, cy + 6, 3, COL_FG);
-    return;
-  }
-  iconCloud(cx, cy - 4, COL_CLOUD);
-  iconDrops(cx, cy + 6, 3, COL_RAIN);
 }
 
 static uint16_t tempColor(float t) {
-  if (t >= 30) return COL_BAD;
   if (t >= 24) return COL_WARM;
-  if (t <= 14) return COL_COOL;
+  if (t <= 15) return COL_COOL;
   return COL_FG;
 }
 
 void uiSplash(const char *line1, const char *line2) {
   canvas.fillScreen(COL_BG);
-  textCentered(line1, 62, &FreeSansBold24pt7b, COL_ACCENT);
-  canvas.setFont(nullptr);
-  canvas.setTextSize(1);
-  canvas.setTextColor(COL_DIM);
-  const int w = strlen(line2) * 6;
-  canvas.setCursor((UI_W - w) / 2, 82);
-  canvas.print(line2);
+  drawCentered(line1, 68, &FreeSansBold24pt7b, COL_ACCENT);
+  micro(line2, (UI_W - (int)strlen(line2) * 6) / 2, 86, COL_DIM);
   uiPush();
 }
 
 void uiProvisioning(bool armed) {
   canvas.fillScreen(COL_BG);
-  textCentered("WI-FI", 30, &FreeSansBold12pt7b, COL_ACCENT);
-  smallAt("Abra o app", 8, 46, COL_FG);
-  smallAt("EspTouch / ESP-Touch", 8, 58, COL_FG);
-  smallAt("no celular e envie", 8, 70, COL_FG);
-  smallAt("a senha do Wi-Fi.", 8, 82, COL_FG);
-  smallAt(armed ? "aguardando..." : "conectando...", 8, 102, COL_DIM);
-  canvas.drawRect(4, 4, UI_W - 8, UI_H - 8, COL_FAINT);
+  micro("WI-FI", 6, 5, COL_DIM);
+  draw("Conecte", 8, 40, &FreeSansBold12pt7b, COL_ACCENT);
+  micro("Abra o app EspTouch", 8, 54, COL_FG);
+  micro("no celular e envie a", 8, 66, COL_FG);
+  micro("senha do Wi-Fi.", 8, 78, COL_FG);
+  micro(armed ? "aguardando" : "conectando", 8, 100, COL_DIM);
+  canvas.fillRect(6, 112, UI_W - 12, 2, COL_FAINT);
   uiPush();
 }
 
 void uiClock(const struct tm &now, bool timeReady, int page) {
-  statusBar("HORA", page);
+  chrome(DASH_CITY, page);
 
   char hhmm[6];
   snprintf(hhmm, sizeof(hhmm), "%02d:%02d", now.tm_hour, now.tm_min);
-  textCentered(hhmm, 62, &FreeSansBold24pt7b, timeReady ? COL_FG : COL_FAINT);
+  drawCentered(hhmm, 66, &FreeSansBold24pt7b, timeReady ? COL_FG : COL_FAINT);
 
-  const int barW = UI_W - 24;
-  canvas.fillRect(12, 70, barW, 2, COL_FAINT);
-  canvas.fillRect(12, 70, (barW * now.tm_sec) / 59, 2, COL_ACCENT);
+  canvas.fillRect(14, 74, UI_W - 28, 1, COL_FAINT);
 
-  textCentered(kWeekdays[now.tm_wday % 7], 92, &FreeSans9pt7b, COL_ACCENT);
+  drawCentered(kWeekdays[now.tm_wday % 7], 95, &FreeSansBold12pt7b, COL_ACCENT);
 
   char date[24];
-  snprintf(date, sizeof(date), "%d de %s de %d", now.tm_mday, kMonths[now.tm_mon % 12],
-           now.tm_year + 1900);
-  canvas.setFont(nullptr);
-  canvas.setTextSize(1);
-  const int w = strlen(date) * 6;
-  canvas.setTextColor(COL_DIM);
-  canvas.setCursor((UI_W - w) / 2, 104);
-  canvas.print(date);
+  snprintf(date, sizeof(date), "%d de %s", now.tm_mday, kMonths[now.tm_mon % 12]);
+  drawCentered(date, 113, &FreeSans9pt7b, COL_DIM);
 
-  if (!timeReady) smallAt("sincronizando...", 26, 118, COL_WARM);
+  if (!timeReady) micro("sincronizando", 22, 118, COL_WARM);
   uiPush();
 }
 
 void uiWeather(const Place &p, const Weather &w, int page) {
-  statusBar("CLIMA", page);
-  smallAt(p.city, 5, 26, COL_DIM);
+  chrome("CLIMA", page);
 
   if (!w.valid) {
-    weatherIcon(64, 66, 3);
-    smallAt("sem dados", 34, 96, COL_WARM);
+    iconCloud(64, 56, COL_FAINT);
+    drawCentered("sem dados", 92, &FreeSans9pt7b, COL_DIM);
     uiPush();
     return;
   }
 
-  weatherIcon(26, 56, w.code);
-
-  char temp[8];
+  char temp[6];
   snprintf(temp, sizeof(temp), "%.0f", w.tempC);
-  const int tw = textWidth(temp, &FreeSansBold24pt7b);
-  textAt(temp, 122 - tw - 10, 68, &FreeSansBold24pt7b, tempColor(w.tempC));
-  textAt("C", 122 - 9, 48, &FreeSans9pt7b, COL_DIM);
+  const uint16_t tc = tempColor(w.tempC);
+  draw(temp, 8, 66, &FreeSansBold24pt7b, tc);
+  canvas.drawCircle(12 + widthOf(temp, &FreeSansBold24pt7b), 40, 3, tc);
 
-  smallAt(w.desc, 5, 78, COL_FG);
+  weatherIcon(w.code, 100, 46);
 
-  canvas.fillRect(0, 90, UI_W, 1, COL_FAINT);
+  draw(w.desc, 8, 86, &FreeSans9pt7b, COL_FG);
+  canvas.fillRect(8, 93, UI_W - 16, 1, COL_FAINT);
 
-  char line1[26];
-  snprintf(line1, sizeof(line1), "min %.0f  max %.0f", w.minC, w.maxC);
-  smallAt(line1, 5, 96, COL_DIM);
+  const char *labels[3] = {"MIN", "MAX", "UMID"};
+  char values[3][8];
+  snprintf(values[0], sizeof(values[0]), "%.0f", w.minC);
+  snprintf(values[1], sizeof(values[1]), "%.0f", w.maxC);
+  snprintf(values[2], sizeof(values[2]), "%d%%", w.humidity);
 
-  char line2[26];
-  snprintf(line2, sizeof(line2), "sens %.0f  umid %d%%", w.feelsC, w.humidity);
-  smallAt(line2, 5, 108, COL_DIM);
-
-  char line3[26];
-  snprintf(line3, sizeof(line3), "chuva %d%%  vento %.0f", w.rainProb, w.windKph);
-  smallAt(line3, 5, 120, w.rainProb >= 50 ? COL_RAIN : COL_DIM);
+  for (int i = 0; i < 3; ++i) {
+    const int x = 8 + i * 40;
+    micro(labels[i], x, 99, COL_FAINT);
+    draw(values[i], x, 121, &FreeSans9pt7b, COL_DIM);
+  }
   uiPush();
 }
 
 void uiInsight(const char *text, bool pending, int page) {
-  statusBar("AI", page);
+  chrome("AI", page);
 
   if (pending) {
-    textCentered("...", 70, &FreeSansBold24pt7b, COL_FAINT);
-    smallAt("pensando", 38, 96, COL_DIM);
+    drawCentered("...", 70, &FreeSansBold24pt7b, COL_FAINT);
     uiPush();
     return;
   }
 
-  canvas.setFont(nullptr);
-  canvas.setTextSize(1);
+  draw("\"", 6, 46, &FreeSansBold24pt7b, COL_FAINT);
+
+  canvas.setFont(&FreeSans9pt7b);
   canvas.setTextColor(COL_FG);
 
-  const int perLine = 20;
-  int y = 32;
-  const char *pp = text;
-  while (*pp && y < UI_H - 8) {
-    while (*pp == ' ') ++pp;
-    if (!*pp) break;
+  int y = 46;
+  const char *p = text;
+  char line[26];
+  while (*p && y < UI_H - 8) {
+    while (*p == ' ') ++p;
+    if (!*p) break;
+
     int take = 0;
-    int lastSpace = -1;
-    while (pp[take] && take < perLine) {
-      if (pp[take] == ' ') lastSpace = take;
+    int fit = 0;
+    while (p[take]) {
+      const int len = take + 1;
+      if (len >= (int)sizeof(line)) break;
+      memcpy(line, p, len);
+      line[len] = '\0';
+      if (widthOf(line, &FreeSans9pt7b) > UI_W - 20) break;
+      if (p[take] == ' ') fit = take;
       ++take;
     }
-    if (pp[take] && lastSpace > 0) take = lastSpace;
-    canvas.setCursor(5, y);
-    for (int i = 0; i < take; ++i) canvas.write(pp[i]);
-    y += 11;
-    pp += take;
+    if (p[take] && fit > 0) take = fit;
+
+    memcpy(line, p, take);
+    line[take] = '\0';
+    draw(line, 10, y, &FreeSans9pt7b, COL_FG);
+    y += 15;
+    p += take;
   }
   uiPush();
 }
 
 void uiSystem(const Place &p, int page) {
-  statusBar("SISTEMA", page);
+  chrome("SISTEMA", page);
 
-  const int rows = 5;
-  const char *labels[rows] = {"rede", "ip", "sinal", "livre", "ligado"};
-  char values[rows][22];
+  const char *labels[5] = {"rede", "ip", "sinal", "livre", "ligado"};
+  char values[5][22];
   snprintf(values[0], sizeof(values[0]), "%s", netSsid());
   snprintf(values[1], sizeof(values[1]), "%s", netIp());
   snprintf(values[2], sizeof(values[2]), "%d dBm", (int)WiFi.RSSI());
@@ -288,12 +264,10 @@ void uiSystem(const Place &p, int page) {
   const unsigned long up = millis() / 1000;
   snprintf(values[4], sizeof(values[4]), "%luh %02lum", up / 3600, (up % 3600) / 60);
 
-  for (int i = 0; i < rows; ++i) {
-    const int y = 30 + i * 15;
-    smallAt(labels[i], 5, y, COL_FAINT);
-    smallAt(values[i], 46, y, COL_FG);
+  for (int i = 0; i < 5; ++i) {
+    const int y = 26 + i * 17;
+    micro(labels[i], 8, y, COL_FAINT);
+    micro(values[i], 46, y, COL_FG);
   }
-
-  smallAt("BOOT 3s = trocar rede", 5, 116, COL_DIM);
   uiPush();
 }

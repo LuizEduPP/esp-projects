@@ -8,13 +8,17 @@
 #endif
 
 #ifndef DASH_CITY
-#define DASH_CITY "--"
+#define DASH_CITY "Cesario Lange"
 #endif
 #ifndef DASH_LAT
-#define DASH_LAT -23.5505f
+#define DASH_LAT -23.2267f
 #endif
 #ifndef DASH_LON
-#define DASH_LON -46.6333f
+#define DASH_LON -47.9531f
+#endif
+
+#ifndef DASH_GEOCODE_URL
+#define DASH_GEOCODE_URL "http://geocoding-api.open-meteo.com/v1/search?count=1&language=pt&format=json&name="
 #endif
 
 #ifndef DASH_NTP_SERVER
