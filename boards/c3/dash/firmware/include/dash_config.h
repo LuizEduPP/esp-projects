@@ -76,7 +76,7 @@
 #endif
 
 #ifndef DASH_NEWS_URL
-#define DASH_NEWS_URL "https://g1.globo.com/rss/g1/"
+#define DASH_NEWS_URL "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml"
 #endif
 #ifndef DASH_HOLIDAY_URL
 #define DASH_HOLIDAY_URL "https://brasilapi.com.br/api/feriados/v1/"

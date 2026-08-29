@@ -455,7 +455,7 @@ static void buildTimer(lv_obj_t *p) {
 }
 
 static void buildNews(lv_obj_t *p) {
-  tagText(p, "G1 BRASIL", W / 2, 8, INNER);
+  tagText(p, "BRASIL", W / 2, 8, INNER);
   for (int i = 0; i < 3; ++i) {
     const int y = 24 + i * 33;
     sLblNews[i] = text(p, FONT_TAG, i == 0 ? COL_FG : COL_MUTED, "--", W / 2, y, INNER);
