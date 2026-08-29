@@ -32,6 +32,22 @@ struct Weather {
 
   char sunrise[6] = "--:--";
   char sunset[6] = "--:--";
+  float uvMax = 0;
+};
+
+struct Air {
+  bool valid = false;
+  int aqi = 0;
+  float pm25 = 0;
+  float pm10 = 0;
+  const char *label = "--";
+};
+
+struct Moon {
+  float age = 0;
+  float illum = 0;
+  bool waxing = true;
+  const char *name = "--";
 };
 
 struct Place {
@@ -61,4 +77,6 @@ void netApplyTimezone(long offsetSec);
 
 bool netResolvePlace(Place &out);
 bool netFetchWeather(Place &place, Weather &out);
+bool netFetchAir(const Place &place, Air &out);
+void netMoonPhase(time_t when, Moon &out);
 bool netFetchInsight(const Place &p, const Weather &w, char *out, size_t outLen);

@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 
-#define UI_PAGES 6
+#define UI_PAGES 8
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,6 +18,8 @@ void screensWeather(float tempC, const char *desc, int humidity, float minC, flo
 void screensForecast(int slot, const char *day, float minC, float maxC, int code);
 void screensChart(const float *temps, int count);
 void screensSun(const char *sunrise, const char *sunset);
+void screensAir(int aqi, const char *label, float pm25, float pm10, float uv);
+void screensMoon(const char *phase, float illum, bool waxing);
 void screensInsight(const char *text, bool pending, const char *stamp);
 void screensSystem(const char *ssid, int rssi, const char *ip, unsigned heapKb,
                    const char *uptime);

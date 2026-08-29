@@ -335,6 +335,92 @@ bool netFetchWeather(Place &place, Weather &out) {
   return true;
 }
 
+static const char *describeAqi(int aqi) {
+  if (aqi <= 20) return "excelente";
+  if (aqi <= 40) return "boa";
+  if (aqi <= 60) return "razoavel";
+  if (aqi <= 80) return "ruim";
+  if (aqi <= 100) return "muito ruim";
+  return "pessima";
+}
+
+bool netFetchAir(const Place &place, Air &out) {
+  if (!netOnline()) return false;
+
+  WiFiClient client;
+
+  char url[320];
+  snprintf(url, sizeof(url),
+           "http://air-quality-api.open-meteo.com/v1/air-quality"
+           "?latitude=%.4f&longitude=%.4f"
+           "&current=european_aqi,pm2_5,pm10&timezone=auto",
+           place.lat, place.lon);
+
+  HTTPClient http;
+  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
+  if (!http.begin(client, url)) return false;
+
+  const int status = http.GET();
+  if (status != HTTP_CODE_OK) {
+    Serial.printf("[air] HTTP %d\n", status);
+    http.end();
+    return false;
+  }
+
+  const String payload = http.getString();
+  http.end();
+
+  JsonDocument doc;
+  const DeserializationError err = deserializeJson(doc, payload);
+  if (err) {
+    Serial.printf("[air] json: %s\n", err.c_str());
+    return false;
+  }
+
+  JsonObject cur = doc["current"];
+  if (cur.isNull()) return false;
+
+  out.aqi = cur["european_aqi"] | 0;
+  out.pm25 = cur["pm2_5"] | 0.0f;
+  out.pm10 = cur["pm10"] | 0.0f;
+  out.label = describeAqi(out.aqi);
+  out.valid = true;
+
+  Serial.printf("[air] aqi %d (%s) pm2.5 %.1f\n", out.aqi, out.label, out.pm25);
+  return true;
+}
+
+void netMoonPhase(time_t when, Moon &out) {
+  static const double kSynodic = 29.530588853;
+  static const time_t kNewMoon = 947182440;
+
+  double days = difftime(when, kNewMoon) / 86400.0;
+  double age = fmod(days, kSynodic);
+  if (age < 0) age += kSynodic;
+
+  out.age = (float)age;
+  out.illum = (float)((1.0 - cos(2.0 * PI * age / kSynodic)) / 2.0);
+  out.waxing = age < kSynodic / 2.0;
+
+  if (age < 1.0 || age > kSynodic - 1.0) {
+    out.name = "nova";
+  } else if (age < 6.4) {
+    out.name = "crescente";
+  } else if (age < 8.4) {
+    out.name = "quarto crescente";
+  } else if (age < 13.8) {
+    out.name = "gibosa crescente";
+  } else if (age < 15.8) {
+    out.name = "cheia";
+  } else if (age < 21.1) {
+    out.name = "gibosa minguante";
+  } else if (age < 23.1) {
+    out.name = "quarto minguante";
+  } else {
+    out.name = "minguante";
+  }
+}
+
 static char foldLatin1(uint8_t c) {
   if (c >= 0xC0 && c <= 0xC5) return 'A';
   if (c == 0xC7) return 'C';
