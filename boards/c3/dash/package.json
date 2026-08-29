@@ -1,0 +1,13 @@
+{
+  "name": "c3-dash",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fw:setup": "bash ../../../scripts/fw-setup-linux.sh",
+    "fw:build": "bash ../../../scripts/pio.sh run -d firmware",
+    "fw:upload": "bash ../../../scripts/pio.sh run -d firmware -t upload",
+    "fw:flash": "bash ../../../scripts/pio.sh run -d firmware && bash ../../../scripts/pio.sh run -d firmware -t upload",
+    "fw:monitor": "bash ../../../scripts/pio.sh device monitor -d firmware -b 115200 --filter direct"
+  }
+}
