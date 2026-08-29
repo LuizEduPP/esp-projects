@@ -244,7 +244,7 @@ bool netFetchWeather(Place &place, Weather &out) {
 
   WiFiClient client;
 
-  char url[320];
+  char url[512];
   snprintf(url, sizeof(url),
            "http://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
            "&current=temperature_2m,relative_humidity_2m,apparent_temperature,"
