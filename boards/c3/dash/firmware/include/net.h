@@ -91,6 +91,39 @@ struct Place {
   long tzOffsetSec = 0;
 };
 
+struct News {
+  bool valid = false;
+  char items[3][96] = {{0}};
+  int count = 0;
+};
+
+struct Holiday {
+  bool valid = false;
+  char name[40] = "--";
+  char date[11] = "--";
+  int daysLeft = 0;
+};
+
+struct Rates {
+  bool valid = false;
+  float selic = 0;
+  float cdi = 0;
+  float ipca = 0;
+};
+
+struct History {
+  bool valid = false;
+  int year = 0;
+  char text[160] = "--";
+};
+
+struct Space {
+  bool valid = false;
+  int people = 0;
+  float issLat = 0;
+  float issLon = 0;
+};
+
 enum NetState { NET_OFFLINE, NET_CONNECTING, NET_PROVISIONING, NET_ONLINE };
 
 void netBegin();
@@ -113,5 +146,10 @@ bool netFetchWeather(Place &place, Weather &out);
 bool netFetchAir(const Place &place, Air &out);
 bool netFetchMarket(Market &out);
 bool netFetchDev(DevStats &out);
+bool netFetchNews(News &out);
+bool netFetchHoliday(Holiday &out);
+bool netFetchRates(Rates &out);
+bool netFetchHistory(History &out);
+bool netFetchSpace(Space &out);
 void netMoonPhase(time_t when, Moon &out);
 bool netFetchInsight(const Place &p, const Weather &w, char *out, size_t outLen);

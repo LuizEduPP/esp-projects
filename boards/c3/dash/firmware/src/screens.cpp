@@ -48,6 +48,9 @@ static lv_obj_t *sWindNeedle, *sLblWind, *sLblGust, *sLblPress, *sLblPressTrend;
 static lv_obj_t *sRainBar[8], *sLblRain, *sLblRainSub;
 static lv_obj_t *sLblRise, *sLblSet, *sLblDaylight, *sSunArc;
 static lv_obj_t *sLblCur[3], *sLblCurPct[3];
+static lv_obj_t *sLblNews[3], *sLblRate[3];
+static lv_obj_t *sLblHolidayDays, *sLblHolidayName, *sLblHolidayDate;
+static lv_obj_t *sLblHistYear, *sLblHistText, *sLblPeople, *sLblIss;
 static lv_obj_t *sLblCommits, *sLblPushes, *sLblRepo, *sLblWeek, *sLblRepos;
 static lv_obj_t *sBusy;
 static lv_obj_t *sLblTimer, *sLblTimerMode, *sTimerArc, *sLblTimerHint;
@@ -140,8 +143,9 @@ static void rule(lv_obj_t *par, int x, int y, int w, int h) {
 
 static lv_obj_t *pageOf(int index) {
   static const uint32_t glow[UI_PAGES] = {
-      COL_VIOLET, COL_SUN,   COL_GREEN, COL_ACCENT, COL_RAIN, COL_ACCENT, COL_GREEN,
-      COL_SUN,    0xC7D2FE,  COL_GREEN, COL_VIOLET, COL_HOT,  COL_HOT,    COL_COLD};
+      COL_VIOLET, COL_SUN,    COL_GREEN,  COL_ACCENT, COL_RAIN,  COL_ACCENT, COL_GREEN,
+      COL_SUN,    0xC7D2FE,   COL_HOT,    COL_GREEN,  COL_VIOLET, COL_SUN,   COL_VIOLET,
+      COL_ACCENT, COL_VIOLET, COL_HOT,    COL_HOT,    COL_COLD};
   lv_obj_t *tile = lv_tileview_add_tile(sTiles, index, 0, LV_DIR_HOR);
   lv_obj_remove_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(tile, 0, 0);
@@ -450,6 +454,61 @@ static void buildTimer(lv_obj_t *p) {
   sLblTimerHint = text(p, FONT_TAG, COL_ACCENT, "BOOT para iniciar", W / 2, 104, INNER);
 }
 
+static void buildNews(lv_obj_t *p) {
+  tagText(p, "G1 BRASIL", W / 2, 8, INNER);
+  for (int i = 0; i < 3; ++i) {
+    const int y = 24 + i * 33;
+    sLblNews[i] = text(p, FONT_TAG, i == 0 ? COL_FG : COL_MUTED, "--", W / 2, y, INNER);
+    lv_obj_set_height(sLblNews[i], 30);
+    lv_obj_set_style_text_line_space(sLblNews[i], 2, 0);
+    if (i < 2) rule(p, 34, y + 30, 60, 1);
+  }
+}
+
+static void buildRates(lv_obj_t *p) {
+  tagText(p, "TAXAS", W / 2, 8, INNER);
+  static const char *names[3] = {"SELIC", "CDI", "IPCA"};
+  static const uint32_t colors[3] = {COL_ACCENT, COL_VIOLET, COL_HOT};
+  for (int i = 0; i < 3; ++i) {
+    const int y = 26 + i * 30;
+    lv_obj_t *card = plate(p, MARGIN, y, INNER, 26);
+    text(card, FONT_TAG, COL_MUTED, names[i], 26, 7, 44);
+    rule(card, 52, 5, 1, 14);
+    sLblRate[i] = text(card, FONT_S, colors[i], "--", 80, 3, 56);
+  }
+}
+
+static void buildHoliday(lv_obj_t *p) {
+  tagText(p, "PROXIMO FERIADO", W / 2, 8, INNER);
+  sLblHolidayDays = text(p, FONT_HERO, COL_SUN, "--", W / 2, 26, INNER);
+  text(p, FONT_TAG, COL_MUTED, "dias", W / 2, 62, INNER);
+  sLblHolidayName = text(p, FONT_XS, COL_FG, "--", W / 2, 80, INNER);
+  lv_obj_set_height(sLblHolidayName, 30);
+  sLblHolidayDate = text(p, FONT_TAG, COL_MUTED, "--", W / 2, 108, INNER);
+}
+
+static void buildHistory(lv_obj_t *p) {
+  tagText(p, "NESTE DIA", W / 2, 8, INNER);
+  sLblHistYear = text(p, FONT_L, COL_VIOLET, "--", W / 2, 22, INNER);
+
+  lv_obj_t *card = plate(p, MARGIN, 48, INNER, 60);
+  sLblHistText = text(card, FONT_TAG, COL_FG, "--", INNER / 2, 0, INNER - 10);
+  lv_obj_set_height(sLblHistText, 50);
+  lv_obj_set_style_text_line_space(sLblHistText, 2, 0);
+  lv_obj_align(sLblHistText, LV_ALIGN_CENTER, 0, 0);
+}
+
+static void buildSpace(lv_obj_t *p) {
+  tagText(p, "ESPACO", W / 2, 8, INNER);
+  sLblPeople = text(p, FONT_HERO, COL_ACCENT, "--", W / 2, 26, INNER);
+  text(p, FONT_TAG, COL_MUTED, "pessoas em orbita", W / 2, 64, INNER);
+
+  lv_obj_t *card = plate(p, MARGIN, 82, INNER, 30);
+  text(card, FONT_TAG, COL_MUTED, "ISS", 24, 9, 32);
+  rule(card, 46, 6, 1, 16);
+  sLblIss = text(card, FONT_XS, COL_FG, "--", 76, 7, 60);
+}
+
 static uint32_t aqiColor(int aqi) {
   if (aqi <= 20) return COL_GREEN;
   if (aqi <= 40) return COL_ACCENT;
@@ -587,7 +646,12 @@ void screensBuild(void) {
   buildAir(pageOf(PAGE_AIR));
   buildSun(pageOf(PAGE_SUN));
   buildMoon(pageOf(PAGE_MOON));
+  buildNews(pageOf(PAGE_NEWS));
   buildMarket(pageOf(PAGE_MARKET));
+  buildRates(pageOf(PAGE_RATES));
+  buildHoliday(pageOf(PAGE_HOLIDAY));
+  buildHistory(pageOf(PAGE_HISTORY));
+  buildSpace(pageOf(PAGE_SPACE));
   buildDev(pageOf(PAGE_DEV));
   buildTimer(pageOf(PAGE_TIMER));
   buildInsight(pageOf(PAGE_AI));
@@ -854,6 +918,51 @@ void screensDev(int commitsToday, int commitsWeek, int activeDays, int repos, in
   }
   lv_label_set_text(sLblRepo, buf);
   (void)followers;
+}
+
+void screensNews(const char *a, const char *b, const char *c, int count) {
+  const char *items[3] = {a, b, c};
+  for (int i = 0; i < 3; ++i) {
+    lv_label_set_text(sLblNews[i], i < count ? items[i] : "--");
+  }
+}
+
+void screensRates(float selic, float cdi, float ipca) {
+  char buf[16];
+  const float values[3] = {selic, cdi, ipca};
+  for (int i = 0; i < 3; ++i) {
+    snprintf(buf, sizeof(buf), "%.2f%%", values[i]);
+    lv_label_set_text(sLblRate[i], buf);
+  }
+}
+
+void screensHoliday(const char *name, const char *date, int daysLeft) {
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%d", daysLeft);
+  lv_label_set_text(sLblHolidayDays, buf);
+  lv_obj_set_style_text_color(sLblHolidayDays,
+                              lv_color_hex(daysLeft <= 7 ? COL_GREEN : COL_SUN), 0);
+  lv_label_set_text(sLblHolidayName, name);
+
+  if (strlen(date) >= 10) {
+    snprintf(buf, sizeof(buf), "%.2s/%.2s", date + 8, date + 5);
+    lv_label_set_text(sLblHolidayDate, buf);
+  }
+}
+
+void screensHistory(int year, const char *txt) {
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%d", year);
+  lv_label_set_text(sLblHistYear, buf);
+  lv_label_set_text(sLblHistText, txt);
+}
+
+void screensSpace(int people, float lat, float lon) {
+  char buf[24];
+  snprintf(buf, sizeof(buf), "%d", people);
+  lv_label_set_text(sLblPeople, buf);
+  snprintf(buf, sizeof(buf), "%.0f, %.0f", lat, lon);
+  lv_label_set_text(sLblIss, buf);
 }
 
 void screensBusy(bool on) {

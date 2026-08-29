@@ -15,6 +15,11 @@ static Weather sWeather;
 static Air sAir;
 static Market sMarket;
 static DevStats sDev;
+static News sNews;
+static Holiday sHoliday;
+static Rates sRates;
+static History sHistory;
+static Space sSpace;
 
 static bool sTimerRunning = false;
 static bool sTimerBreak = false;
@@ -26,6 +31,9 @@ static unsigned long sNextWeather = 0;
 static unsigned long sNextInsight = 0;
 static unsigned long sNextMarket = 0;
 static unsigned long sNextDev = 0;
+static unsigned long sNextNews = 0;
+static unsigned long sNextSlow = 0;
+static int sSlowStep = 0;
 static unsigned long sNextTimeSync = 0;
 static unsigned long sNextGeo = 0;
 static unsigned long sNextTick = 0;
@@ -117,6 +125,33 @@ static void refreshDev() {
   uiUpdateDev(sDev);
 }
 
+static void refreshNews() {
+  sNextNews = millis() + DASH_MARKET_INTERVAL_MS;
+  if (netFetchNews(sNews)) uiUpdateNews(sNews);
+}
+
+static void refreshSlow() {
+  sNextSlow = millis() + 20000UL;
+
+  switch (sSlowStep) {
+    case 0:
+      if (netFetchRates(sRates)) uiUpdateRates(sRates);
+      break;
+    case 1:
+      if (netFetchHoliday(sHoliday)) uiUpdateHoliday(sHoliday);
+      break;
+    case 2:
+      if (netFetchHistory(sHistory)) uiUpdateHistory(sHistory);
+      break;
+    default:
+      if (netFetchSpace(sSpace)) uiUpdateSpace(sSpace);
+      sNextSlow = millis() + DASH_SLOW_INTERVAL_MS;
+      break;
+  }
+
+  sSlowStep = (sSlowStep + 1) % 4;
+}
+
 static int timerTotal() {
   return sTimerBreak ? DASH_POMODORO_BREAK_S : DASH_POMODORO_WORK_S;
 }
@@ -149,6 +184,21 @@ static void refreshCurrentPage() {
   switch (uiPage()) {
     case PAGE_MARKET:
       refreshMarket();
+      break;
+    case PAGE_NEWS:
+      refreshNews();
+      break;
+    case PAGE_RATES:
+      if (netFetchRates(sRates)) uiUpdateRates(sRates);
+      break;
+    case PAGE_HOLIDAY:
+      if (netFetchHoliday(sHoliday)) uiUpdateHoliday(sHoliday);
+      break;
+    case PAGE_HISTORY:
+      if (netFetchHistory(sHistory)) uiUpdateHistory(sHistory);
+      break;
+    case PAGE_SPACE:
+      if (netFetchSpace(sSpace)) uiUpdateSpace(sSpace);
       break;
     case PAGE_DEV:
       refreshDev();
@@ -212,6 +262,8 @@ void loop() {
       sNextWeather = millis();
       sNextMarket = millis() + 2000;
       sNextDev = millis() + 4000;
+      sNextNews = millis() + 6000;
+      sNextSlow = millis() + 8000;
       sNextTimeSync = millis() + DASH_TIME_SYNC_INTERVAL_MS;
     }
   }
@@ -262,6 +314,8 @@ void loop() {
     if ((long)(now - sNextWeather) >= 0) refreshWeather();
     if ((long)(now - sNextMarket) >= 0) refreshMarket();
     if ((long)(now - sNextDev) >= 0) refreshDev();
+    if ((long)(now - sNextNews) >= 0) refreshNews();
+    if ((long)(now - sNextSlow) >= 0) refreshSlow();
     if ((long)(now - sNextInsight) >= 0 && sWeather.valid) refreshInsight();
   }
 

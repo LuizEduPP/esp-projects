@@ -632,6 +632,38 @@ void netMoonPhase(time_t when, Moon &out) {
   }
 }
 
+static bool secureGetJson(const char *url, JsonDocument &doc, JsonDocument *filter,
+                          const char *tag) {
+  if (!netOnline()) return false;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  HTTPClient http;
+  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
+  http.useHTTP10(true);
+  if (!http.begin(client, url)) return false;
+  http.addHeader("User-Agent", "esp32-dash");
+
+  const int status = http.GET();
+  if (status != HTTP_CODE_OK) {
+    Serial.printf("[%s] HTTP %d\n", tag, status);
+    http.end();
+    return false;
+  }
+
+  const DeserializationError err =
+      filter ? deserializeJson(doc, http.getStream(), DeserializationOption::Filter(*filter))
+             : deserializeJson(doc, http.getStream());
+  http.end();
+
+  if (err) {
+    Serial.printf("[%s] json: %s\n", tag, err.c_str());
+    return false;
+  }
+  return true;
+}
+
 static char foldLatin1(uint8_t c) {
   if (c >= 0xC0 && c <= 0xC5) return 'A';
   if (c == 0xC7) return 'C';
@@ -681,6 +713,169 @@ static void deaccent(const char *in, char *out, size_t outLen) {
   out[o] = '\0';
 }
 
+static void stripCdata(String &s) {
+  s.replace("<![CDATA[", "");
+  s.replace("]]>", "");
+  s.replace("&amp;", "&");
+  s.replace("&quot;", "\"");
+  s.replace("&#39;", "'");
+  s.trim();
+}
+
+bool netFetchNews(News &out) {
+  if (!netOnline()) return false;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  HTTPClient http;
+  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
+  http.useHTTP10(true);
+  if (!http.begin(client, DASH_NEWS_URL)) return false;
+  http.addHeader("User-Agent", "esp32-dash");
+
+  const int status = http.GET();
+  if (status != HTTP_CODE_OK) {
+    Serial.printf("[news] HTTP %d\n", status);
+    http.end();
+    return false;
+  }
+
+  Stream &s = http.getStream();
+  out.count = 0;
+
+  while (out.count < 3 && s.find("<item>")) {
+    if (!s.find("<title>")) break;
+    String title = s.readStringUntil('<');
+    stripCdata(title);
+    if (title.length() == 0) continue;
+    deaccent(title.c_str(), out.items[out.count], sizeof(out.items[0]));
+    ++out.count;
+  }
+  http.end();
+
+  out.valid = out.count > 0;
+  if (out.valid) Serial.printf("[news] %d manchetes: %s\n", out.count, out.items[0]);
+  return out.valid;
+}
+
+bool netFetchHoliday(Holiday &out) {
+  struct tm now;
+  if (!getLocalTime(&now, 100)) return false;
+
+  char url[96];
+  snprintf(url, sizeof(url), "%s%d", DASH_HOLIDAY_URL, now.tm_year + 1900);
+
+  JsonDocument doc;
+  if (!secureGetJson(url, doc, nullptr, "feriado")) return false;
+
+  char today[11];
+  strftime(today, sizeof(today), "%Y-%m-%d", &now);
+
+  for (JsonObject h : doc.as<JsonArray>()) {
+    const char *date = h["date"] | "";
+    if (strlen(date) < 10 || strcmp(date, today) < 0) continue;
+
+    struct tm target = {};
+    target.tm_year = atoi(date) - 1900;
+    target.tm_mon = atoi(date + 5) - 1;
+    target.tm_mday = atoi(date + 8);
+    target.tm_hour = 12;
+
+    struct tm ref = now;
+    ref.tm_hour = 12;
+    ref.tm_min = 0;
+    ref.tm_sec = 0;
+
+    const double diff = difftime(mktime(&target), mktime(&ref));
+    out.daysLeft = (int)(diff / 86400.0 + 0.5);
+    deaccent(h["name"] | "--", out.name, sizeof(out.name));
+    snprintf(out.date, sizeof(out.date), "%.10s", date);
+    out.valid = true;
+    Serial.printf("[feriado] %s em %d dias\n", out.name, out.daysLeft);
+    return true;
+  }
+  return false;
+}
+
+bool netFetchRates(Rates &out) {
+  JsonDocument doc;
+  if (!secureGetJson(DASH_RATES_URL, doc, nullptr, "taxas")) return false;
+
+  for (JsonObject r : doc.as<JsonArray>()) {
+    const char *name = r["nome"] | "";
+    const float value = r["valor"] | 0.0f;
+    if (strcmp(name, "Selic") == 0) out.selic = value;
+    else if (strcmp(name, "CDI") == 0) out.cdi = value;
+    else if (strcmp(name, "IPCA") == 0) out.ipca = value;
+  }
+
+  out.valid = out.selic > 0 || out.cdi > 0;
+  if (out.valid)
+    Serial.printf("[taxas] selic %.2f cdi %.2f ipca %.2f\n", out.selic, out.cdi, out.ipca);
+  return out.valid;
+}
+
+bool netFetchHistory(History &out) {
+  struct tm now;
+  if (!getLocalTime(&now, 100)) return false;
+
+  char url[128];
+  snprintf(url, sizeof(url), "%s%d/%d", DASH_HISTORY_URL, now.tm_mon + 1, now.tm_mday);
+
+  JsonDocument filter;
+  JsonObject sel = filter["selected"].add<JsonObject>();
+  sel["text"] = true;
+  sel["year"] = true;
+
+  JsonDocument doc;
+  if (!secureGetJson(url, doc, &filter, "historia")) return false;
+
+  JsonArray items = doc["selected"];
+  if (items.isNull() || items.size() == 0) return false;
+
+  JsonObject pick = items[random(items.size())];
+  out.year = pick["year"] | 0;
+  deaccent(pick["text"] | "--", out.text, sizeof(out.text));
+  out.valid = true;
+
+  Serial.printf("[historia] %d: %s\n", out.year, out.text);
+  return true;
+}
+
+bool netFetchSpace(Space &out) {
+  if (!netOnline()) return false;
+
+  WiFiClient client;
+  JsonDocument doc;
+
+  HTTPClient http;
+  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
+  if (!http.begin(client, DASH_SPACE_URL)) return false;
+  if (http.GET() == HTTP_CODE_OK) {
+    if (!deserializeJson(doc, http.getString())) out.people = doc["number"] | 0;
+  }
+  http.end();
+
+  JsonDocument iss;
+  HTTPClient http2;
+  http2.setTimeout(DASH_HTTP_TIMEOUT_MS);
+  if (http2.begin(client, DASH_ISS_URL)) {
+    if (http2.GET() == HTTP_CODE_OK) {
+      if (!deserializeJson(iss, http2.getString())) {
+        out.issLat = atof(iss["iss_position"]["latitude"] | "0");
+        out.issLon = atof(iss["iss_position"]["longitude"] | "0");
+      }
+    }
+    http2.end();
+  }
+
+  out.valid = out.people > 0;
+  if (out.valid)
+    Serial.printf("[espaco] %d pessoas, iss %.1f %.1f\n", out.people, out.issLat, out.issLon);
+  return out.valid;
+}
+
 bool netFetchInsight(const Place &p, const Weather &w, char *out, size_t outLen) {
   if (!netOnline() || outLen == 0) return false;
 
@@ -689,7 +884,7 @@ bool netFetchInsight(const Place &p, const Weather &w, char *out, size_t outLen)
 
   static const char *kInstruction =
       "Voce e o painel de um relogio de mesa. Escreva UMA frase em portugues do "
-      "Brasil, no maximo 18 palavras, util ou espirituosa, sobre a hora e o clima. "
+      "Brasil, no maximo 10 palavras, util ou espirituosa, sobre a hora e o clima. "
       "Sem emojis, sem aspas, sem explicacao.\n\n";
 
   char user[384];

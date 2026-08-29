@@ -75,6 +75,29 @@
 #define DASH_GITHUB_USER "luizedupp"
 #endif
 
+#ifndef DASH_NEWS_URL
+#define DASH_NEWS_URL "https://g1.globo.com/rss/g1/"
+#endif
+#ifndef DASH_HOLIDAY_URL
+#define DASH_HOLIDAY_URL "https://brasilapi.com.br/api/feriados/v1/"
+#endif
+#ifndef DASH_RATES_URL
+#define DASH_RATES_URL "https://brasilapi.com.br/api/taxas/v1"
+#endif
+#ifndef DASH_HISTORY_URL
+#define DASH_HISTORY_URL "https://pt.wikipedia.org/api/rest_v1/feed/onthisday/selected/"
+#endif
+#ifndef DASH_SPACE_URL
+#define DASH_SPACE_URL "http://api.open-notify.org/astros.json"
+#endif
+#ifndef DASH_ISS_URL
+#define DASH_ISS_URL "http://api.open-notify.org/iss-now.json"
+#endif
+
+#ifndef DASH_SLOW_INTERVAL_MS
+#define DASH_SLOW_INTERVAL_MS 1800000UL
+#endif
+
 #ifndef DASH_POMODORO_WORK_S
 #define DASH_POMODORO_WORK_S 1500
 #endif

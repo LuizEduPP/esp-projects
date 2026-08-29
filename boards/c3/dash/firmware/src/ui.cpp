@@ -148,6 +148,26 @@ void uiUpdateDev(const DevStats &d) {
              d.lastRepo);
 }
 
+void uiUpdateNews(const News &n) {
+  screensNews(n.items[0], n.items[1], n.items[2], n.count);
+}
+
+void uiUpdateRates(const Rates &r) {
+  if (r.valid) screensRates(r.selic, r.cdi, r.ipca);
+}
+
+void uiUpdateHoliday(const Holiday &h) {
+  if (h.valid) screensHoliday(h.name, h.date, h.daysLeft);
+}
+
+void uiUpdateHistory(const History &h) {
+  if (h.valid) screensHistory(h.year, h.text);
+}
+
+void uiUpdateSpace(const Space &s) {
+  if (s.valid) screensSpace(s.people, s.issLat, s.issLon);
+}
+
 void uiBusy(bool on) {
   screensBusy(on);
   displayTask();

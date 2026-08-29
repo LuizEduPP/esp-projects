@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 
-#define UI_PAGES 14
+#define UI_PAGES 19
 
 #define PAGE_CLOCK 0
 #define PAGE_WEATHER 1
@@ -13,11 +13,16 @@
 #define PAGE_AIR 6
 #define PAGE_SUN 7
 #define PAGE_MOON 8
-#define PAGE_MARKET 9
-#define PAGE_DEV 10
-#define PAGE_TIMER 11
-#define PAGE_AI 12
-#define PAGE_SYSTEM 13
+#define PAGE_NEWS 9
+#define PAGE_MARKET 10
+#define PAGE_RATES 11
+#define PAGE_HOLIDAY 12
+#define PAGE_HISTORY 13
+#define PAGE_SPACE 14
+#define PAGE_DEV 15
+#define PAGE_TIMER 16
+#define PAGE_AI 17
+#define PAGE_SYSTEM 18
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +47,11 @@ void screensMarket(float usd, float usdPct, float eur, float eurPct, float btc, 
 void screensDev(int commitsToday, int commitsWeek, int activeDays, int repos, int followers,
                 const char *repo);
 void screensBusy(bool on);
+void screensNews(const char *a, const char *b, const char *c, int count);
+void screensRates(float selic, float cdi, float ipca);
+void screensHoliday(const char *name, const char *date, int daysLeft);
+void screensHistory(int year, const char *text);
+void screensSpace(int people, float lat, float lon);
 void screensTimer(const char *clock, const char *mode, int percent, bool running);
 void screensInsight(const char *text, bool pending, const char *stamp);
 void screensSystem(const char *ssid, int rssi, const char *ip, unsigned heapKb,
