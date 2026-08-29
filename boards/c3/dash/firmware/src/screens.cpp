@@ -514,9 +514,7 @@ static void buildNews(lv_obj_t *p) {
   tagText(p, "BRASIL", W / 2, 8, INNER);
   for (int i = 0; i < 3; ++i) {
     const int y = 24 + i * 33;
-    sLblNews[i] = text(p, FONT_TAG, i == 0 ? COL_FG : COL_MUTED, "--", W / 2, y, INNER);
-    lv_obj_set_height(sLblNews[i], 30);
-    lv_obj_set_style_text_line_space(sLblNews[i], 2, 0);
+    sLblNews[i] = wrapBox(p, FONT_TAG, i == 0 ? COL_FG : COL_MUTED, W / 2, y, INNER, 29);
     if (i < 2) rule(p, 34, y + 30, 60, 1);
   }
 }
@@ -538,8 +536,7 @@ static void buildHoliday(lv_obj_t *p) {
   tagText(p, "PROXIMO FERIADO", W / 2, 8, INNER);
   sLblHolidayDays = text(p, FONT_HERO, COL_SUN, "--", W / 2, 26, INNER);
   text(p, FONT_TAG, COL_MUTED, "dias", W / 2, 62, INNER);
-  sLblHolidayName = text(p, FONT_XS, COL_FG, "--", W / 2, 80, INNER);
-  lv_obj_set_height(sLblHolidayName, 30);
+  sLblHolidayName = wrapBox(p, FONT_XS, COL_FG, W / 2, 78, INNER, 28);
   sLblHolidayDate = text(p, FONT_TAG, COL_MUTED, "--", W / 2, 108, INNER);
 }
 
@@ -547,11 +544,8 @@ static void buildHistory(lv_obj_t *p) {
   tagText(p, "NESTE DIA", W / 2, 8, INNER);
   sLblHistYear = text(p, FONT_L, COL_VIOLET, "--", W / 2, 22, INNER);
 
-  lv_obj_t *card = plate(p, MARGIN, 48, INNER, 60);
-  sLblHistText = text(card, FONT_TAG, COL_FG, "--", INNER / 2, 0, INNER - 10);
-  lv_obj_set_height(sLblHistText, 50);
-  lv_obj_set_style_text_line_space(sLblHistText, 2, 0);
-  lv_obj_align(sLblHistText, LV_ALIGN_CENTER, 0, 0);
+  plate(p, MARGIN, 46, INNER, 66);
+  sLblHistText = wrapBox(p, FONT_TAG, COL_FG, W / 2, 52, INNER - 12, 54);
 }
 
 static void buildSpace(lv_obj_t *p) {
@@ -977,7 +971,7 @@ void screensDev(int commitsToday, int commitsWeek, int activeDays, int repos, in
 void screensNews(const char *a, const char *b, const char *c, int count) {
   const char *items[3] = {a, b, c};
   for (int i = 0; i < 3; ++i) {
-    lv_label_set_text(sLblNews[i], i < count ? items[i] : "--");
+    wrapText(sLblNews[i], i < count ? items[i] : "--");
   }
 }
 
@@ -996,7 +990,7 @@ void screensHoliday(const char *name, const char *date, int daysLeft) {
   lv_label_set_text(sLblHolidayDays, buf);
   lv_obj_set_style_text_color(sLblHolidayDays,
                               lv_color_hex(daysLeft <= 7 ? COL_GREEN : COL_SUN), 0);
-  lv_label_set_text(sLblHolidayName, name);
+  wrapText(sLblHolidayName, name);
 
   if (strlen(date) >= 10) {
     snprintf(buf, sizeof(buf), "%.2s/%.2s", date + 8, date + 5);
