@@ -316,6 +316,7 @@ static void buildIcon(int code) {
 
 static void buildClock(lv_obj_t *p) {
   sLblCity = tagText(p, "--", W / 2, 12, INNER);
+  marquee(sLblCity);
   sLblTime = text(p, FONT_HERO, COL_FG, "--:--", W / 2, 34, INNER);
   sLblWeekday = text(p, FONT_M, COL_ACCENT, "--", W / 2, 72, INNER);
   sLblDate = text(p, FONT_TAG, COL_MUTED, "--", W / 2, 92, INNER);
@@ -341,6 +342,7 @@ static void buildWeather(lv_obj_t *p) {
 
   sLblTemp = text(p, FONT_HERO, COL_FG, "--", 86, 32, 72);
   sLblDesc = text(p, FONT_XS, COL_MUTED, "--", W / 2, 78, INNER);
+  marquee(sLblDesc);
 
   static const uint32_t colors[3] = {COL_COLD, COL_HOT, COL_ACCENT};
   for (int i = 0; i < 3; ++i) {
@@ -499,6 +501,7 @@ static void buildDev(lv_obj_t *p) {
   sLblDays = text(strip, FONT_XS, COL_GREEN, "--", 92, 6, 34);
 
   sLblRepo = text(p, FONT_TAG, COL_MUTED, "--", W / 2, 106, INNER);
+  marquee(sLblRepo);
 }
 
 static void buildTimer(lv_obj_t *p) {
@@ -623,10 +626,8 @@ static void buildInsight(lv_obj_t *p) {
   tagText(p, "AI", W / 2, 8, INNER);
   sLblStamp = tagText(p, "--:--", W / 2, 108, INNER);
 
-  lv_obj_t *card = plate(p, MARGIN, 22, INNER, 82);
-  sLblInsight = text(card, FONT_XS, COL_FG, "...", INNER / 2, 0, INNER - 8);
-  lv_obj_set_height(sLblInsight, 76);
-  lv_obj_align(sLblInsight, LV_ALIGN_CENTER, 0, 0);
+  plate(p, MARGIN, 22, INNER, 82);
+  sLblInsight = wrapBox(p, FONT_XS, COL_FG, W / 2, 28, INNER - 10, 70);
 }
 
 static void buildSystem(lv_obj_t *p) {
@@ -1002,7 +1003,7 @@ void screensHistory(int year, const char *txt) {
   char buf[16];
   snprintf(buf, sizeof(buf), "%d", year);
   lv_label_set_text(sLblHistYear, buf);
-  lv_label_set_text(sLblHistText, txt);
+  wrapText(sLblHistText, txt);
 }
 
 void screensSpace(int people, float lat, float lon) {
@@ -1033,7 +1034,7 @@ void screensTimer(const char *clock, const char *mode, int percent, bool running
 }
 
 void screensInsight(const char *txt, bool pending, const char *stamp) {
-  lv_label_set_text(sLblInsight, pending ? "pensando..." : txt);
+  wrapText(sLblInsight, pending ? "pensando..." : txt);
   lv_obj_set_style_text_opa(sLblInsight, pending ? LV_OPA_50 : LV_OPA_COVER, 0);
   if (stamp) lv_label_set_text(sLblStamp, stamp);
 }
