@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "boards/s3-cam/*",
-    "boards/cyd/*"
+    "boards/cyd/*",
+    "boards/c3/*"
   ],
   "scripts": {
     "setup": "bash scripts/fw-setup-linux.sh",
@@ -32,6 +33,9 @@
     "arcade:flash": "yarn workspace cyd-arcade fw:flash",
     "arcade:install": "yarn workspace cyd-arcade fw:install",
     "arcade:monitor": "yarn workspace cyd-arcade fw:monitor",
-    "arcade:preview": "yarn workspace cyd-arcade preview:circus"
+    "arcade:preview": "yarn workspace cyd-arcade preview:circus",
+    "dash:build": "yarn workspace c3-dash fw:build",
+    "dash:flash": "yarn workspace c3-dash fw:flash",
+    "dash:monitor": "yarn workspace c3-dash fw:monitor"
   }
 }

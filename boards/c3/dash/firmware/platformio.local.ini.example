@@ -1,0 +1,10 @@
+[secrets]
+flags =
+    -DWIFI_SSID='"your-network"'
+    -DWIFI_PASS='"your-password"'
+    -DDASH_OLLAMA_URL='"http://192.168.1.28:11434/api/chat"'
+    -DDASH_OLLAMA_MODEL='"llama3.2:3b"'
+
+[env:spaceman-c3]
+upload_port = /dev/ttyACM0
+monitor_port = /dev/ttyACM0

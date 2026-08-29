@@ -17,6 +17,7 @@ yarn mini-games:flash               # pick any project below
 | | | [folio](boards/s3-cam/folio/) — mic + camera push | `yarn folio:flash` |
 | **CYD** | [`boards/cyd/`](boards/cyd/) | [gb](boards/cyd/gb/) — Game Boy emulator | `yarn gb:flash` |
 | | | [arcade](boards/cyd/arcade/) — 12 touch games | `yarn arcade:flash` |
+| **C3** | [`boards/c3/`](boards/c3/) | [dash](boards/c3/dash/) — clock, weather, local AI | `yarn dash:flash` |
 
 Each app = `README.md` + `package.json` + `firmware/` (+ optional `scripts/`).
 
@@ -33,9 +34,11 @@ esp-projects/
     │   ├── mini-games/
     │   ├── rc-car/
     │   └── folio/
-    └── cyd/            ← ESP32-2432S028R (Cheap Yellow Display)
-        ├── gb/
-        └── arcade/
+    ├── cyd/            ← ESP32-2432S028R (Cheap Yellow Display)
+    │   ├── gb/
+    │   └── arcade/
+    └── c3/             ← Spotpear ESP32-C3 1.44" (Spaceman)
+        └── dash/
 ```
 
 Details: [docs/guide.md](docs/guide.md) · Parts: [docs/hardware-inventory.md](docs/hardware-inventory.md)
@@ -49,6 +52,7 @@ Details: [docs/guide.md](docs/guide.md) · Parts: [docs/hardware-inventory.md](d
 | `folio:` | ✓ | ✓ | ✓ |
 | `gb:` | ✓ | ✓ | ✓ (+ `install`, `icons`) |
 | `arcade:` | ✓ | ✓ | ✓ (+ `install`, `preview`) |
+| `dash:` | ✓ | ✓ | ✓ |
 
 Inside any app folder: `yarn fw:flash` · `yarn fw:monitor`
 

@@ -66,6 +66,7 @@
 | 1 | ESP32-S3-CAM + USB converter (GOOUUU) — no camera |
 | 2 | ESP32-2432S028R CYD2USB + USB cable |
 | 1 | ESP8266 NodeMCU ESP-12E V3 USB-C |
+| 1 | ESP32-C3 with integrated 1.44″ display + case + battery |
 | 2 | OLED 0.96″ SSD1306 I2C |
 | 1 | LCD 16×2 1602 green backlight + I2C adapter |
 | 1 | TFT IPS 1.47″ 172×320 |
@@ -99,7 +100,7 @@
 | 4 | L spacer 60 mm |
 | 1 | I2S amplifier MAX98357 |
 | 1 | Speaker 4 Ω 3 W |
-| 1 | I2S microphone INMP441 |
+| 2 | I2S microphone INMP441 |
 | 1 | LM324N |
 | 1 | MOC3010 513Q |
 | 100 | Resistors 1/4 W |
@@ -107,6 +108,9 @@
 | 1 | 2× AA battery holder |
 | 2 | 4× AA battery holder |
 | 1 | Rechargeable AA batteries |
+| 2 | LiPo battery 1800 mAh 3.7 V 1S1P 3-wire (10 × 34 × 50 mm) |
+| 140 | Rigid jumper wires + organizer box |
+| 10 | Lever wire connector 2-way |
 | 5 | microSD card FAT32 |
 | 100 | Screw M3 × 12 mm |
 | 8 | Screw M3 × 30 mm |
