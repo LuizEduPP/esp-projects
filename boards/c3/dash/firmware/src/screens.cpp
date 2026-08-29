@@ -43,6 +43,8 @@ static lv_obj_t *sIconBox, *sLblTemp, *sLblDesc, *sQuick[3];
 static lv_obj_t *sFcDay[3], *sFcMax[3], *sFcMin[3], *sFcDot[3];
 static lv_obj_t *sChart, *sLblSpan, *sLblSun;
 static lv_chart_series_t *sSeries;
+static lv_obj_t *sLblAqi, *sLblAqiText, *sLblPm25, *sLblUv, *sAqiRing;
+static lv_obj_t *sMoonDisc, *sMoonLit, *sLblMoon, *sLblMoonPct;
 static lv_obj_t *sLblInsight, *sLblStamp;
 static lv_obj_t *sLblSsid, *sLblIp, *sLblRssi, *sLblHeap, *sLblUptime;
 static lv_obj_t *sLblProv, *sLblNightTime;
