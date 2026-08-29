@@ -51,7 +51,7 @@ static lv_obj_t *sLblCur[3], *sLblCurPct[3];
 static lv_obj_t *sLblNews[3], *sLblRate[3];
 static lv_obj_t *sLblHolidayDays, *sLblHolidayName, *sLblHolidayDate;
 static lv_obj_t *sLblHistYear, *sLblHistText, *sLblPeople, *sLblIss;
-static lv_obj_t *sLblCommits, *sLblPushes, *sLblRepo, *sLblWeek, *sLblRepos;
+static lv_obj_t *sLblCommits, *sLblPushes, *sLblRepo, *sLblWeek, *sLblRepos, *sLblDays;
 static lv_obj_t *sBusy;
 static lv_obj_t *sLblTimer, *sLblTimerMode, *sTimerArc, *sLblTimerHint;
 static lv_obj_t *sLblAqi, *sLblAqiText, *sLblPm25, *sLblUv, *sAqiRing;
@@ -74,6 +74,60 @@ static lv_obj_t *text(lv_obj_t *par, const lv_font_t *font, uint32_t color, cons
   lv_obj_set_size(l, w, lv_font_get_line_height(font) + 2);
   lv_obj_set_pos(l, cx - w / 2, y);
   return l;
+}
+
+static void marquee(lv_obj_t *l) {
+  lv_label_set_long_mode(l, LV_LABEL_LONG_SCROLL_CIRCULAR);
+  lv_obj_set_style_anim_duration(l, 6000, 0);
+}
+
+/* Label that wraps inside a clipped box and, when the text is taller than the
+   box, drifts up and back so nothing is lost. */
+static lv_obj_t *wrapBox(lv_obj_t *par, const lv_font_t *font, uint32_t color, int cx, int y,
+                         int w, int h) {
+  lv_obj_t *box = lv_obj_create(par);
+  lv_obj_remove_style_all(box);
+  lv_obj_set_pos(box, cx - w / 2, y);
+  lv_obj_set_size(box, w, h);
+
+  lv_obj_t *l = lv_label_create(box);
+  lv_obj_set_style_text_font(l, font, 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(color), 0);
+  lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_line_space(l, 2, 0);
+  lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+  lv_label_set_text(l, "--");
+  lv_obj_set_width(l, w);
+  lv_obj_set_height(l, LV_SIZE_CONTENT);
+  lv_obj_set_pos(l, 0, 0);
+  return l;
+}
+
+static void driftY(void *obj, int32_t v) { lv_obj_set_y((lv_obj_t *)obj, v); }
+
+static void wrapText(lv_obj_t *l, const char *txt) {
+  lv_label_set_text(l, txt);
+  lv_obj_update_layout(l);
+
+  lv_anim_delete(l, driftY);
+  lv_obj_set_y(l, 0);
+
+  const int boxH = lv_obj_get_height(lv_obj_get_parent(l));
+  const int textH = lv_obj_get_height(l);
+  if (textH <= boxH) return;
+
+  const int travel = textH - boxH;
+  lv_anim_t a;
+  lv_anim_init(&a);
+  lv_anim_set_var(&a, l);
+  lv_anim_set_exec_cb(&a, driftY);
+  lv_anim_set_values(&a, 0, -travel);
+  lv_anim_set_duration(&a, travel * 140);
+  lv_anim_set_playback_duration(&a, travel * 140);
+  lv_anim_set_delay(&a, 2000);
+  lv_anim_set_playback_delay(&a, 2000);
+  lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+  lv_anim_start(&a);
 }
 
 static lv_obj_t *tagText(lv_obj_t *par, const char *txt, int cx, int y, int w) {
@@ -438,9 +492,11 @@ static void buildDev(lv_obj_t *p) {
   sLblPushes = text(p, FONT_TAG, COL_MUTED, "commits hoje", W / 2, 58, INNER);
 
   lv_obj_t *strip = plate(p, MARGIN, 74, INNER, 28);
-  sLblWeek = text(strip, FONT_XS, COL_ACCENT, "--", 26, 5, 48);
-  rule(strip, 52, 5, 1, 16);
-  sLblRepos = text(strip, FONT_XS, COL_VIOLET, "--", 78, 5, 48);
+  sLblWeek = text(strip, FONT_XS, COL_ACCENT, "--", 20, 6, 34);
+  rule(strip, 38, 5, 1, 16);
+  sLblRepos = text(strip, FONT_XS, COL_VIOLET, "--", 56, 6, 34);
+  rule(strip, 74, 5, 1, 16);
+  sLblDays = text(strip, FONT_XS, COL_GREEN, "--", 92, 6, 34);
 
   sLblRepo = text(p, FONT_TAG, COL_MUTED, "--", W / 2, 106, INNER);
 }
@@ -905,18 +961,16 @@ void screensDev(int commitsToday, int commitsWeek, int activeDays, int repos, in
   snprintf(buf, sizeof(buf), commitsToday == 1 ? "commit hoje" : "commits hoje");
   lv_label_set_text(sLblPushes, buf);
 
-  snprintf(buf, sizeof(buf), "%d / 7d", commitsWeek);
+  snprintf(buf, sizeof(buf), "%d/7d", commitsWeek);
   lv_label_set_text(sLblWeek, buf);
 
-  snprintf(buf, sizeof(buf), "%d ativos", repos);
+  snprintf(buf, sizeof(buf), "%d rep", repos);
   lv_label_set_text(sLblRepos, buf);
 
-  if (activeDays > 0) {
-    snprintf(buf, sizeof(buf), "%s  %dd na semana", repo, activeDays);
-  } else {
-    snprintf(buf, sizeof(buf), "%s", repo);
-  }
-  lv_label_set_text(sLblRepo, buf);
+  snprintf(buf, sizeof(buf), "%dd", activeDays);
+  lv_label_set_text(sLblDays, buf);
+
+  lv_label_set_text(sLblRepo, repo);
   (void)followers;
 }
 

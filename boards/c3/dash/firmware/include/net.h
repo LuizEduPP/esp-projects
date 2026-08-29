@@ -65,7 +65,7 @@ struct DevStats {
   int followers = 0;
   int activeDays = 0;
   int activeRepos = 0;
-  char lastRepo[24] = "--";
+  char lastRepo[32] = "--";
 };
 
 struct Air {
