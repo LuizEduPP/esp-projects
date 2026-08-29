@@ -81,8 +81,17 @@ int main(int argc, char **argv) {
   screensRain(rain, 8, 30);
   screensSun2("06:21", "18:04", "11h 43min de sol", 62);
   screensMarket(5.42f, 0.37f, 5.91f, -0.22f, 348000.0f, 2.4f);
-  screensDev(7, 12, 2, "015-esp-projects");
+  screensDev(7, 12, 2, 5, 34, "015-esp-projects");
   screensTimer("18:24", "foco", 26, true);
+  screensNews("Daniel Cargnin e ouro no Grand Slam de Lausanne de judo",
+              "Mega-Sena sorteia premio acumulado de R$ 30 milhoes neste domingo",
+              "Ministerio da Saude reforca chamamento para vacina contra o sarampo", 3);
+  screensRates(14.00f, 13.90f, 4.44f);
+  screensHoliday("Independencia do Brasil", "2026-09-07", 9);
+  screensHistory(1949,
+                 "E realizado o primeiro teste de uma bomba nuclear da Uniao Sovietica, a RDS-1, "
+                 "em Semipalatinsk.");
+  screensSpace(12, -35.9f, -29.1f);
   screensInsight("O ceu encoberto promete uma tarde quente e umida.", false, "15:40");
   screensSystem("hotspot", -58, "10.31.254.103", 187, "0h 12m");
 
@@ -109,8 +118,17 @@ int main(int argc, char **argv) {
   screensRain(storm, 8, 0);
   screensSun2("05:59", "19:12", "13h 13min de sol", 100);
   screensMarket(19.99f, -12.5f, 21.44f, -8.7f, 1200000.0f, 15.2f);
-  screensDev(0, 0, 0, "monorepo-com-nome-gigante");
+  screensDev(0, 0, 0, 0, 0, "monorepo-com-nome-gigante");
   screensTimer("00:00", "pausa", 100, false);
+  screensNews("Governo anuncia pacote de medidas economicas para conter a alta dos combustiveis e "
+              "a inflacao de alimentos no segundo semestre",
+              "--", "--", 1);
+  screensRates(999.99f, 0.0f, -1.25f);
+  screensHoliday("Nossa Senhora Aparecida - Padroeira do Brasil", "2026-10-12", 365);
+  screensHistory(1500,
+                 "Uma sequencia muito longa de acontecimentos historicos ocorre simultaneamente em "
+                 "diversos continentes distintos e precisa ser truncada pela interface.");
+  screensSpace(0, 0.0f, 0.0f);
   screensInsight(
       "Uma frente fria bastante intensa chega durante a madrugada e derruba a temperatura de "
       "forma abrupta em toda a regiao, entao leve agasalho.",

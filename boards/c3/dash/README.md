@@ -12,9 +12,10 @@ yarn dash:flash
 
 ## Controls
 
-Fourteen screens in a loop — Clock, Weather, Forecast, 24 h chart, Rain (next 2 h), Wind, Air &
-UV, Sun, Moon, Market, GitHub, Pomodoro, AI and System. With that many pages the dot indicator
-became unreadable, so the footer is a thin progress bar instead. Each
+Nineteen screens in a loop — Clock, Weather, Forecast, 24 h chart, Rain (next 2 h), Wind, Air &
+UV, Sun, Moon, News, Market, Rates, Holiday, On this day, Space, GitHub, Pomodoro, AI and System.
+With that many pages the dot indicator became unreadable, so the footer is a thin progress bar
+instead. Each
 screen is a typographic hero (one large value, a small label above it) rather than a grid of
 boxes; surfaces appear only where values need grouping. Widgets are placed with explicit
 coordinates: LVGL's flex layout inside style-less containers produced overlapping labels here,
@@ -94,6 +95,37 @@ running and refreshing data; only BOOT brings the panel back.
 Turning the screen off issues the ST7735 `DISPOFF` + `SLPIN` commands, which blanks the pixels.
 The vendor schematic confirms the backlight has no GPIO in its path, so the LED stays lit — this
 is a visual off, not a power saving. See [../README.md](../README.md).
+
+## Data sources
+
+Everything is free and keyless:
+
+| Screen | Source |
+|--------|--------|
+| Weather, rain, wind, forecast, sun, UV | [Open-Meteo](https://open-meteo.com/) |
+| Air quality | Open-Meteo air-quality API |
+| Moon | computed locally from the synodic period — no request |
+| News | [Agência Brasil](https://agenciabrasil.ebc.com.br/) RSS |
+| Market | [AwesomeAPI](https://docs.awesomeapi.com.br/) |
+| Rates (Selic, CDI, IPCA), holidays | [BrasilAPI](https://brasilapi.com.br/) |
+| On this day | Portuguese Wikipedia REST feed |
+| Space | [Open Notify](http://open-notify.org/) |
+| GitHub | public events API, unauthenticated |
+
+Two feeds that look obvious but do not work here. `g1.globo.com` answers **HTTP 426 Upgrade
+Required** because it demands HTTP/2, which the ESP32 does not speak. Folha's RSS returns
+ISO-8859-1, and the accent folding in `net.cpp` assumes UTF-8, so its headlines arrive mangled.
+
+The RSS is parsed straight off the socket with `Stream::find("<item>")` instead of
+`http.getString()`: the feed is over 100 KB and buffering it would blow the heap that LVGL now
+shares.
+
+GitHub without a token only ever sees public activity — no private repos, and the event feed caps
+at 90 days. That is why the screen counts *active* repositories from the feed rather than showing
+the profile total, which would silently exclude private work.
+
+The slow screens (rates, holiday, history, space) refresh on a rotating schedule, one every 20 s
+after boot and then every 30 min, so the board never fires six TLS handshakes at once.
 
 ## Config
 
