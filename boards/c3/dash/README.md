@@ -12,8 +12,14 @@ yarn dash:flash
 
 ## Controls
 
-Four screens in a loop — Clock, Weather, AI, System — with a segmented bar at the top showing
-where you are.
+Four screens in a loop — Clock, Weather, AI, System — laid out as a mosaic of cards, with a
+segmented bar at the bottom showing where you are. The UI redraws at 10 fps so the weather icons
+animate (drifting clouds, falling rain, a rotating sun) and page changes fade in.
+
+After `DASH_SCREEN_TIMEOUT_MS` of no input the board enters night mode: only the clock, drawn in
+near-black. It is not a real dimmer — the backlight has no GPIO — but since the panel emits the
+same light either way, painting almost-black pixels is the closest thing to 1% brightness and
+keeps the time readable up close. Any button wakes it.
 
 There is no battery readout because the board exposes no way to measure it: the PL4054 charges the
 LiPo but neither its status pin nor a voltage divider reaches a GPIO. A charge level would require
@@ -23,7 +29,7 @@ soldering a 2:1 divider from BAT+ to GPIO 1.
 |--------|------|--------|
 | Top right | 8 | next screen |
 | Top left | 10 | previous screen |
-| BOOT | 9 | wake / turn the screen off |
+| BOOT | 9 | toggle night mode |
 | BOOT (hold 3 s) | 9 | forget WiFi and re-provision |
 
 ## WiFi provisioning

@@ -9,8 +9,9 @@
 
 static int sPage = 0;
 static bool sDirty = true;
-static bool sScreenOn = true;
-static unsigned long sScreenOffAt = 0;
+static bool sNight = false;
+static unsigned long sNightAt = 0;
+static unsigned long sNextFrame = 0;
 
 static Place sPlace;
 static Weather sWeather;
@@ -21,7 +22,6 @@ static unsigned long sNextWeather = 0;
 static unsigned long sNextInsight = 0;
 static unsigned long sNextTimeSync = 0;
 static unsigned long sNextGeo = 0;
-static unsigned long sNextTick = 0;
 static NetState sLastState = NET_OFFLINE;
 
 struct Button {
@@ -62,17 +62,17 @@ static Button btnDown;
 static Button btnUp;
 static Button btnBoot;
 
-static void screenOn(bool on) {
-  if (sScreenOn == on) return;
-  sScreenOn = on;
-  uiScreenPower(on);
-  if (on) {
-    sScreenOffAt = millis() + DASH_SCREEN_TIMEOUT_MS;
-    sDirty = true;
+static void keepAwake() { sNightAt = millis() + DASH_SCREEN_TIMEOUT_MS; }
+
+static void setNight(bool on) {
+  if (sNight == on) return;
+  sNight = on;
+  sDirty = true;
+  if (!on) {
+    uiIntro();
+    keepAwake();
   }
 }
-
-static void keepAwake() { sScreenOffAt = millis() + DASH_SCREEN_TIMEOUT_MS; }
 
 static void refreshWeather() {
   sNextWeather = millis() + DASH_WEATHER_INTERVAL_MS;
@@ -82,7 +82,7 @@ static void refreshWeather() {
 static void refreshInsight() {
   sNextInsight = millis() + DASH_AI_INTERVAL_MS;
   sInsightPending = true;
-  if (sScreenOn && sPage == 2) uiInsight(sInsight, true, sPage);
+  if (!sNight && sPage == 2) uiInsight(sInsight, true, sPage);
 
   if (netFetchInsight(sPlace, sWeather, sInsight, sizeof(sInsight))) {
     Serial.printf("[ai] %s\n", sInsight);
@@ -103,6 +103,15 @@ static void locate() {
 }
 
 static void render() {
+  if (sNight) {
+    struct tm now;
+    const bool ok = getLocalTime(&now, 50);
+    if (!ok) memset(&now, 0, sizeof(now));
+    uiNight(now, netTimeReady() && ok);
+    sDirty = false;
+    return;
+  }
+
   if (netState() == NET_PROVISIONING) {
     uiProvisioning(true);
     sDirty = false;
@@ -160,27 +169,33 @@ void loop() {
     }
   }
 
-  if (btnBoot.pressed()) screenOn(!sScreenOn);
+  if (btnBoot.pressed()) setNight(!sNight);
   if (btnBoot.heldFor(3000)) {
-    screenOn(true);
+    setNight(false);
     netForgetCredentials();
     sDirty = true;
   }
 
   if (btnDown.pressed()) {
-    if (sScreenOn) {
+    if (sNight) {
+      setNight(false);
+    } else {
       sPage = (sPage + 1) % UI_PAGES;
+      uiIntro();
       sDirty = true;
+      keepAwake();
     }
-    keepAwake();
   }
 
   if (btnUp.pressed()) {
-    if (sScreenOn) {
+    if (sNight) {
+      setNight(false);
+    } else {
       sPage = (sPage + UI_PAGES - 1) % UI_PAGES;
+      uiIntro();
       sDirty = true;
+      keepAwake();
     }
-    keepAwake();
   }
 
   const unsigned long now = millis();
@@ -195,13 +210,13 @@ void loop() {
     if ((long)(now - sNextInsight) >= 0 && sWeather.valid) refreshInsight();
   }
 
-  if (sScreenOn && (long)(now - sScreenOffAt) >= 0) screenOn(false);
+  if (!sNight && (long)(now - sNightAt) >= 0) setNight(true);
 
-  if (sScreenOn && (long)(now - sNextTick) >= 0) {
-    sNextTick = now + 1000;
-    if (sPage == 0 || sPage == 3 || state == NET_PROVISIONING) sDirty = true;
+  if ((long)(now - sNextFrame) >= 0) {
+    sNextFrame = now + (sNight ? 1000 : 100);
+    sDirty = true;
   }
 
-  if (sScreenOn && sDirty) render();
-  delay(20);
+  if (sDirty) render();
+  delay(5);
 }

@@ -6,3 +6,5 @@ platformio.local.ini
 __pycache__/
 .DS_Store
 icons/
+boards/c3/dash/preview/*.png
+boards/c3/dash/preview/*.html
