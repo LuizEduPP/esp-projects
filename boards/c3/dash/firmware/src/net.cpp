@@ -534,6 +534,8 @@ bool netFetchDev(DevStats &out) {
 
   char days[8][11] = {{0}};
   int dayCount = 0;
+  char seenRepos[8][24] = {{0}};
+  int repoCount = 0;
   bool gotRepo = false;
 
   for (JsonObject ev : doc.as<JsonArray>()) {
@@ -544,11 +546,24 @@ bool netFetchDev(DevStats &out) {
     const bool isToday = today[0] && strncmp(at, today, 10) == 0;
     const bool inWeek = weekAgo[0] && strncmp(at, weekAgo, 10) >= 0;
 
+    const char *full = ev["repo"]["name"] | "";
+    const char *slash = strchr(full, '/');
+    const char *name = slash ? slash + 1 : full;
+
     if (!gotRepo) {
-      const char *repo = ev["repo"]["name"] | "";
-      const char *slash = strchr(repo, '/');
-      snprintf(out.lastRepo, sizeof(out.lastRepo), "%s", slash ? slash + 1 : repo);
+      snprintf(out.lastRepo, sizeof(out.lastRepo), "%s", name);
       gotRepo = true;
+    }
+
+    if (name[0] && repoCount < 8) {
+      bool known = false;
+      for (int i = 0; i < repoCount; ++i) {
+        if (strcmp(seenRepos[i], name) == 0) {
+          known = true;
+          break;
+        }
+      }
+      if (!known) snprintf(seenRepos[repoCount++], sizeof(seenRepos[0]), "%s", name);
     }
 
     if (strcmp(type, "PushEvent") == 0) {
@@ -578,9 +593,10 @@ bool netFetchDev(DevStats &out) {
   }
 
   out.activeDays = dayCount;
+  out.activeRepos = repoCount;
   out.valid = true;
-  Serial.printf("[dev] hoje %d, semana %d em %d dias, %d repos, %d seguidores, repo %s\n",
-                out.commitsToday, out.commitsWeek, out.activeDays, out.repos, out.followers,
+  Serial.printf("[dev] hoje %d, semana %d em %d dias, %d repos ativos (%d publicos), repo %s\n",
+                out.commitsToday, out.commitsWeek, out.activeDays, out.activeRepos, out.repos,
                 out.lastRepo);
   return true;
 }

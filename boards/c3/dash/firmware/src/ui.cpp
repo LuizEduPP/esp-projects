@@ -144,7 +144,8 @@ void uiUpdateDev(const DevStats &d) {
     screensDev(0, 0, 0, 0, 0, "sem dados");
     return;
   }
-  screensDev(d.commitsToday, d.commitsWeek, d.activeDays, d.repos, d.followers, d.lastRepo);
+  screensDev(d.commitsToday, d.commitsWeek, d.activeDays, d.activeRepos, d.followers,
+             d.lastRepo);
 }
 
 void uiBusy(bool on) {

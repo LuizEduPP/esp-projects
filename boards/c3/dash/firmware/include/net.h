@@ -64,6 +64,7 @@ struct DevStats {
   int repos = 0;
   int followers = 0;
   int activeDays = 0;
+  int activeRepos = 0;
   char lastRepo[24] = "--";
 };
 

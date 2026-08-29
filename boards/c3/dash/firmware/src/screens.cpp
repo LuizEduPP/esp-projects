@@ -844,11 +844,11 @@ void screensDev(int commitsToday, int commitsWeek, int activeDays, int repos, in
   snprintf(buf, sizeof(buf), "%d / 7d", commitsWeek);
   lv_label_set_text(sLblWeek, buf);
 
-  snprintf(buf, sizeof(buf), "%d repos", repos);
+  snprintf(buf, sizeof(buf), "%d ativos", repos);
   lv_label_set_text(sLblRepos, buf);
 
   if (activeDays > 0) {
-    snprintf(buf, sizeof(buf), "%s  %dd ativos", repo, activeDays);
+    snprintf(buf, sizeof(buf), "%s  %dd na semana", repo, activeDays);
   } else {
     snprintf(buf, sizeof(buf), "%s", repo);
   }
