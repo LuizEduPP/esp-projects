@@ -36,6 +36,9 @@ GPIO 2 and GPIO 8 are C3 strapping pins — both must read HIGH at reset. Holdin
 - **The backlight is not switchable.** The panel's LEDA/LEDK go to 3V3 through a fixed resistor —
   no GPIO in the path. `DISPOFF`/`SLPIN` blanks the pixels but the LED stays on.
 - **There is a battery charger on board**: PL4054, LiPo on a 1.27 mm connector, charging over USB.
+- **There is no battery telemetry.** No divider reaches an ADC: GPIO 1 is the only free ADC pin
+  (0, 2, 3, 4 belong to the display) and it floats at ~530 mV, and the vendor sketch never reads an
+  ADC. Reporting charge level needs a 2:1 divider soldered from BAT+ to GPIO 1.
 - **A user LED sits on GPIO 11**, next to the reset button.
 - Free GPIOs on the header: 1, 6, 7, 20, 21.
 

@@ -14,6 +14,10 @@
 #define COL_FG 0xE73C
 #define COL_DIM 0x7BCF
 #define COL_FAINT 0x31A6
+#define COL_HAIR 0x10A2
+#define UI_PAD 6
+#define UI_HEADER_Y 17
+#define UI_FOOTER_Y 122
 #define COL_ACCENT 0x279F
 #define COL_WARM 0xFCAF
 #define COL_COOL 0x62FF
@@ -72,19 +76,25 @@ static void drawCentered(const char *s, int baseline, const GFXfont *font, uint1
   draw(s, (UI_W - widthOf(s, font)) / 2, baseline, font, color);
 }
 
+static void microRight(const char *s, int right, int y, uint16_t color) {
+  micro(s, right - (int)strlen(s) * 6, y, color);
+}
+
 static void chrome(const char *label, int page) {
   canvas.fillScreen(COL_BG);
-  micro(label, 6, 5, COL_DIM);
+  micro(label, UI_PAD, 4, COL_DIM);
 
   const int bars = netRssiBars();
   for (int i = 0; i < 3; ++i) {
     const int h = 3 + i * 3;
-    canvas.fillRect(UI_W - 22 + i * 5, 12 - h, 3, h, i < bars ? COL_ACCENT : COL_FAINT);
+    canvas.fillRect(UI_W - 20 + i * 5, 12 - h, 3, h, i < bars ? COL_ACCENT : COL_FAINT);
   }
+  canvas.drawFastHLine(UI_PAD, UI_HEADER_Y, UI_W - 2 * UI_PAD, COL_FAINT);
 
-  const int seg = (UI_W - 12) / 4;
+  const int seg = (UI_W - 2 * UI_PAD) / UI_PAGES;
   for (int i = 0; i < UI_PAGES; ++i) {
-    canvas.fillRect(6 + i * seg, UI_H - 4, seg - 4, 2, i == page ? COL_ACCENT : COL_FAINT);
+    canvas.fillRect(UI_PAD + i * seg, UI_FOOTER_Y, seg - 4, 2,
+                    i == page ? COL_ACCENT : COL_FAINT);
   }
 }
 
@@ -160,17 +170,17 @@ void uiClock(const struct tm &now, bool timeReady, int page) {
 
   char hhmm[6];
   snprintf(hhmm, sizeof(hhmm), "%02d:%02d", now.tm_hour, now.tm_min);
-  drawCentered(hhmm, 66, &FreeSansBold24pt7b, timeReady ? COL_FG : COL_FAINT);
+  drawCentered(hhmm, 62, &FreeSansBold24pt7b, timeReady ? COL_FG : COL_FAINT);
 
-  canvas.fillRect(14, 74, UI_W - 28, 1, COL_FAINT);
+  drawCentered(kWeekdays[now.tm_wday % 7], 90, &FreeSansBold12pt7b, COL_ACCENT);
 
-  drawCentered(kWeekdays[now.tm_wday % 7], 95, &FreeSansBold12pt7b, COL_ACCENT);
-
-  char date[24];
-  snprintf(date, sizeof(date), "%d de %s", now.tm_mday, kMonths[now.tm_mon % 12]);
-  drawCentered(date, 113, &FreeSans9pt7b, COL_DIM);
-
-  if (!timeReady) micro("sincronizando", 22, 118, COL_WARM);
+  if (timeReady) {
+    char date[24];
+    snprintf(date, sizeof(date), "%d de %s", now.tm_mday, kMonths[now.tm_mon % 12]);
+    drawCentered(date, 110, &FreeSans9pt7b, COL_DIM);
+  } else {
+    drawCentered("sincronizando", 110, &FreeSans9pt7b, COL_WARM);
+  }
   uiPush();
 }
 
@@ -187,13 +197,13 @@ void uiWeather(const Place &p, const Weather &w, int page) {
   char temp[6];
   snprintf(temp, sizeof(temp), "%.0f", w.tempC);
   const uint16_t tc = tempColor(w.tempC);
-  draw(temp, 8, 66, &FreeSansBold24pt7b, tc);
-  canvas.drawCircle(12 + widthOf(temp, &FreeSansBold24pt7b), 40, 3, tc);
+  draw(temp, UI_PAD, 62, &FreeSansBold24pt7b, tc);
+  canvas.drawCircle(UI_PAD + widthOf(temp, &FreeSansBold24pt7b) + 6, 36, 3, tc);
 
   weatherIcon(w.code, 100, 46);
 
-  draw(w.desc, 8, 86, &FreeSans9pt7b, COL_FG);
-  canvas.fillRect(8, 93, UI_W - 16, 1, COL_FAINT);
+  draw(w.desc, UI_PAD, 82, &FreeSans9pt7b, COL_FG);
+  canvas.drawFastHLine(UI_PAD, 92, UI_W - 2 * UI_PAD, COL_FAINT);
 
   const char *labels[3] = {"MIN", "MAX", "UMID"};
   char values[3][8];
@@ -201,10 +211,11 @@ void uiWeather(const Place &p, const Weather &w, int page) {
   snprintf(values[1], sizeof(values[1]), "%.0f", w.maxC);
   snprintf(values[2], sizeof(values[2]), "%d%%", w.humidity);
 
+  const int step = (UI_W - 2 * UI_PAD) / 3;
   for (int i = 0; i < 3; ++i) {
-    const int x = 8 + i * 40;
-    micro(labels[i], x, 99, COL_FAINT);
-    draw(values[i], x, 121, &FreeSans9pt7b, COL_DIM);
+    const int cx = UI_PAD + step * i + step / 2;
+    micro(labels[i], cx - (int)strlen(labels[i]) * 3, 98, COL_FAINT);
+    draw(values[i], cx - widthOf(values[i], &FreeSans9pt7b) / 2, 118, &FreeSans9pt7b, COL_FG);
   }
   uiPush();
 }
@@ -218,36 +229,40 @@ void uiInsight(const char *text, bool pending, int page) {
     return;
   }
 
-  draw("\"", 6, 46, &FreeSansBold24pt7b, COL_FAINT);
+  const int kMaxLines = 6;
+  char lines[kMaxLines][26];
+  int count = 0;
 
-  canvas.setFont(&FreeSans9pt7b);
-  canvas.setTextColor(COL_FG);
-
-  int y = 46;
   const char *p = text;
-  char line[26];
-  while (*p && y < UI_H - 8) {
+  while (*p && count < kMaxLines) {
     while (*p == ' ') ++p;
     if (!*p) break;
 
+    char probe[26];
     int take = 0;
     int fit = 0;
     while (p[take]) {
       const int len = take + 1;
-      if (len >= (int)sizeof(line)) break;
-      memcpy(line, p, len);
-      line[len] = '\0';
-      if (widthOf(line, &FreeSans9pt7b) > UI_W - 20) break;
+      if (len >= (int)sizeof(probe)) break;
+      memcpy(probe, p, len);
+      probe[len] = '\0';
+      if (widthOf(probe, &FreeSans9pt7b) > UI_W - 24) break;
       if (p[take] == ' ') fit = take;
       ++take;
     }
     if (p[take] && fit > 0) take = fit;
 
-    memcpy(line, p, take);
-    line[take] = '\0';
-    draw(line, 10, y, &FreeSans9pt7b, COL_FG);
-    y += 15;
+    memcpy(lines[count], p, take);
+    lines[count][take] = '\0';
+    ++count;
     p += take;
+  }
+
+  const int block = count * 15;
+  const int top = 24 + (94 - block > 0 ? (94 - block) / 2 : 0);
+  canvas.fillRect(UI_PAD, top, 2, block - 4, COL_ACCENT);
+  for (int i = 0; i < count; ++i) {
+    draw(lines[i], UI_PAD + 8, top + 11 + i * 15, &FreeSans9pt7b, COL_FG);
   }
   uiPush();
 }
@@ -265,9 +280,10 @@ void uiSystem(const Place &p, int page) {
   snprintf(values[4], sizeof(values[4]), "%luh %02lum", up / 3600, (up % 3600) / 60);
 
   for (int i = 0; i < 5; ++i) {
-    const int y = 26 + i * 17;
-    micro(labels[i], 8, y, COL_FAINT);
-    micro(values[i], 46, y, COL_FG);
+    const int y = 27 + i * 18;
+    micro(labels[i], UI_PAD, y, COL_FAINT);
+    microRight(values[i], UI_W - UI_PAD, y, COL_FG);
+    if (i < 4) canvas.drawFastHLine(UI_PAD, y + 13, UI_W - 2 * UI_PAD, COL_HAIR);
   }
   uiPush();
 }

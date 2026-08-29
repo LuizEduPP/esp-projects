@@ -11,20 +11,22 @@ BOLD = "/usr/share/fonts/liberation-sans-fonts/LiberationSans-Bold.ttf"
 BG = (0, 0, 0)
 FG = (232, 234, 237)
 DIM = (122, 130, 140)
-FAINT = (52, 58, 66)
+FAINT = (48, 54, 62)
 ACCENT = (34, 211, 238)
 WARM = (251, 146, 60)
 COOL = (96, 165, 250)
-GOOD = (52, 211, 153)
 SUN = (250, 204, 21)
 CLOUD = (148, 163, 184)
 RAIN = (56, 130, 246)
 
-big = ImageFont.truetype(BOLD, 42)
+big = ImageFont.truetype(BOLD, 40)
 mid = ImageFont.truetype(BOLD, 15)
 reg = ImageFont.truetype(SANS, 12)
-tiny = ImageFont.truetype(SANS, 10)
 micro = ImageFont.truetype(BOLD, 9)
+
+PAD = 6
+HEADER_Y = 17
+FOOTER_Y = 122
 
 
 def new():
@@ -32,20 +34,24 @@ def new():
 
 
 def center(d, text, y, font, fill):
-    w = d.textlength(text, font=font)
-    d.text(((W - w) / 2, y), text, font=font, fill=fill)
+    d.text(((W - d.textlength(text, font=font)) / 2, y), text, font=font, fill=fill)
+
+
+def right(d, text, y, font, fill):
+    d.text((W - PAD - d.textlength(text, font=font), y), text, font=font, fill=fill)
 
 
 def chrome(d, label, page, bars=3):
-    d.text((6, 5), label, font=micro, fill=DIM)
+    d.text((PAD, 4), label, font=micro, fill=DIM)
     for i in range(3):
         h = 3 + i * 3
         c = ACCENT if i < bars else FAINT
-        d.rectangle([W - 22 + i * 5, 12 - h, W - 20 + i * 5, 12], fill=c)
-    seg = (W - 12) / 4
+        d.rectangle([W - 20 + i * 5, 12 - h, W - 18 + i * 5, 12], fill=c)
+    d.line([PAD, HEADER_Y, W - PAD, HEADER_Y], fill=FAINT, width=1)
+    seg = (W - 2 * PAD) / 4
     for i in range(4):
-        x = 6 + i * seg
-        d.rectangle([x, H - 4, x + seg - 4, H - 3], fill=ACCENT if i == page else FAINT)
+        x = PAD + i * seg
+        d.rectangle([x, FOOTER_Y, x + seg - 4, FOOTER_Y + 1], fill=ACCENT if i == page else FAINT)
 
 
 def icon_sun(d, cx, cy, r=9):
@@ -60,10 +66,10 @@ def icon_cloud(d, cx, cy, color=CLOUD):
 
 
 def icon_rain(d, cx, cy):
-    icon_cloud(d, cx, cy - 4)
+    icon_cloud(d, cx, cy - 5)
     for i in range(3):
         x = cx - 9 + i * 9
-        d.line([x, cy + 9, x - 3, cy + 17], fill=RAIN, width=2)
+        d.line([x, cy + 8, x - 3, cy + 15], fill=RAIN, width=2)
 
 
 def screen_clock():
@@ -71,9 +77,8 @@ def screen_clock():
     d = ImageDraw.Draw(img)
     chrome(d, "CESARIO LANGE", 0)
     center(d, "15:47", 26, big, FG)
-    d.line([14, 76, W - 14, 76], fill=FAINT, width=1)
-    center(d, "SABADO", 82, mid, ACCENT)
-    center(d, "29 de agosto", 100, reg, DIM)
+    center(d, "SABADO", 78, mid, ACCENT)
+    center(d, "29 de agosto", 98, reg, DIM)
     return img
 
 
@@ -81,17 +86,18 @@ def screen_weather():
     img = new()
     d = ImageDraw.Draw(img)
     chrome(d, "CLIMA", 1)
-    d.text((8, 26), "29", font=big, fill=WARM)
+    d.text((PAD, 24), "29", font=big, fill=WARM)
     w = d.textlength("29", font=big)
-    d.text((8 + w + 2, 32), "°", font=mid, fill=WARM)
-    icon_cloud(d, 100, 44)
-    d.text((8, 74), "encoberto", font=reg, fill=FG)
-    d.line([8, 92, W - 8, 92], fill=FAINT, width=1)
+    d.ellipse([PAD + w + 3, 30, PAD + w + 9, 36], outline=WARM, width=2)
+    icon_cloud(d, 100, 46)
+    d.text((PAD, 72), "encoberto", font=reg, fill=FG)
+    d.line([PAD, 92, W - PAD, 92], fill=FAINT, width=1)
     cols = [("MIN", "20"), ("MAX", "31"), ("UMID", "42%")]
+    step = (W - 2 * PAD) / 3
     for i, (k, v) in enumerate(cols):
-        x = 8 + i * 40
-        d.text((x, 97), k, font=micro, fill=FAINT)
-        d.text((x, 108), v, font=reg, fill=DIM)
+        cx = PAD + step * i + step / 2
+        d.text((cx - d.textlength(k, font=micro) / 2, 98), k, font=micro, fill=FAINT)
+        d.text((cx - d.textlength(v, font=reg) / 2, 106), v, font=reg, fill=FG)
     return img
 
 
@@ -99,18 +105,20 @@ def screen_ai():
     img = new()
     d = ImageDraw.Draw(img)
     chrome(d, "AI", 2)
-    d.text((6, 18), "\u201c", font=big, fill=FAINT)
     text = "O ceu encoberto promete uma tarde quente e umida."
-    words, line, y = text.split(), "", 44
-    for word in words:
+    lines, line = [], ""
+    for word in text.split():
         probe = (line + " " + word).strip()
-        if d.textlength(probe, font=reg) > W - 20:
-            d.text((10, y), line, font=reg, fill=FG)
-            y += 15
+        if d.textlength(probe, font=reg) > W - 24:
+            lines.append(line)
             line = word
         else:
             line = probe
-    d.text((10, y), line, font=reg, fill=FG)
+    lines.append(line)
+    top = 24 + max(0, (94 - len(lines) * 15)) // 2
+    d.rectangle([PAD, top, PAD + 1, top + len(lines) * 15 - 4], fill=ACCENT)
+    for i, ln in enumerate(lines):
+        d.text((PAD + 8, top + i * 15), ln, font=reg, fill=FG)
     return img
 
 
@@ -119,11 +127,13 @@ def screen_system():
     d = ImageDraw.Draw(img)
     chrome(d, "SISTEMA", 3)
     rows = [("rede", "hotspot"), ("ip", "10.31.254.103"), ("sinal", "-58 dBm"),
-            ("livre", "187 KB"), ("ligado", "0h 12m")]
+            ("livre", "187 KB"), ("ligado", "0h 12m"), ("bateria", "sem sensor")]
     for i, (k, v) in enumerate(rows):
-        y = 24 + i * 17
-        d.text((8, y), k, font=micro, fill=FAINT)
-        d.text((46, y - 2), v, font=tiny, fill=FG)
+        y = 25 + i * 16
+        d.text((PAD, y), k, font=micro, fill=FAINT)
+        right(d, v, y, micro, FG)
+        if i < len(rows) - 1:
+            d.line([PAD, y + 12, W - PAD, y + 12], fill=(24, 27, 32), width=1)
     return img
 
 
