@@ -12,9 +12,11 @@ yarn dash:flash
 
 ## Controls
 
-Six screens in a loop — Clock, Weather, Forecast (3 days), Chart (next 24 h), AI, System — laid
-out as a mosaic of cards. Cards use flex layouts rather than fixed coordinates, so labels cannot
-overlap when text grows. The UI runs on
+Six screens in a loop — Clock, Weather, Forecast (3 days), Chart (next 24 h), AI, System. Each
+screen is a typographic hero (one large value, a small label above it) rather than a grid of
+boxes; surfaces appear only where values need grouping. Widgets are placed with explicit
+coordinates: LVGL's flex layout inside style-less containers produced overlapping labels here,
+and at 128×128 absolute positions are both predictable and easy to verify. The UI runs on
 **LVGL 9**, which is what buys antialiased text and shapes; Adafruit GFX only draws hard-edged
 pixels and made the panel look like an 8-bit console. Screens are tiles in an `lv_tileview`, so
 turning a page slides with easing, and the weather icons are real objects animated by `lv_anim`
@@ -22,6 +24,14 @@ turning a page slides with easing, and the weather icons are real objects animat
 
 Fonts are Montserrat 10/12/14/16/20/28. They cover ASCII only, which is why `net.cpp` strips
 accents before any text reaches a label.
+
+## Previewing the UI without the board
+
+`preview/build.sh` compiles LVGL and the firmware's own `src/screens.cpp` for the host, renders
+every screen with sample data and writes `preview/screens.png`. Because `screens.cpp` contains no
+Arduino or network code, what shows up in that PNG is what the panel draws, pixel for pixel — run
+it and look at it before flashing any layout change. Labels that overflow, get clipped or truncate
+are obvious in the image and invisible from the source.
 
 The weather request now also asks Open-Meteo for `weather_code`, `sunrise`, `sunset`, four
 forecast days and hourly temperatures. Watch the URL buffer when adding parameters: it silently
