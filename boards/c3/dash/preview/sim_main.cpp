@@ -73,6 +73,8 @@ int main(int argc, char **argv) {
   }
   screensChart(hours, 24);
   screensSun("06:21", "18:04");
+  screensAir(34, "boa", 8.4f, 14.0f, 9.0f);
+  screensMoon("gibosa crescente", 0.72f, true);
   screensInsight("O ceu encoberto promete uma tarde quente e umida.", false, "15:40");
   screensSystem("hotspot", -58, "10.31.254.103", 187, "0h 12m");
 
@@ -91,6 +93,8 @@ int main(int argc, char **argv) {
   screensForecast(1, "QUINTA", -8.0f, 41.0f, 61);
   screensForecast(2, "SEXTA", 100.0f, 100.0f, 3);
   screensSun("06:21", "18:04");
+  screensAir(142, "pessima", 188.6f, 240.0f, 12.0f);
+  screensMoon("quarto minguante", 0.5f, false);
   screensInsight(
       "Uma frente fria bastante intensa chega durante a madrugada e derruba a temperatura de "
       "forma abrupta em toda a regiao, entao leve agasalho.",
