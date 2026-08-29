@@ -84,6 +84,26 @@ int main(int argc, char **argv) {
     savePPM(path);
   }
 
+  screensCity("SAO JOSE DOS CAMPOS");
+  screensClock("00:00", 59, "QUARTA-FEIRA", "30 de setembro");
+  screensWeather(-12.5f, "trovoada com granizo forte", 100, -12.0f, 100.0f, 95);
+  screensForecast(0, "QUARTA", -12.0f, 100.0f, 95);
+  screensForecast(1, "QUINTA", -8.0f, 41.0f, 61);
+  screensForecast(2, "SEXTA", 100.0f, 100.0f, 3);
+  screensSun("06:21", "18:04");
+  screensInsight(
+      "Uma frente fria bastante intensa chega durante a madrugada e derruba a temperatura de "
+      "forma abrupta em toda a regiao, entao leve agasalho.",
+      false, "23:59");
+  screensSystem("MinhaRedeWiFi5GHz", -100, "192.168.100.254", 1024, "999h 59m");
+
+  for (int p = 0; p < UI_PAGES; ++p) {
+    screensGoTo(p, false);
+    settle(600);
+    snprintf(path, sizeof(path), "%s/stress%d.ppm", outDir, p);
+    savePPM(path);
+  }
+
   screensShowProvisioning(true);
   settle(600);
   snprintf(path, sizeof(path), "%s/prov.ppm", outDir);

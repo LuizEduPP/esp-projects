@@ -52,4 +52,5 @@ g++ -Os -w "${flags[@]}" \
   "$out/liblvgl.a" -lm -o "$out/uisim"
 
 "$out/uisim" "$out"
-python3 "$here/sheet.py" "$out"
+python3 "$here/sheet.py" "$out" page
+python3 "$here/sheet.py" "$out" stress

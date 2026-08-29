@@ -5,14 +5,20 @@ from PIL import Image
 
 SCALE = 3
 GAP = 8
-NAMES = ["page0", "page1", "page2", "page3", "page4", "page5", "prov"]
-TITLES = ["relogio", "clima", "previsao", "grafico", "ai", "sistema", "wifi"]
 
 src = sys.argv[1]
-out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "screens.png")
+prefix = sys.argv[2] if len(sys.argv) > 2 else "page"
+out = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "screens.png" if prefix == "page" else prefix + ".png",
+)
+
+names = [prefix + str(i) for i in range(6)]
+if prefix == "page":
+    names.append("prov")
 
 frames = []
-for name in NAMES:
+for name in names:
     path = os.path.join(src, name + ".ppm")
     if os.path.exists(path):
         frames.append(Image.open(path).convert("RGB"))
