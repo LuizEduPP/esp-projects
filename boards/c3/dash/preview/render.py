@@ -127,13 +127,13 @@ def screen_system():
     d = ImageDraw.Draw(img)
     chrome(d, "SISTEMA", 3)
     rows = [("rede", "hotspot"), ("ip", "10.31.254.103"), ("sinal", "-58 dBm"),
-            ("livre", "187 KB"), ("ligado", "0h 12m"), ("bateria", "sem sensor")]
+            ("livre", "187 KB"), ("ligado", "0h 12m")]
     for i, (k, v) in enumerate(rows):
-        y = 25 + i * 16
+        y = 27 + i * 18
         d.text((PAD, y), k, font=micro, fill=FAINT)
         right(d, v, y, micro, FG)
         if i < len(rows) - 1:
-            d.line([PAD, y + 12, W - PAD, y + 12], fill=(24, 27, 32), width=1)
+            d.line([PAD, y + 13, W - PAD, y + 13], fill=(24, 27, 32), width=1)
     return img
 
 

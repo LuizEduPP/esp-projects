@@ -15,9 +15,9 @@ yarn dash:flash
 Four screens in a loop — Clock, Weather, AI, System — with a segmented bar at the top showing
 where you are.
 
-System reports battery as "sem sensor" because the board exposes no way to measure it: the PL4054
-charges the LiPo but neither its status pin nor a voltage divider reaches a GPIO. A charge level
-would require soldering a 2:1 divider from BAT+ to GPIO 1.
+There is no battery readout because the board exposes no way to measure it: the PL4054 charges the
+LiPo but neither its status pin nor a voltage divider reaches a GPIO. A charge level would require
+soldering a 2:1 divider from BAT+ to GPIO 1.
 
 | Button | GPIO | Action |
 |--------|------|--------|
