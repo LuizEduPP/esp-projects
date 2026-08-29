@@ -5,7 +5,7 @@
 #include "display.h"
 #include "net.h"
 
-#define UI_PAGES 4
+#define UI_PAGES 6
 
 void uiBegin();
 void uiTask();
