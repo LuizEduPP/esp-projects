@@ -6,18 +6,43 @@ Desk panel for the Spotpear ESP32-C3 1.44″: time and date over NTP, current we
 
 ```bash
 cp firmware/platformio.local.ini.example firmware/platformio.local.ini
-$EDITOR firmware/platformio.local.ini    # WiFi + Ollama URL
+$EDITOR firmware/platformio.local.ini    # Ollama URL (WiFi is optional, see below)
 yarn dash:flash
 ```
 
 ## Controls
 
-| Screen | NAV (GPIO 8) | SEL (GPIO 10) |
-|--------|--------------|---------------|
-| Menu | next item | open |
-| Clock | — | back |
-| Weather | refresh now | back |
-| AI | regenerate | back |
+Four screens in a loop — Clock, Weather, AI, System — with a segmented bar at the top showing
+where you are.
+
+| Button | GPIO | Action |
+|--------|------|--------|
+| Top right | 8 | next screen |
+| Top left | 10 | previous screen |
+| BOOT | 9 | wake / turn the screen off |
+| BOOT (hold 3 s) | 9 | forget WiFi and re-provision |
+
+## WiFi provisioning
+
+Credentials are **not** compiled in. On first boot the board starts SmartConfig (ESP-Touch) and
+shows instructions on screen: open the EspTouch app on the phone, send SSID and password, and the
+board stores them in NVS. It reconnects on its own after that; hold BOOT for 3 s to switch networks.
+
+`WIFI_SSID`/`WIFI_PASS` still work as a compile-time fallback for the first connection.
+
+## Location
+
+There is no hardcoded city. The board resolves its own position from its public IP
+([ip-api.com](http://ip-api.com/)) and feeds that into the forecast; Open-Meteo returns
+`utc_offset_seconds`, which sets the clock's timezone. Move the board to another city or another
+network and it follows, no rebuild.
+
+The screen sleeps by itself after `DASH_SCREEN_TIMEOUT_MS` (60 s). While asleep the firmware keeps
+running and refreshing data; only BOOT brings the panel back.
+
+Turning the screen off issues the ST7735 `DISPOFF` + `SLPIN` commands, which blanks the pixels.
+The vendor schematic confirms the backlight has no GPIO in its path, so the LED stays lit — this
+is a visual off, not a power saving. See [../README.md](../README.md).
 
 ## Config
 
@@ -27,20 +52,19 @@ in [`include/dash_config.h`](firmware/include/dash_config.h) and can be overridd
 
 | Flag | Default |
 |------|---------|
-| `DASH_CITY` / `DASH_LAT` / `DASH_LON` | Sao Paulo |
-| `DASH_TZ` | `<-03>3` (Brasilia, no DST) |
 | `DASH_OLLAMA_URL` | `http://192.168.1.28:11434/api/chat` |
 | `DASH_OLLAMA_MODEL` | `llama3.2:3b` |
 | `DASH_WEATHER_INTERVAL_MS` | 15 min |
 | `DASH_AI_INTERVAL_MS` | 30 min |
 
-Ollama binds to loopback by default, so the board cannot reach it out of the box — start it with
-`OLLAMA_HOST=0.0.0.0 ollama serve` (or set that in the systemd unit). Check from another machine
-with `curl http://<host>:11434/api/tags`.
+A public HTTPS endpoint (`https://ollama.kmali.online/api/chat`) works from any network and is the
+recommended setup. A LAN address only works while the board and the Ollama host share a network —
+on a phone hotspot the board sits on something like `10.31.x.x` and a home LAN URL never answers.
+For a local instance, serve it with `OLLAMA_HOST=0.0.0.0 ollama serve`, since Ollama binds to
+loopback by default.
 
-Optional flags (`DASH_TZ`, `DASH_WEATHER_INTERVAL_MS`, `DASH_AI_INTERVAL_MS`, `DASH_AI_TIMEOUT_MS`)
-have defaults in `dash_config.h` and can be added to `build_flags`. The `[secrets]` section exists
-so the local file *adds* flags instead of replacing the whole `build_flags` list.
+The `[secrets]` section exists so the local file *adds* flags instead of replacing the whole
+`build_flags` list.
 
 ## Notes
 
@@ -48,8 +72,17 @@ Rendering goes through a full-screen `GFXcanvas16` (32 KB) pushed in one `drawRG
 nothing flickers. The panel runs on hardware SPI; the five-pin Adafruit constructor would
 silently fall back to bit-bang and cost ~20× per full redraw.
 
-Weather is HTTPS with `setInsecure()` — a pinned CA would only add a certificate to rotate for
-a public, read-only endpoint.
+Two things about talking to these APIs from the ESP32:
+
+- Responses are read with `http.getString()` before parsing. Feeding `http.getStream()` straight
+  into ArduinoJson fails with `InvalidInput` on chunked responses, and `DeserializationOption::Filter`
+  silently produced an empty document.
+- Gemma models return an **empty** `content` when given a `role: system` message — the family has no
+  system turn — and burn the whole token budget on hidden reasoning unless the request carries
+  `"think": false`. The instruction therefore goes inside the user message.
+
+Model output is folded to ASCII before display: the Adafruit GFX font has no accented glyphs, so
+`céu` would render as garbage.
 
 The AI request gets its own 30 s timeout (`DASH_AI_TIMEOUT_MS`): the first call after boot pays
 for Ollama loading the model into memory, and the 8 s used for weather would report a false

@@ -7,15 +7,12 @@
 #include "pins.h"
 #include "ui.h"
 
-enum Screen { SCREEN_MENU, SCREEN_CLOCK, SCREEN_WEATHER, SCREEN_AI };
-
-static const char *const kMenu[] = {"Hora & data", "Clima", "AI"};
-static const int kMenuCount = sizeof(kMenu) / sizeof(kMenu[0]);
-
-static Screen sScreen = SCREEN_MENU;
-static int sMenuIndex = 0;
+static int sPage = 0;
 static bool sDirty = true;
+static bool sScreenOn = true;
+static unsigned long sScreenOffAt = 0;
 
+static Place sPlace;
 static Weather sWeather;
 static char sInsight[DASH_AI_TEXT_MAX] = "";
 static bool sInsightPending = false;
@@ -23,12 +20,16 @@ static bool sInsightPending = false;
 static unsigned long sNextWeather = 0;
 static unsigned long sNextInsight = 0;
 static unsigned long sNextTimeSync = 0;
-static int sLastSecond = -1;
+static unsigned long sNextGeo = 0;
+static unsigned long sNextTick = 0;
+static NetState sLastState = NET_OFFLINE;
 
 struct Button {
   uint8_t pin;
   bool last = HIGH;
+  unsigned long downAt = 0;
   unsigned long lastChange = 0;
+  bool longFired = false;
 
   void begin(uint8_t p) {
     pin = p;
@@ -39,50 +40,91 @@ struct Button {
   bool pressed() {
     const bool now = digitalRead(pin);
     const bool fell = (now == LOW && last == HIGH && millis() - lastChange > 200);
-    if (fell) lastChange = millis();
+    if (fell) {
+      lastChange = millis();
+      downAt = millis();
+      longFired = false;
+    }
     last = now;
     return fell;
   }
+
+  bool heldFor(unsigned long ms) {
+    if (last == LOW && !longFired && millis() - downAt >= ms) {
+      longFired = true;
+      return true;
+    }
+    return false;
+  }
 };
 
-static Button btnNav;
-static Button btnSel;
+static Button btnDown;
+static Button btnUp;
+static Button btnBoot;
+
+static void screenOn(bool on) {
+  if (sScreenOn == on) return;
+  sScreenOn = on;
+  uiScreenPower(on);
+  if (on) {
+    sScreenOffAt = millis() + DASH_SCREEN_TIMEOUT_MS;
+    sDirty = true;
+  }
+}
+
+static void keepAwake() { sScreenOffAt = millis() + DASH_SCREEN_TIMEOUT_MS; }
 
 static void refreshWeather() {
   sNextWeather = millis() + DASH_WEATHER_INTERVAL_MS;
-  if (netFetchWeather(sWeather)) sDirty = true;
+  if (netFetchWeather(sPlace, sWeather)) sDirty = true;
 }
 
 static void refreshInsight() {
   sNextInsight = millis() + DASH_AI_INTERVAL_MS;
   sInsightPending = true;
-  if (sScreen == SCREEN_AI) uiInsight(sInsight, true, netOnline());
+  if (sScreenOn && sPage == 2) uiInsight(sInsight, true, sPage);
 
-  if (!netFetchInsight(sWeather, sInsight, sizeof(sInsight))) {
+  if (netFetchInsight(sPlace, sWeather, sInsight, sizeof(sInsight))) {
+    Serial.printf("[ai] %s\n", sInsight);
+  } else {
     snprintf(sInsight, sizeof(sInsight), "Ollama fora do ar.");
   }
   sInsightPending = false;
   sDirty = true;
 }
 
+static void locate() {
+  sNextGeo = millis() + 6UL * 3600000UL;
+  if (netGeolocate(sPlace)) {
+    sWeather.valid = false;
+    sNextWeather = millis();
+    sDirty = true;
+  }
+}
+
 static void render() {
-  const bool online = netOnline();
-  switch (sScreen) {
-    case SCREEN_MENU:
-      uiMenu(kMenu, kMenuCount, sMenuIndex, online);
-      break;
-    case SCREEN_CLOCK: {
+  if (netState() == NET_PROVISIONING) {
+    uiProvisioning(true);
+    sDirty = false;
+    return;
+  }
+
+  switch (sPage) {
+    case 0: {
       struct tm now;
       const bool ok = getLocalTime(&now, 50);
       if (!ok) memset(&now, 0, sizeof(now));
-      uiClock(now, netTimeReady() && ok, online);
+      uiClock(now, netTimeReady() && ok, sPage);
       break;
     }
-    case SCREEN_WEATHER:
-      uiWeather(sWeather, online);
+    case 1:
+      uiWeather(sPlace, sWeather, sPage);
       break;
-    case SCREEN_AI:
-      uiInsight(sInsight, sInsightPending, online);
+    case 2:
+      uiInsight(sInsight, sInsightPending, sPage);
+      break;
+    default:
+      uiSystem(sPlace, sPage);
       break;
   }
   sDirty = false;
@@ -90,72 +132,76 @@ static void render() {
 
 void setup() {
   Serial.begin(115200);
-  btnNav.begin(BTN_NAV);
-  btnSel.begin(BTN_SEL);
+  btnDown.begin(BTN_DOWN);
+  btnUp.begin(BTN_UP);
+  btnBoot.begin(BTN_BOOT);
 
   uiBegin();
-  uiSplash("DASH", "conectando...");
+  uiSplash("DASH", "iniciando");
 
   netBegin();
-  for (int i = 0; i < 40 && !netOnline(); ++i) delay(250);
-
-  if (netOnline()) {
-    netSyncTime();
-    refreshWeather();
-  }
-  sNextTimeSync = millis() + 3600000UL;
-  sNextInsight = millis();
+  sNextTimeSync = millis();
+  sNextInsight = millis() + 5000;
+  keepAwake();
 }
 
 void loop() {
-  netEnsure();
+  netLoop();
 
-  if (btnNav.pressed()) {
-    switch (sScreen) {
-      case SCREEN_MENU:
-        sMenuIndex = (sMenuIndex + 1) % kMenuCount;
-        break;
-      case SCREEN_WEATHER:
-        refreshWeather();
-        break;
-      case SCREEN_AI:
-        refreshInsight();
-        break;
-      default:
-        break;
+  const NetState state = netState();
+  if (state != sLastState) {
+    sLastState = state;
+    sDirty = true;
+    if (state == NET_ONLINE) {
+      netSyncTime();
+      locate();
+      sNextWeather = millis();
+      sNextTimeSync = millis() + DASH_TIME_SYNC_INTERVAL_MS;
     }
+  }
+
+  if (btnBoot.pressed()) screenOn(!sScreenOn);
+  if (btnBoot.heldFor(3000)) {
+    screenOn(true);
+    netForgetCredentials();
     sDirty = true;
   }
 
-  if (btnSel.pressed()) {
-    if (sScreen == SCREEN_MENU) {
-      sScreen = static_cast<Screen>(SCREEN_CLOCK + sMenuIndex);
-      if (sScreen == SCREEN_AI && sInsight[0] == '\0') refreshInsight();
-    } else {
-      sScreen = SCREEN_MENU;
+  if (btnDown.pressed()) {
+    if (sScreenOn) {
+      sPage = (sPage + 1) % UI_PAGES;
+      sDirty = true;
     }
-    sDirty = true;
+    keepAwake();
+  }
+
+  if (btnUp.pressed()) {
+    if (sScreenOn) {
+      sPage = (sPage + UI_PAGES - 1) % UI_PAGES;
+      sDirty = true;
+    }
+    keepAwake();
   }
 
   const unsigned long now = millis();
   if (netOnline()) {
     if (!netTimeReady() || (long)(now - sNextTimeSync) >= 0) {
       netSyncTime();
-      sNextTimeSync = now + 3600000UL;
+      sNextTimeSync = now + DASH_TIME_SYNC_INTERVAL_MS;
       sDirty = true;
     }
+    if ((long)(now - sNextGeo) >= 0) locate();
     if ((long)(now - sNextWeather) >= 0) refreshWeather();
     if ((long)(now - sNextInsight) >= 0 && sWeather.valid) refreshInsight();
   }
 
-  if (sScreen == SCREEN_CLOCK) {
-    struct tm t;
-    if (getLocalTime(&t, 10) && t.tm_sec != sLastSecond) {
-      sLastSecond = t.tm_sec;
-      sDirty = true;
-    }
+  if (sScreenOn && (long)(now - sScreenOffAt) >= 0) screenOn(false);
+
+  if (sScreenOn && (long)(now - sNextTick) >= 0) {
+    sNextTick = now + 1000;
+    if (sPage == 0 || sPage == 3 || state == NET_PROVISIONING) sDirty = true;
   }
 
-  if (sDirty) render();
+  if (sScreenOn && sDirty) render();
   delay(20);
 }

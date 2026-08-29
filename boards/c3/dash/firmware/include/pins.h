@@ -6,5 +6,6 @@
 #define TFT_DC 0
 #define TFT_RST 5
 
-#define BTN_NAV 8
-#define BTN_SEL 10
+#define BTN_DOWN 8
+#define BTN_UP 10
+#define BTN_BOOT 9

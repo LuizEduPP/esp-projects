@@ -23,7 +23,21 @@ The vendor hid the display SPI bus: the pins on the top header (6, 7, 20, 21) ar
 
 ST7735 init profile: `INITR_144GREENTAB`.
 
-GPIO 2 and GPIO 8 are C3 strapping pins — both must read HIGH at reset. Holding NAV while resetting can stall the boot.
+GPIO 2 and GPIO 8 are C3 strapping pins — both must read HIGH at reset. Holding the top-right button while resetting can stall the boot.
+
+## Facts from the vendor schematic
+
+[ESP32-C3-1.44inch.pdf](https://cdn.static.spotpear.com/uploads/picture/product/esp32/ESP32C3-1.44/Schematic/ESP32-C3-1.44inch.pdf) ·
+[demo code](https://github.com/Spotpear/ESP32C3_1.44inch) ·
+[vendor wiki](https://spotpear.com/wiki/ESP32-C3-desktop-trinket-Mini-TV-Portable-Pendant-LVGL-1.44inch-LCD-ST7735.html)
+
+- **Flash is 16 MB** (W25Q128), not the 4 MB the `esp32-c3-devkitm-1` board definition assumes.
+  Set `flash_size = 16MB` and `default_16MB.csv`, confirmed on device with `esptool flash_id`.
+- **The backlight is not switchable.** The panel's LEDA/LEDK go to 3V3 through a fixed resistor —
+  no GPIO in the path. `DISPOFF`/`SLPIN` blanks the pixels but the LED stays on.
+- **There is a battery charger on board**: PL4054, LiPo on a 1.27 mm connector, charging over USB.
+- **A user LED sits on GPIO 11**, next to the reset button.
+- Free GPIOs on the header: 1, 6, 7, 20, 21.
 
 ## Upload stalls with "Write timeout"
 
