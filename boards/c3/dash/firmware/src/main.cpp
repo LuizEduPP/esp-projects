@@ -3,14 +3,15 @@
 #include <time.h>
 
 #include "dash_config.h"
+#include "data.h"
 #include "net.h"
+#include "ota.h"
 #include "pins.h"
 #include "ui.h"
+#include "uidoc.h"
 
 static bool sNight = false;
 static unsigned long sNightAt = 0;
-
-static Dash sDash;
 
 static bool sTimerRunning = false;
 static bool sTimerBreak = false;
@@ -18,6 +19,8 @@ static int sTimerLeft = DASH_POMODORO_WORK_S;
 static unsigned long sTimerTick = 0;
 
 static unsigned long sNextFetch = 0;
+static unsigned long sNextUi = 0;
+static unsigned long sNextOta = 0;
 static unsigned long sNextTimeSync = 0;
 static unsigned long sNextTick = 0;
 static NetState sLastState = NET_OFFLINE;
@@ -69,25 +72,6 @@ static void setNight(bool on) {
   if (!on) keepAwake();
 }
 
-static void tickClock() {
-  struct tm now;
-  const bool ok = getLocalTime(&now, 20);
-  if (!ok) memset(&now, 0, sizeof(now));
-  uiUpdateClock(now, netTimeReady() && ok);
-  uiUpdateSystem();
-}
-
-static void refreshDash() {
-  sNextFetch = millis() + DASH_API_INTERVAL_MS;
-
-  uiBusy(true);
-  if (netFetchDash(sDash)) {
-    if (sDash.tzOffsetSec != 0) netApplyTimezone(sDash.tzOffsetSec);
-    uiUpdateDash(sDash);
-  }
-  uiBusy(false);
-}
-
 static int timerTotal() {
   return sTimerBreak ? DASH_POMODORO_BREAK_S : DASH_POMODORO_WORK_S;
 }
@@ -95,7 +79,7 @@ static int timerTotal() {
 static void timerReset(bool breakMode) {
   sTimerBreak = breakMode;
   sTimerLeft = timerTotal();
-  uiUpdateTimer(sTimerLeft, timerTotal(), sTimerBreak, sTimerRunning);
+  dataUpdateTimer(sTimerLeft, timerTotal(), sTimerBreak, sTimerRunning);
 }
 
 static void timerTask() {
@@ -110,7 +94,25 @@ static void timerTask() {
     timerReset(!sTimerBreak);
     return;
   }
-  uiUpdateTimer(sTimerLeft, timerTotal(), sTimerBreak, sTimerRunning);
+  dataUpdateTimer(sTimerLeft, timerTotal(), sTimerBreak, sTimerRunning);
+}
+
+static void tickClock() {
+  dataUpdateClock(netTimeReady());
+  dataUpdateSystem();
+  if (!sNight) uiRefreshValues();
+}
+
+static void refreshDash() {
+  sNextFetch = millis() + DASH_API_INTERVAL_MS;
+  uiBusy(true);
+  if (netFetchDash()) uiRefreshValues();
+  uiBusy(false);
+}
+
+static void syncUi(bool force) {
+  sNextUi = millis() + DASH_UI_POLL_MS;
+  if (uiDocSync(force)) uiRebuild();
 }
 
 void setup() {
@@ -122,7 +124,10 @@ void setup() {
   uiBegin();
   uiSplash("dash", "iniciando");
 
+  uiDocBegin();
   timerReset(false);
+  dataUpdateClock(false);
+  dataUpdateSystem();
 
   netBegin();
   sNextTimeSync = millis();
@@ -137,26 +142,26 @@ void loop() {
     sLastState = state;
     if (state == NET_PROVISIONING) {
       uiShowProvisioning(true);
+    } else if (state == NET_ONLINE) {
+      netSyncTime();
+      syncUi(false);
+      uiShowDash();
+      sNextFetch = millis();
+      sNextOta = millis() + 20000;
+      sNextTimeSync = millis() + DASH_TIME_SYNC_INTERVAL_MS;
     } else {
       uiShowDash();
-    }
-    if (state == NET_ONLINE) {
-      netSyncTime();
-      sNextFetch = millis();
-      sNextTimeSync = millis() + DASH_TIME_SYNC_INTERVAL_MS;
     }
   }
 
   if (btnBoot.pressed()) {
     if (sNight) {
       setNight(false);
-    } else if (uiPage() == PAGE_TIMER) {
-      sTimerRunning = !sTimerRunning;
-      sTimerTick = millis() + 1000;
-      uiUpdateTimer(sTimerLeft, timerTotal(), sTimerBreak, sTimerRunning);
+    } else if (uiMenuOpen()) {
+      uiMenuSelect();
       keepAwake();
     } else {
-      if (netOnline()) refreshDash();
+      uiMenuToggle();
       keepAwake();
     }
   }
@@ -168,6 +173,9 @@ void loop() {
   if (btnUp.pressed()) {
     if (sNight) {
       setNight(false);
+    } else if (uiMenuOpen()) {
+      uiMenuMove(-1);
+      keepAwake();
     } else {
       uiTurnPage(1);
       keepAwake();
@@ -177,6 +185,9 @@ void loop() {
   if (btnDown.pressed()) {
     if (sNight) {
       setNight(false);
+    } else if (uiMenuOpen()) {
+      uiMenuMove(1);
+      keepAwake();
     } else {
       uiTurnPage(-1);
       keepAwake();
@@ -190,6 +201,11 @@ void loop() {
       sNextTimeSync = now + DASH_TIME_SYNC_INTERVAL_MS;
     }
     if ((long)(now - sNextFetch) >= 0) refreshDash();
+    if ((long)(now - sNextUi) >= 0) syncUi(false);
+    if ((long)(now - sNextOta) >= 0) {
+      sNextOta = now + DASH_OTA_INTERVAL_MS;
+      otaCheck();
+    }
   }
 
   timerTask();

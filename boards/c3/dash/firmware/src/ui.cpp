@@ -1,206 +1,237 @@
 #include "ui.h"
 
-#include <WiFi.h>
 #include <lvgl.h>
 
-static const char *const kWeekdays[] = {"DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"};
-static const char *const kMonths[] = {"janeiro",   "fevereiro", "marco",    "abril",
-                                      "maio",      "junho",     "julho",    "agosto",
-                                      "setembro",  "outubro",   "novembro", "dezembro"};
+#include "data.h"
+#include "render.h"
+#include "uidoc.h"
+
+#define W 128
+#define H 128
+#define MENU_ROWS 5
+
+static lv_obj_t *sStage;
+static lv_obj_t *sOverlay;
+static lv_obj_t *sOverlayText;
+static lv_obj_t *sOverlaySub;
+static lv_obj_t *sMenu;
+static lv_obj_t *sMenuRow[MENU_ROWS];
+static lv_obj_t *sBusy;
+static lv_obj_t *sProgress;
 
 static bool sNight = false;
+static bool sMenuOpen = false;
 static int sPage = 0;
+static int sMenuIndex = 0;
+
+static lv_obj_t *bare(lv_obj_t *par, int x, int y, int w, int h) {
+  lv_obj_t *o = lv_obj_create(par);
+  lv_obj_remove_style_all(o);
+  lv_obj_set_pos(o, x, y);
+  lv_obj_set_size(o, w, h);
+  return o;
+}
+
+static lv_obj_t *label(lv_obj_t *par, const lv_font_t *font, uint32_t color, int y, int w) {
+  lv_obj_t *l = lv_label_create(par);
+  lv_obj_set_style_text_font(l, font, 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(color), 0);
+  lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+  lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+  lv_label_set_text(l, "");
+  lv_obj_set_size(l, w, lv_font_get_line_height(font) + 2);
+  lv_obj_set_pos(l, (W - w) / 2, y);
+  return l;
+}
+
+static void buildOverlay() {
+  sOverlay = bare(lv_screen_active(), 0, 0, W, H);
+  lv_obj_set_style_bg_color(sOverlay, lv_color_hex(0x080B14), 0);
+  lv_obj_set_style_bg_opa(sOverlay, LV_OPA_COVER, 0);
+  sOverlayText = label(sOverlay, &lv_font_montserrat_16, 0xFFFFFF, 46, 116);
+  sOverlaySub = label(sOverlay, &lv_font_montserrat_12, 0x9FB0CC, 70, 116);
+}
+
+static void buildMenu() {
+  sMenu = bare(lv_screen_active(), 0, 0, W, H);
+  lv_obj_set_style_bg_color(sMenu, lv_color_hex(0x0A0E1A), 0);
+  lv_obj_set_style_bg_opa(sMenu, 245, 0);
+  lv_obj_add_flag(sMenu, LV_OBJ_FLAG_HIDDEN);
+
+  lv_obj_t *title = label(sMenu, &lv_font_montserrat_10, 0x8B93A7, 8, 112);
+  lv_label_set_text(title, "TELAS");
+
+  for (int i = 0; i < MENU_ROWS; ++i) {
+    sMenuRow[i] = label(sMenu, &lv_font_montserrat_14, 0x9FB0CC, 26 + i * 20, 112);
+  }
+}
+
+static void buildChrome() {
+  sProgress = bare(lv_screen_active(), 0, H - 2, 10, 2);
+  lv_obj_set_style_bg_color(sProgress, lv_color_hex(0x38BDF8), 0);
+  lv_obj_set_style_bg_opa(sProgress, 200, 0);
+
+  sBusy = bare(lv_screen_active(), W - 8, 4, 4, 4);
+  lv_obj_set_style_radius(sBusy, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(sBusy, lv_color_hex(0x34D399), 0);
+  lv_obj_set_style_bg_opa(sBusy, LV_OPA_COVER, 0);
+  lv_obj_add_flag(sBusy, LV_OBJ_FLAG_HIDDEN);
+}
 
 void uiBegin() {
   displayBegin();
-  screensBuild();
+
+  sStage = bare(lv_screen_active(), 0, 0, W, H);
+  lv_obj_set_style_bg_color(sStage, lv_color_hex(0x080B14), 0);
+  lv_obj_set_style_bg_opa(sStage, LV_OPA_COVER, 0);
+
+  buildChrome();
+  buildMenu();
+  buildOverlay();
 }
 
 void uiTask() { displayTask(); }
 
 void uiSplash(const char *line1, const char *line2) {
-  screensSplash(line1, line2);
+  lv_label_set_text(sOverlayText, line1);
+  lv_label_set_text(sOverlaySub, line2);
+  lv_obj_remove_flag(sOverlay, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_move_foreground(sOverlay);
   displayTask();
 }
 
-void uiShowProvisioning(bool armed) { screensShowProvisioning(armed); }
+void uiStatus(const char *text) {
+  lv_label_set_text(sOverlaySub, text);
+  displayTask();
+}
 
-void uiShowDash() { screensShowDash(); }
+void uiShowProvisioning(bool armed) {
+  lv_label_set_text(sOverlayText, "WiFi");
+  lv_label_set_text(sOverlaySub, armed ? "abra o ESP-Touch" : "conectando");
+  lv_obj_remove_flag(sOverlay, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_move_foreground(sOverlay);
+}
+
+void uiShowDash() {
+  lv_obj_add_flag(sOverlay, LV_OBJ_FLAG_HIDDEN);
+  uiRebuild();
+}
+
+static void syncProgress() {
+  const int count = uiDocPageCount();
+  if (count <= 0) return;
+  const int w = W / count;
+  lv_obj_set_width(sProgress, w < 4 ? 4 : w);
+  lv_obj_set_x(sProgress, sPage * W / count);
+}
+
+void uiRebuild() {
+  const int count = uiDocPageCount();
+  if (count <= 0) {
+    lv_label_set_text(sOverlayText, "sem UI");
+    lv_label_set_text(sOverlaySub, "aguardando servidor");
+    lv_obj_remove_flag(sOverlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(sOverlay);
+    return;
+  }
+
+  if (sPage >= count) sPage = 0;
+
+  JsonDocument page;
+  if (!uiDocLoadPage(sPage, page)) return;
+
+  renderPage(sStage, page.as<JsonObjectConst>());
+  syncProgress();
+  lv_obj_move_foreground(sProgress);
+  lv_obj_move_foreground(sBusy);
+}
+
+void uiRefreshValues() {
+  if (!sMenuOpen) renderRefresh();
+}
 
 void uiTurnPage(int delta) {
-  sPage = (sPage + delta + UI_PAGES) % UI_PAGES;
-  screensGoTo(sPage, true);
+  const int count = uiDocPageCount();
+  if (count <= 0) return;
+  sPage = (sPage + delta + count) % count;
+  uiRebuild();
 }
 
 int uiPage() { return sPage; }
 
+static void paintMenu() {
+  const int count = uiDocPageCount();
+  const int first = sMenuIndex - MENU_ROWS / 2 < 0 ? 0
+                    : (sMenuIndex + MENU_ROWS / 2 >= count ? count - MENU_ROWS
+                                                           : sMenuIndex - MENU_ROWS / 2);
+  const int start = first < 0 ? 0 : first;
+
+  for (int i = 0; i < MENU_ROWS; ++i) {
+    const int index = start + i;
+    if (index >= count) {
+      lv_label_set_text(sMenuRow[i], "");
+      continue;
+    }
+    char line[28];
+    snprintf(line, sizeof(line), "%s%s", index == sMenuIndex ? "> " : "  ",
+             uiDocPageTitle(index));
+    lv_label_set_text(sMenuRow[i], line);
+    lv_obj_set_style_text_color(
+        sMenuRow[i], lv_color_hex(index == sMenuIndex ? 0xFFFFFF : 0x6B7280), 0);
+  }
+}
+
+void uiMenuToggle() {
+  sMenuOpen = !sMenuOpen;
+  if (sMenuOpen) {
+    sMenuIndex = sPage;
+    paintMenu();
+    lv_obj_remove_flag(sMenu, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(sMenu);
+  } else {
+    lv_obj_add_flag(sMenu, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
+bool uiMenuOpen() { return sMenuOpen; }
+
+void uiMenuMove(int delta) {
+  const int count = uiDocPageCount();
+  if (count <= 0) return;
+  sMenuIndex = (sMenuIndex + delta + count) % count;
+  paintMenu();
+}
+
+void uiMenuSelect() {
+  sPage = sMenuIndex;
+  uiMenuToggle();
+  uiRebuild();
+}
+
 void uiSetNight(bool on) {
   if (sNight == on) return;
   sNight = on;
-  screensShowNight(on, nullptr);
+
+  if (on) {
+    lv_label_set_text(sOverlayText, "");
+    lv_label_set_text(sOverlaySub, "");
+    lv_obj_set_style_bg_color(sOverlay, lv_color_hex(0x000000), 0);
+    lv_obj_remove_flag(sOverlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(sOverlay);
+  } else {
+    lv_obj_set_style_bg_color(sOverlay, lv_color_hex(0x080B14), 0);
+    lv_obj_add_flag(sOverlay, LV_OBJ_FLAG_HIDDEN);
+    uiRebuild();
+  }
 }
 
 bool uiIsNight() { return sNight; }
 
-void uiUpdateClock(const struct tm &now, bool timeReady) {
-  char hhmm[8];
-  char date[24];
-  if (timeReady) {
-    snprintf(hhmm, sizeof(hhmm), "%02d:%02d", now.tm_hour, now.tm_min);
-    snprintf(date, sizeof(date), "%d de %s", now.tm_mday, kMonths[now.tm_mon % 12]);
-  } else {
-    snprintf(hhmm, sizeof(hhmm), "--:--");
-    snprintf(date, sizeof(date), "sincronizando");
-  }
-  screensClock(hhmm, timeReady ? now.tm_sec : 0,
-               timeReady ? kWeekdays[now.tm_wday % 7] : "--", date);
-}
-
-void uiUpdatePlace(const char *city) { screensCity(city); }
-
-void uiUpdateWeather(const Weather &w) {
-  if (!w.valid) {
-    screensWeather(0, "sem dados", 0, 0, 0, -1);
-    return;
-  }
-
-  screensWeather(w.tempC, w.desc, w.humidity, w.minC, w.maxC, w.code);
-
-  for (int i = 0; i < 3; ++i) {
-    if (i < w.dayCount) {
-      const Forecast &f = w.days[i];
-      screensForecast(i, f.day, f.minC, f.maxC, f.code);
-    } else {
-      screensForecast(i, "--", 0, 0, -1);
-    }
-  }
-
-  if (w.hourlyCount > 0) screensChart(w.hourly, w.hourlyCount);
-  screensSun(w.sunrise, w.sunset);
-  uiUpdateWind(w);
-  uiUpdateRain(w);
-  uiUpdateSun(w);
-}
-
-void uiUpdateAir(const Air &a, const Weather &w) {
-  if (!a.valid) {
-    screensAir(0, "sem dados", 0, 0, w.uvMax);
-    return;
-  }
-  screensAir(a.aqi, a.label, a.pm25, a.pm10, w.uvMax);
-}
-
-void uiUpdateMoon(const Moon &m) { screensMoon(m.name, m.illum, m.waxing); }
-
-void uiUpdateWind(const Weather &w) {
-  screensWind(w.windKph, w.windDir, w.gustKph, w.pressure, w.pressureDelta);
-}
-
-void uiUpdateRain(const Weather &w) {
-  screensRain(w.rain15, w.rain15Count, w.rainStartsInMin);
-}
-
-void uiUpdateSun(const Weather &w) {
-  int rh = 0;
-  int rm = 0;
-  int sh = 0;
-  int sm = 0;
-  if (sscanf(w.sunrise, "%d:%d", &rh, &rm) != 2 ||
-      sscanf(w.sunset, "%d:%d", &sh, &sm) != 2) {
-    screensSun2(w.sunrise, w.sunset, "--", 0);
-    return;
-  }
-
-  const int rise = rh * 60 + rm;
-  const int set = sh * 60 + sm;
-  const int span = set - rise;
-
-  char daylight[24];
-  snprintf(daylight, sizeof(daylight), "%dh %02dmin de sol", span / 60, span % 60);
-
-  int progress = 0;
-  struct tm now;
-  if (getLocalTime(&now, 20) && span > 0) {
-    const int mins = now.tm_hour * 60 + now.tm_min;
-    progress = (mins - rise) * 100 / span;
-    if (progress < 0) progress = 0;
-    if (progress > 100) progress = 100;
-  }
-
-  screensSun2(w.sunrise, w.sunset, daylight, progress);
-}
-
-void uiUpdateMarket(const Market &m) {
-  if (!m.valid) return;
-  screensMarket(m.usd, m.usdPct, m.eur, m.eurPct, m.btc, m.btcPct);
-}
-
-void uiUpdateDev(const DevStats &d) {
-  if (!d.valid) {
-    screensDev(0, 0, 0, 0, 0, "sem dados");
-    return;
-  }
-  screensDev(d.today, d.week, d.activeDays, d.repos, d.followers, d.repo);
-}
-
-void uiUpdateNews(const News &n) {
-  screensNews(n.items[0], n.items[1], n.items[2], n.count);
-}
-
-void uiUpdateRates(const Rates &r) {
-  if (r.valid) screensRates(r.selic, r.cdi, r.ipca);
-}
-
-void uiUpdateHoliday(const Holiday &h) {
-  if (h.valid) screensHoliday(h.name, h.date, h.daysLeft);
-}
-
-void uiUpdateHistory(const History &h) {
-  if (h.valid) screensHistory(h.year, h.text);
-}
-
-void uiUpdateSpace(const Space &s) {
-  if (s.valid) screensSpace(s.people, s.lat, s.lon);
-}
-
-void uiUpdateDash(const Dash &d) {
-  uiUpdatePlace(d.city);
-  uiUpdateWeather(d.weather);
-  uiUpdateAir(d.air, d.weather);
-  uiUpdateMoon(d.moon);
-  uiUpdateNews(d.news);
-  uiUpdateMarket(d.market);
-  uiUpdateRates(d.rates);
-  uiUpdateHoliday(d.holiday);
-  uiUpdateHistory(d.history);
-  uiUpdateSpace(d.space);
-  uiUpdateDev(d.dev);
-  uiUpdateInsight(d.ai[0] ? d.ai : "sem resposta", false);
-}
-
 void uiBusy(bool on) {
-  screensBusy(on);
+  if (on) {
+    lv_obj_remove_flag(sBusy, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_add_flag(sBusy, LV_OBJ_FLAG_HIDDEN);
+  }
   displayTask();
-}
-
-void uiUpdateTimer(int remainingSec, int totalSec, bool breakMode, bool running) {
-  char clock[8];
-  snprintf(clock, sizeof(clock), "%02d:%02d", remainingSec / 60, remainingSec % 60);
-  const int percent = totalSec > 0 ? (totalSec - remainingSec) * 100 / totalSec : 0;
-  screensTimer(clock, breakMode ? "pausa" : "foco", percent, running);
-}
-
-void uiUpdateInsight(const char *text, bool pending) {
-  char stamp[8] = "--:--";
-  struct tm now;
-  if (getLocalTime(&now, 5)) snprintf(stamp, sizeof(stamp), "%02d:%02d", now.tm_hour, now.tm_min);
-  screensInsight(text, pending, stamp);
-}
-
-void uiUpdateSystem() {
-  char uptime[16];
-  const unsigned long up = millis() / 1000;
-  snprintf(uptime, sizeof(uptime), "%luh %02lum", up / 3600, (up % 3600) / 60);
-  screensSystem(netSsid(), (int)WiFi.RSSI(), netIp(),
-                (unsigned)(ESP.getFreeHeap() / 1024), uptime);
 }
