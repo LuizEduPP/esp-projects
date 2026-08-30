@@ -120,11 +120,11 @@ export const fetchInsight = async (ctx: InsightContext): Promise<string> => {
   }
 
   const prompt =
-    "Voce e o painel de um relogio de mesa do Luiz. Abaixo esta tudo que o painel sabe agora. " +
-    "Escreva UMA frase em portugues do Brasil, no maximo 18 palavras, util ou espirituosa, " +
-    "conectando o momento a UM ou DOIS desses dados. Nao liste os dados, nao repita numeros " +
-    "demais. Sem emojis, sem aspas, sem explicacao.\n\n" +
-    lines.join("\n");
+    "Estes sao os dados do momento em Cesario Lange:\n\n" +
+    lines.join("\n") +
+    "\n\nEscreva uma unica frase em portugues do Brasil, com ate 16 palavras, " +
+    "comentando um desses dados de um jeito util ou bem-humorado, como um amigo comentaria. " +
+    "Responda so a frase, sem aspas, sem emojis e sem repetir estas instrucoes.";
 
   const body = await fetchJson<{ message?: { content?: string } }>(
     config.aiUrl,
@@ -154,6 +154,6 @@ export const fetchInsight = async (ctx: InsightContext): Promise<string> => {
     .replace(/^["']|["']$/g, "")
     .trim();
 
-  if (!text) throw new Error("resposta vazia");
+  if (!text || /<\/?think>/i.test(text)) throw new Error("resposta invalida");
   return clamp(text, 180);
 };
