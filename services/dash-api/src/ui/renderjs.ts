@@ -58,6 +58,21 @@ function renderItem(it, DATA) {
     return d;
   }
 
+  if (it.t === "stack") {
+    at("left:" + px(it.x) + ";top:" + px(it.y) + ";width:" + px(it.w) +
+      ";height:" + px(it.h) + ";overflow:hidden;text-align:" + (it.align || "left"));
+    for (const line of it.lines) {
+      const raw = line.bind ? get(DATA, line.bind) : line.text;
+      const txt = line.text !== undefined && !line.bind ? line.text : fmt(line.fmt, raw);
+      const p = document.createElement("div");
+      p.textContent = txt;
+      p.setAttribute("style", "position:static;font-size:" + px(line.font) +
+        ";color:" + line.color + ";line-height:1.12;margin-bottom:" + px(line.gap || 0));
+      d.appendChild(p);
+    }
+    return d;
+  }
+
   if (it.t === "plate") {
     if (it.style === "none") return d;
     const bw = it.border == null ? 1 : Math.max(1, it.border);

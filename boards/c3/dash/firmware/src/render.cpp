@@ -23,6 +23,8 @@ struct Bind {
 
 static Bind sBinds[MAX_BINDS];
 static int sBindCount = 0;
+static lv_obj_t *sFlows[4];
+static int sFlowCount = 0;
 static lv_chart_series_t *sSeries[2];
 static int sSeriesCount = 0;
 
@@ -158,6 +160,46 @@ static void buildBackground(lv_obj_t *par, JsonObjectConst bg) {
       lv_obj_set_style_bg_opa(o, opa / 3, 0);
     }
   }
+}
+
+static lv_text_align_t alignOf(const char *align) {
+  if (strcmp(align, "left") == 0) return LV_TEXT_ALIGN_LEFT;
+  if (strcmp(align, "right") == 0) return LV_TEXT_ALIGN_RIGHT;
+  return LV_TEXT_ALIGN_CENTER;
+}
+
+static void buildStack(lv_obj_t *par, JsonObjectConst it) {
+  const int x = it["x"] | 0;
+  const int y = it["y"] | 0;
+  const int w = it["w"] | W;
+  const int h = it["h"] | 40;
+  const lv_text_align_t align = alignOf(it["align"] | "left");
+
+  lv_obj_t *clip = bare(par, x, y, w, h);
+  lv_obj_t *flow = bare(clip, 0, 0, w, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(flow, LV_FLEX_FLOW_COLUMN);
+
+  for (JsonObjectConst line : it["lines"].as<JsonArrayConst>()) {
+    lv_obj_t *l = lv_label_create(flow);
+    lv_obj_set_style_text_font(l, fontOf(line["font"] | 12), 0);
+    lv_obj_set_style_text_color(l, lv_color_hex(colorOf(line["color"] | "#ffffff")), 0);
+    lv_obj_set_style_text_align(l, align, 0);
+    lv_obj_set_style_text_line_space(l, 2, 0);
+    lv_obj_set_style_pad_bottom(l, line["gap"] | 0, 0);
+    lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(l, w);
+    lv_obj_set_height(l, LV_SIZE_CONTENT);
+
+    const char *bind = line["bind"] | "";
+    if (bind[0]) {
+      lv_label_set_text(l, "--");
+      addBind(l, BIND_LABEL, bind, line["fmt"] | "", 0, 0);
+    } else {
+      lv_label_set_text(l, line["text"] | "");
+    }
+  }
+
+  if (sFlowCount < (int)(sizeof(sFlows) / sizeof(sFlows[0]))) sFlows[sFlowCount++] = flow;
 }
 
 static void buildLabel(lv_obj_t *par, JsonObjectConst it) {
@@ -385,6 +427,7 @@ static void buildMoon(lv_obj_t *par, JsonObjectConst it) {
 void renderClear() {
   sBindCount = 0;
   sSeriesCount = 0;
+  sFlowCount = 0;
 }
 
 void renderPage(lv_obj_t *parent, JsonObjectConst page) {
@@ -396,6 +439,8 @@ void renderPage(lv_obj_t *parent, JsonObjectConst page) {
     const char *type = it["t"] | "";
     if (strcmp(type, "label") == 0) {
       buildLabel(parent, it);
+    } else if (strcmp(type, "stack") == 0) {
+      buildStack(parent, it);
     } else if (strcmp(type, "plate") == 0) {
       buildPlate(parent, it);
     } else if (strcmp(type, "rule") == 0) {
@@ -493,4 +538,6 @@ void renderRefresh() {
       }
     }
   }
+
+  for (int i = 0; i < sFlowCount; ++i) scrollWrapped(sFlows[i]);
 }
