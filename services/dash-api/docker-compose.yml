@@ -4,9 +4,9 @@ services:
     container_name: dash-api
     restart: unless-stopped
     ports:
-      - "${PORT:-8090}:8090"
+      - "${PORT:-38172}:38172"
     environment:
-      PORT: 8090
+      PORT: 38172
       DASH_CITY: ${DASH_CITY:-Cesario Lange}
       DASH_LAT: ${DASH_LAT:--23.2267}
       DASH_LON: ${DASH_LON:--47.9531}
@@ -16,7 +16,7 @@ services:
       DASH_OLLAMA_URL: ${DASH_OLLAMA_URL:-https://ollama.kmali.online/api/chat}
       DASH_OLLAMA_MODEL: ${DASH_OLLAMA_MODEL:-gemma4:e4b}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8090/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:38172/health"]
       interval: 60s
       timeout: 10s
       retries: 3
