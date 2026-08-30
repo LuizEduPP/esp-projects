@@ -52,16 +52,6 @@ void dataUpdateSystem() {
   sys["uptime"] = buf;
 }
 
-void dataUpdateTimer(int remainingSec, int totalSec, bool breakMode, bool running) {
-  JsonObject timer = sDoc["timer"].to<JsonObject>();
-  char clock[8];
-  snprintf(clock, sizeof(clock), "%02d:%02d", remainingSec / 60, remainingSec % 60);
-  timer["clock"] = clock;
-  timer["mode"] = breakMode ? (running ? "pausa" : "pausa parada")
-                            : (running ? "foco" : "foco parado");
-  timer["percent"] = totalSec > 0 ? (totalSec - remainingSec) * 100 / totalSec : 0;
-}
-
 void dataUpdateSun() {
   JsonObject sun = sDoc["sun"].to<JsonObject>();
   const char *rise = sDoc["weather"]["sunrise"] | "--:--";

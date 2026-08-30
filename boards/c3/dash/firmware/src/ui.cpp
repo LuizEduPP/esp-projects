@@ -2,6 +2,7 @@
 
 #include <lvgl.h>
 
+#include "dash_config.h"
 #include "data.h"
 #include "render.h"
 #include "uidoc.h"
@@ -160,6 +161,7 @@ void uiRebuild() {
   syncProgress();
   lv_obj_move_foreground(sProgress);
   lv_obj_move_foreground(sBusy);
+  if (sNight) lv_obj_move_foreground(sOverlay);
 }
 
 void uiRefreshValues() {
@@ -232,10 +234,12 @@ void uiSetNight(bool on) {
     lv_label_set_text(sOverlayText, "");
     lv_label_set_text(sOverlaySub, "");
     lv_obj_set_style_bg_color(sOverlay, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(sOverlay, DASH_NIGHT_DIM_OPA, 0);
     lv_obj_remove_flag(sOverlay, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(sOverlay);
   } else {
     lv_obj_set_style_bg_color(sOverlay, lv_color_hex(0x080B14), 0);
+    lv_obj_set_style_bg_opa(sOverlay, LV_OPA_COVER, 0);
     lv_obj_add_flag(sOverlay, LV_OBJ_FLAG_HIDDEN);
     uiRebuild();
   }

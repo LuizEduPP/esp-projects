@@ -10,7 +10,6 @@ void dataMarkValid(bool valid);
 
 void dataUpdateClock(bool timeReady);
 void dataUpdateSystem();
-void dataUpdateTimer(int remainingSec, int totalSec, bool breakMode, bool running);
 void dataUpdateSun();
 
 JsonVariantConst dataAt(const char *path);

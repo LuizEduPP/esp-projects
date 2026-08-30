@@ -202,14 +202,6 @@ export const screens: Screen[] = [
     ],
   },
   {
-    id: "timer",
-    title: "Timer",
-    tag: "pomodoro",
-    hero: { bind: "timer.clock" },
-    gauge: { bind: "timer.percent", min: 0, max: 100 },
-    caption: { bind: "timer.mode", tone: "muted" },
-  },
-  {
     id: "ai",
     title: "IA",
     tag: "ia",
