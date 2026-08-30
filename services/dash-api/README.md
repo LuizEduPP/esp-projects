@@ -13,6 +13,51 @@ yarn dash-api:logs
 space, GitHub and the AI sentence — around 1.6 KB. `GET /health` reports how many seconds ago
 each source last succeeded. `POST /refresh` forces a full refresh.
 
+The server also owns the **look** of the panel and its **firmware**, so the board is only a
+renderer. Open `/` to pick one of the 30 themes; the board applies it within 10 seconds without
+being reflashed.
+
+## The UI document
+
+Data and appearance travel on separate channels, so neither invalidates the other: `/dash` every
+5 minutes, the UI only when its version changes.
+
+| Route | Purpose |
+|-------|---------|
+| `GET /` | editor: 30 themes previewed 128x128, click to apply, click a screen to hide it |
+| `GET /ui/version` | `{version, theme, pages[]}` — the ~300 byte target of the board's polling |
+| `GET /ui/page/:id` | one screen, ~1 KB, fetched and cached individually in LittleFS |
+| `GET /ui` | the whole document, used by the editor |
+| `POST /ui` | `{theme?, hidden?}`, bumps `version` and persists to `data/ui.json` |
+
+A screen is a background plus absolutely positioned items. `bind` is a path into the `/dash`
+payload, and `fmt` is a printf spec applied on the board:
+
+```json
+{ "t": "label", "x": 50, "y": 26, "w": 72, "font": 28, "color": "#ffffff",
+  "bind": "weather.temp", "fmt": "%.0f" }
+```
+
+Widgets: `label` (with `wrap` and `scroll`), `plate`, `rule`, `arc`, `bar`, `chart`, `icon`,
+`moon`, `needle`. Backgrounds: `solid`, `gradient`, `grid`, `dots`, each with optional blurred
+`blobs`.
+
+Two constraints worth knowing. Fonts are compiled into the firmware at fixed sizes — 10, 12, 14,
+16, 20 and 28 — so a document asking for anything else falls back to 12; that is why the serif
+and seven-segment mocks are not in the catalog. And `bind` also reaches fields the board
+generates itself (`time`, `date`, `net.*`, `sys.*`, `timer.*`, `sun.*`), which live in the same
+namespace as the server payload.
+
+## OTA
+
+`GET /firmware/version` returns version, sha256 and size; `GET /firmware/bin` streams the image.
+`POST /firmware?version=...` publishes it, guarded by `DASH_OTA_TOKEN` when set. From the
+monorepo, `yarn dash:publish` sends the binary that `yarn dash:build` just produced.
+
+The board compares against the `DASH_FW_VERSION` compiled into it, writes to the idle OTA
+partition, verifies the hash before marking it valid, and only then reboots. A download that
+dies halfway leaves the running partition untouched.
+
 ## Why it exists
 
 The firmware used to call ten APIs directly. That meant HTTPS on a chip with ~400 KB of RAM,
