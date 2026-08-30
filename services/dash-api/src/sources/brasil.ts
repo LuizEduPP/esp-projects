@@ -122,15 +122,19 @@ export type Space = { valid: boolean; people: number; lat: number; lon: number }
 export const emptySpace: Space = { valid: false, people: 0, lat: 0, lon: 0 };
 
 export const fetchSpace = async (): Promise<Space> => {
-  const crew = await fetchJson<{ number: number }>("http://api.open-notify.org/astros.json");
-  const iss = await fetchJson<{ iss_position: { latitude: string; longitude: string } }>(
-    "http://api.open-notify.org/iss-now.json",
-  );
+  const [crew, iss] = await Promise.all([
+    fetchJson<{ number: number }>(
+      "https://corquaid.github.io/international-space-station-APIs/JSON/people-in-space.json",
+    ),
+    fetchJson<{ latitude: number; longitude: number }>(
+      "https://api.wheretheiss.at/v1/satellites/25544",
+    ),
+  ]);
 
   return {
     valid: true,
     people: crew.number,
-    lat: Math.round(Number(iss.iss_position.latitude) * 10) / 10,
-    lon: Math.round(Number(iss.iss_position.longitude) * 10) / 10,
+    lat: Math.round(iss.latitude * 10) / 10,
+    lon: Math.round(iss.longitude * 10) / 10,
   };
 };
