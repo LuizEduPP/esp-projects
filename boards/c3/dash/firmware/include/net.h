@@ -5,10 +5,10 @@
 #include "dash_config.h"
 
 struct Forecast {
+  char day[8] = "--";
   float minC = 0;
   float maxC = 0;
   int code = -1;
-  int weekday = 0;
 };
 
 struct Weather {
@@ -19,53 +19,27 @@ struct Weather {
   float maxC = 0;
   int humidity = 0;
   float windKph = 0;
+  int windDir = 0;
+  float gustKph = 0;
+  float pressure = 0;
+  float pressureDelta = 0;
   int rainProb = 0;
   int code = -1;
-  const char *desc = "--";
-
-  Forecast days[3];
-  int dayCount = 0;
+  char desc[24] = "--";
+  float uvMax = 0;
+  char sunrise[6] = "--:--";
+  char sunset[6] = "--:--";
 
   float hourly[24] = {0};
   int hourlyCount = 0;
   int hourNow = 0;
 
-  char sunrise[6] = "--:--";
-  char sunset[6] = "--:--";
-  float uvMax = 0;
-
-  int windDir = 0;
-  float gustKph = 0;
-  float pressure = 0;
-  float pressureDelta = 0;
-
   float rain15[8] = {0};
   int rain15Count = 0;
   int rainStartsInMin = -1;
-};
 
-struct Market {
-  bool valid = false;
-  float usd = 0;
-  float eur = 0;
-  float btc = 0;
-  float usdPct = 0;
-  float eurPct = 0;
-  float btcPct = 0;
-};
-
-struct DevStats {
-  bool valid = false;
-  int commitsToday = 0;
-  int commitsWeek = 0;
-  int pushes = 0;
-  int prs = 0;
-  int issues = 0;
-  int repos = 0;
-  int followers = 0;
-  int activeDays = 0;
-  int activeRepos = 0;
-  char lastRepo[32] = "--";
+  Forecast days[3];
+  int dayCount = 0;
 };
 
 struct Air {
@@ -73,35 +47,29 @@ struct Air {
   int aqi = 0;
   float pm25 = 0;
   float pm10 = 0;
-  const char *label = "--";
+  char label[16] = "--";
 };
 
 struct Moon {
-  float age = 0;
   float illum = 0;
   bool waxing = true;
-  const char *name = "--";
-};
-
-struct Place {
-  bool valid = false;
-  char city[24] = DASH_CITY;
-  float lat = DASH_LAT;
-  float lon = DASH_LON;
-  long tzOffsetSec = 0;
+  char name[20] = "--";
 };
 
 struct News {
   bool valid = false;
-  char items[3][96] = {{0}};
+  char items[3][112] = {{0}};
   int count = 0;
 };
 
-struct Holiday {
+struct Market {
   bool valid = false;
-  char name[40] = "--";
-  char date[11] = "--";
-  int daysLeft = 0;
+  float usd = 0;
+  float usdPct = 0;
+  float eur = 0;
+  float eurPct = 0;
+  float btc = 0;
+  float btcPct = 0;
 };
 
 struct Rates {
@@ -111,17 +79,51 @@ struct Rates {
   float ipca = 0;
 };
 
+struct Holiday {
+  bool valid = false;
+  char name[52] = "--";
+  char date[11] = "--";
+  int daysLeft = 0;
+};
+
 struct History {
   bool valid = false;
   int year = 0;
-  char text[160] = "--";
+  char text[184] = "--";
 };
 
 struct Space {
   bool valid = false;
   int people = 0;
-  float issLat = 0;
-  float issLon = 0;
+  float lat = 0;
+  float lon = 0;
+};
+
+struct DevStats {
+  bool valid = false;
+  int today = 0;
+  int week = 0;
+  int activeDays = 0;
+  int repos = 0;
+  int followers = 0;
+  char repo[32] = "--";
+};
+
+struct Dash {
+  bool valid = false;
+  char city[28] = DASH_CITY;
+  long tzOffsetSec = 0;
+  Weather weather;
+  Air air;
+  Moon moon;
+  News news;
+  Market market;
+  Rates rates;
+  Holiday holiday;
+  History history;
+  Space space;
+  DevStats dev;
+  char ai[DASH_AI_TEXT_MAX] = "";
 };
 
 enum NetState { NET_OFFLINE, NET_CONNECTING, NET_PROVISIONING, NET_ONLINE };
@@ -141,15 +143,4 @@ bool netTimeReady();
 void netSyncTime();
 void netApplyTimezone(long offsetSec);
 
-bool netResolvePlace(Place &out);
-bool netFetchWeather(Place &place, Weather &out);
-bool netFetchAir(const Place &place, Air &out);
-bool netFetchMarket(Market &out);
-bool netFetchDev(DevStats &out);
-bool netFetchNews(News &out);
-bool netFetchHoliday(Holiday &out);
-bool netFetchRates(Rates &out);
-bool netFetchHistory(History &out);
-bool netFetchSpace(Space &out);
-void netMoonPhase(time_t when, Moon &out);
-bool netFetchInsight(const Place &p, const Weather &w, char *out, size_t outLen);
+bool netFetchDash(Dash &out);

@@ -56,7 +56,7 @@ void uiUpdateClock(const struct tm &now, bool timeReady) {
                timeReady ? kWeekdays[now.tm_wday % 7] : "--", date);
 }
 
-void uiUpdatePlace(const Place &p) { screensCity(p.city); }
+void uiUpdatePlace(const char *city) { screensCity(city); }
 
 void uiUpdateWeather(const Weather &w) {
   if (!w.valid) {
@@ -69,7 +69,7 @@ void uiUpdateWeather(const Weather &w) {
   for (int i = 0; i < 3; ++i) {
     if (i < w.dayCount) {
       const Forecast &f = w.days[i];
-      screensForecast(i, f.weekday >= 0 ? kWeekdays[f.weekday] : "--", f.minC, f.maxC, f.code);
+      screensForecast(i, f.day, f.minC, f.maxC, f.code);
     } else {
       screensForecast(i, "--", 0, 0, -1);
     }
@@ -90,11 +90,7 @@ void uiUpdateAir(const Air &a, const Weather &w) {
   screensAir(a.aqi, a.label, a.pm25, a.pm10, w.uvMax);
 }
 
-void uiUpdateMoon() {
-  Moon m;
-  netMoonPhase(time(nullptr), m);
-  screensMoon(m.name, m.illum, m.waxing);
-}
+void uiUpdateMoon(const Moon &m) { screensMoon(m.name, m.illum, m.waxing); }
 
 void uiUpdateWind(const Weather &w) {
   screensWind(w.windKph, w.windDir, w.gustKph, w.pressure, w.pressureDelta);
@@ -144,8 +140,7 @@ void uiUpdateDev(const DevStats &d) {
     screensDev(0, 0, 0, 0, 0, "sem dados");
     return;
   }
-  screensDev(d.commitsToday, d.commitsWeek, d.activeDays, d.activeRepos, d.followers,
-             d.lastRepo);
+  screensDev(d.today, d.week, d.activeDays, d.repos, d.followers, d.repo);
 }
 
 void uiUpdateNews(const News &n) {
@@ -165,7 +160,22 @@ void uiUpdateHistory(const History &h) {
 }
 
 void uiUpdateSpace(const Space &s) {
-  if (s.valid) screensSpace(s.people, s.issLat, s.issLon);
+  if (s.valid) screensSpace(s.people, s.lat, s.lon);
+}
+
+void uiUpdateDash(const Dash &d) {
+  uiUpdatePlace(d.city);
+  uiUpdateWeather(d.weather);
+  uiUpdateAir(d.air, d.weather);
+  uiUpdateMoon(d.moon);
+  uiUpdateNews(d.news);
+  uiUpdateMarket(d.market);
+  uiUpdateRates(d.rates);
+  uiUpdateHoliday(d.holiday);
+  uiUpdateHistory(d.history);
+  uiUpdateSpace(d.space);
+  uiUpdateDev(d.dev);
+  uiUpdateInsight(d.ai[0] ? d.ai : "sem resposta", false);
 }
 
 void uiBusy(bool on) {

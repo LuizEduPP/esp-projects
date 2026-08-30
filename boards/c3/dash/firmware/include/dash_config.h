@@ -10,43 +10,17 @@
 #ifndef DASH_CITY
 #define DASH_CITY "Cesario Lange"
 #endif
-#ifndef DASH_LAT
-#define DASH_LAT -23.2267f
-#endif
-#ifndef DASH_LON
-#define DASH_LON -47.9531f
-#endif
 
-#ifndef DASH_GEOCODE_URL
-#define DASH_GEOCODE_URL "http://geocoding-api.open-meteo.com/v1/search?count=1&language=pt&format=json&name="
+#ifndef DASH_API_URL
+#define DASH_API_URL "https://dash-esp32.kmali.online/dash"
 #endif
 
 #ifndef DASH_NTP_SERVER
 #define DASH_NTP_SERVER "pool.ntp.org"
 #endif
 
-#ifndef DASH_GEO_URL
-#define DASH_GEO_URL "http://ip-api.com/json/?fields=status,city,lat,lon"
-#endif
-
-#ifndef DASH_OLLAMA_URL
-#define DASH_OLLAMA_URL "https://ollama.kmali.online/api/chat"
-#endif
-#ifndef DASH_OLLAMA_MODEL
-#define DASH_OLLAMA_MODEL "gemma4:e4b"
-#endif
-
-#ifndef DASH_WEATHER_INTERVAL_MS
-#define DASH_WEATHER_INTERVAL_MS 600000UL
-#endif
-#ifndef DASH_AI_INTERVAL_MS
-#define DASH_AI_INTERVAL_MS 600000UL
-#endif
-#ifndef DASH_MARKET_INTERVAL_MS
-#define DASH_MARKET_INTERVAL_MS 600000UL
-#endif
-#ifndef DASH_DEV_INTERVAL_MS
-#define DASH_DEV_INTERVAL_MS 600000UL
+#ifndef DASH_API_INTERVAL_MS
+#define DASH_API_INTERVAL_MS 300000UL
 #endif
 #ifndef DASH_SCREEN_TIMEOUT_MS
 #define DASH_SCREEN_TIMEOUT_MS 60000UL
@@ -58,44 +32,10 @@
 #define DASH_WIFI_RETRY_MS 15000UL
 #endif
 #ifndef DASH_HTTP_TIMEOUT_MS
-#define DASH_HTTP_TIMEOUT_MS 8000
-#endif
-#ifndef DASH_AI_TIMEOUT_MS
-#define DASH_AI_TIMEOUT_MS 30000
+#define DASH_HTTP_TIMEOUT_MS 12000
 #endif
 #ifndef DASH_PROVISION_TIMEOUT_MS
 #define DASH_PROVISION_TIMEOUT_MS 180000UL
-#endif
-
-#ifndef DASH_MARKET_URL
-#define DASH_MARKET_URL "https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,BTC-BRL"
-#endif
-
-#ifndef DASH_GITHUB_USER
-#define DASH_GITHUB_USER "luizedupp"
-#endif
-
-#ifndef DASH_NEWS_URL
-#define DASH_NEWS_URL "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml"
-#endif
-#ifndef DASH_HOLIDAY_URL
-#define DASH_HOLIDAY_URL "https://brasilapi.com.br/api/feriados/v1/"
-#endif
-#ifndef DASH_RATES_URL
-#define DASH_RATES_URL "https://brasilapi.com.br/api/taxas/v1"
-#endif
-#ifndef DASH_HISTORY_URL
-#define DASH_HISTORY_URL "https://pt.wikipedia.org/api/rest_v1/feed/onthisday/selected/"
-#endif
-#ifndef DASH_SPACE_URL
-#define DASH_SPACE_URL "http://api.open-notify.org/astros.json"
-#endif
-#ifndef DASH_ISS_URL
-#define DASH_ISS_URL "http://api.open-notify.org/iss-now.json"
-#endif
-
-#ifndef DASH_SLOW_INTERVAL_MS
-#define DASH_SLOW_INTERVAL_MS 1800000UL
 #endif
 
 #ifndef DASH_POMODORO_WORK_S

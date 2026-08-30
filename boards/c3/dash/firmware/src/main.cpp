@@ -10,32 +10,15 @@
 static bool sNight = false;
 static unsigned long sNightAt = 0;
 
-static Place sPlace;
-static Weather sWeather;
-static Air sAir;
-static Market sMarket;
-static DevStats sDev;
-static News sNews;
-static Holiday sHoliday;
-static Rates sRates;
-static History sHistory;
-static Space sSpace;
+static Dash sDash;
 
 static bool sTimerRunning = false;
 static bool sTimerBreak = false;
 static int sTimerLeft = DASH_POMODORO_WORK_S;
 static unsigned long sTimerTick = 0;
-static char sInsight[DASH_AI_TEXT_MAX] = "";
 
-static unsigned long sNextWeather = 0;
-static unsigned long sNextInsight = 0;
-static unsigned long sNextMarket = 0;
-static unsigned long sNextDev = 0;
-static unsigned long sNextNews = 0;
-static unsigned long sNextSlow = 0;
-static int sSlowStep = 0;
+static unsigned long sNextFetch = 0;
 static unsigned long sNextTimeSync = 0;
-static unsigned long sNextGeo = 0;
 static unsigned long sNextTick = 0;
 static NetState sLastState = NET_OFFLINE;
 
@@ -92,64 +75,17 @@ static void tickClock() {
   if (!ok) memset(&now, 0, sizeof(now));
   uiUpdateClock(now, netTimeReady() && ok);
   uiUpdateSystem();
-  if (ok) uiUpdateMoon();
 }
 
-static void refreshWeather() {
-  sNextWeather = millis() + DASH_WEATHER_INTERVAL_MS;
-  if (netFetchWeather(sPlace, sWeather)) uiUpdateWeather(sWeather);
-  if (netFetchAir(sPlace, sAir)) uiUpdateAir(sAir, sWeather);
-}
+static void refreshDash() {
+  sNextFetch = millis() + DASH_API_INTERVAL_MS;
 
-static void refreshInsight() {
-  sNextInsight = millis() + DASH_AI_INTERVAL_MS;
-  uiUpdateInsight(sInsight, true);
-  uiTask();
-
-  if (netFetchInsight(sPlace, sWeather, sInsight, sizeof(sInsight))) {
-    Serial.printf("[ai] %s\n", sInsight);
-  } else {
-    snprintf(sInsight, sizeof(sInsight), "Ollama fora do ar.");
+  uiBusy(true);
+  if (netFetchDash(sDash)) {
+    if (sDash.tzOffsetSec != 0) netApplyTimezone(sDash.tzOffsetSec);
+    uiUpdateDash(sDash);
   }
-  uiUpdateInsight(sInsight, false);
-}
-
-static void refreshMarket() {
-  sNextMarket = millis() + DASH_MARKET_INTERVAL_MS;
-  if (netFetchMarket(sMarket)) uiUpdateMarket(sMarket);
-}
-
-static void refreshDev() {
-  sNextDev = millis() + DASH_DEV_INTERVAL_MS;
-  netFetchDev(sDev);
-  uiUpdateDev(sDev);
-}
-
-static void refreshNews() {
-  sNextNews = millis() + DASH_MARKET_INTERVAL_MS;
-  if (netFetchNews(sNews)) uiUpdateNews(sNews);
-}
-
-static void refreshSlow() {
-  sNextSlow = millis() + 20000UL;
-
-  switch (sSlowStep) {
-    case 0:
-      if (netFetchRates(sRates)) uiUpdateRates(sRates);
-      break;
-    case 1:
-      if (netFetchHoliday(sHoliday)) uiUpdateHoliday(sHoliday);
-      break;
-    case 2:
-      if (netFetchHistory(sHistory)) uiUpdateHistory(sHistory);
-      break;
-    default:
-      if (netFetchSpace(sSpace)) uiUpdateSpace(sSpace);
-      sNextSlow = millis() + DASH_SLOW_INTERVAL_MS;
-      break;
-  }
-
-  sSlowStep = (sSlowStep + 1) % 4;
+  uiBusy(false);
 }
 
 static int timerTotal() {
@@ -177,57 +113,6 @@ static void timerTask() {
   uiUpdateTimer(sTimerLeft, timerTotal(), sTimerBreak, sTimerRunning);
 }
 
-static void refreshCurrentPage() {
-  if (!netOnline()) return;
-
-  uiBusy(true);
-  switch (uiPage()) {
-    case PAGE_MARKET:
-      refreshMarket();
-      break;
-    case PAGE_NEWS:
-      refreshNews();
-      break;
-    case PAGE_RATES:
-      if (netFetchRates(sRates)) uiUpdateRates(sRates);
-      break;
-    case PAGE_HOLIDAY:
-      if (netFetchHoliday(sHoliday)) uiUpdateHoliday(sHoliday);
-      break;
-    case PAGE_HISTORY:
-      if (netFetchHistory(sHistory)) uiUpdateHistory(sHistory);
-      break;
-    case PAGE_SPACE:
-      if (netFetchSpace(sSpace)) uiUpdateSpace(sSpace);
-      break;
-    case PAGE_DEV:
-      refreshDev();
-      break;
-    case PAGE_AI:
-      refreshInsight();
-      break;
-    case PAGE_MOON:
-      uiUpdateMoon();
-      break;
-    case PAGE_CLOCK:
-    case PAGE_SYSTEM:
-      netSyncTime();
-      break;
-    default:
-      refreshWeather();
-      break;
-  }
-  uiBusy(false);
-}
-
-static void locate() {
-  sNextGeo = millis() + 6UL * 3600000UL;
-  if (netResolvePlace(sPlace)) {
-    sWeather.valid = false;
-    sNextWeather = millis();
-  }
-}
-
 void setup() {
   Serial.begin(115200);
   btnDown.begin(BTN_DOWN);
@@ -241,7 +126,6 @@ void setup() {
 
   netBegin();
   sNextTimeSync = millis();
-  sNextInsight = millis() + 5000;
   keepAwake();
 }
 
@@ -258,12 +142,7 @@ void loop() {
     }
     if (state == NET_ONLINE) {
       netSyncTime();
-      locate();
-      sNextWeather = millis();
-      sNextMarket = millis() + 2000;
-      sNextDev = millis() + 4000;
-      sNextNews = millis() + 6000;
-      sNextSlow = millis() + 8000;
+      sNextFetch = millis();
       sNextTimeSync = millis() + DASH_TIME_SYNC_INTERVAL_MS;
     }
   }
@@ -277,7 +156,7 @@ void loop() {
       uiUpdateTimer(sTimerLeft, timerTotal(), sTimerBreak, sTimerRunning);
       keepAwake();
     } else {
-      refreshCurrentPage();
+      if (netOnline()) refreshDash();
       keepAwake();
     }
   }
@@ -310,13 +189,7 @@ void loop() {
       netSyncTime();
       sNextTimeSync = now + DASH_TIME_SYNC_INTERVAL_MS;
     }
-    if ((long)(now - sNextGeo) >= 0) locate();
-    if ((long)(now - sNextWeather) >= 0) refreshWeather();
-    if ((long)(now - sNextMarket) >= 0) refreshMarket();
-    if ((long)(now - sNextDev) >= 0) refreshDev();
-    if ((long)(now - sNextNews) >= 0) refreshNews();
-    if ((long)(now - sNextSlow) >= 0) refreshSlow();
-    if ((long)(now - sNextInsight) >= 0 && sWeather.valid) refreshInsight();
+    if ((long)(now - sNextFetch) >= 0) refreshDash();
   }
 
   timerTask();

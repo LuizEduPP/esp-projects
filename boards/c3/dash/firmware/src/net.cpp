@@ -149,805 +149,154 @@ void netSyncTime() {
   }
 }
 
-static bool httpGetJson(const char *url, JsonDocument &doc) {
-  WiFiClient client;
-  HTTPClient http;
-  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
-  if (!http.begin(client, url)) return false;
-
-  const int status = http.GET();
-  if (status != HTTP_CODE_OK) {
-    Serial.printf("[http] %s -> %d\n", url, status);
-    http.end();
-    return false;
-  }
-
-  const String payload = http.getString();
-  http.end();
-  return !deserializeJson(doc, payload);
+static void copyText(const char *src, char *dst, size_t len) {
+  snprintf(dst, len, "%s", src && src[0] ? src : "--");
 }
 
-static bool geocodeCity(Place &out) {
-  if (!strlen(DASH_CITY)) return false;
-
-  String url = DASH_GEOCODE_URL;
-  for (const char *p = DASH_CITY; *p; ++p) url += (*p == ' ') ? '+' : *p;
-
-  JsonDocument doc;
-  if (!httpGetJson(url.c_str(), doc)) return false;
-
-  JsonObject hit = doc["results"][0];
-  if (hit.isNull()) return false;
-
-  out.lat = hit["latitude"] | out.lat;
-  out.lon = hit["longitude"] | out.lon;
-  snprintf(out.city, sizeof(out.city), "%s", DASH_CITY);
-  out.valid = true;
-  return true;
-}
-
-static bool geolocateByIp(Place &out) {
-  JsonDocument doc;
-  if (!httpGetJson(DASH_GEO_URL, doc)) return false;
-  if (strcmp(doc["status"] | "fail", "success") != 0) return false;
-
-  out.lat = doc["lat"] | out.lat;
-  out.lon = doc["lon"] | out.lon;
-  snprintf(out.city, sizeof(out.city), "%s", doc["city"] | out.city);
-  out.valid = true;
-  return true;
-}
-
-bool netResolvePlace(Place &out) {
-  if (!netOnline()) return false;
-  if (!geocodeCity(out) && !geolocateByIp(out)) return false;
-  Serial.printf("[geo] %s %.4f %.4f\n", out.city, out.lat, out.lon);
-  return true;
-}
-
-static const char *describeCode(int code) {
-  switch (code) {
-    case 0: return "ceu limpo";
-    case 1: return "predom. limpo";
-    case 2: return "parc. nublado";
-    case 3: return "encoberto";
-    case 45:
-    case 48: return "nevoeiro";
-    case 51:
-    case 53:
-    case 55: return "garoa";
-    case 56:
-    case 57: return "garoa gelada";
-    case 61: return "chuva fraca";
-    case 63: return "chuva";
-    case 65: return "chuva forte";
-    case 66:
-    case 67: return "chuva gelada";
-    case 71:
-    case 73:
-    case 75:
-    case 77: return "neve";
-    case 80: return "pancadas fracas";
-    case 81: return "pancadas";
-    case 82: return "pancadas fortes";
-    case 85:
-    case 86: return "pancadas de neve";
-    case 95: return "tempestade";
-    case 96:
-    case 99: return "tempestade granizo";
-    default: return "--";
-  }
-}
-
-bool netFetchWeather(Place &place, Weather &out) {
+bool netFetchDash(Dash &out) {
   if (!netOnline()) return false;
 
-  WiFiClient client;
-
-  char url[512];
-  snprintf(url, sizeof(url),
-           "http://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
-           "&current=temperature_2m,relative_humidity_2m,apparent_temperature,"
-           "weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,surface_pressure"
-           "&minutely_15=precipitation&forecast_minutely_15=8"
-           "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,"
-           "weather_code,sunrise,sunset,uv_index_max"
-           "&hourly=temperature_2m,surface_pressure&forecast_days=4&timezone=auto",
-           place.lat, place.lon);
-
-  HTTPClient http;
-  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
-  if (!http.begin(client, url)) return false;
-
-  const int status = http.GET();
-  if (status != HTTP_CODE_OK) {
-    Serial.printf("[weather] HTTP %d\n", status);
-    http.end();
-    return false;
-  }
-
-  const String payload = http.getString();
-  http.end();
-
-  JsonDocument doc;
-  const DeserializationError err = deserializeJson(doc, payload);
-  if (err) {
-    Serial.printf("[weather] json: %s\n", err.c_str());
-    return false;
-  }
-
-  JsonObject cur = doc["current"];
-  if (cur.isNull()) return false;
-
-  out.tempC = cur["temperature_2m"] | 0.0f;
-  out.feelsC = cur["apparent_temperature"] | out.tempC;
-  out.humidity = cur["relative_humidity_2m"] | 0;
-  out.windKph = cur["wind_speed_10m"] | 0.0f;
-  out.windDir = cur["wind_direction_10m"] | 0;
-  out.gustKph = cur["wind_gusts_10m"] | out.windKph;
-  out.pressure = cur["surface_pressure"] | 0.0f;
-  out.code = cur["weather_code"] | -1;
-  out.desc = describeCode(out.code);
-
-  JsonObject daily = doc["daily"];
-  if (!daily.isNull()) {
-    out.maxC = daily["temperature_2m_max"][0] | out.tempC;
-    out.minC = daily["temperature_2m_min"][0] | out.tempC;
-    out.rainProb = daily["precipitation_probability_max"][0] | 0;
-
-    out.uvMax = daily["uv_index_max"][0] | 0.0f;
-
-    const char *rise = daily["sunrise"][0] | "";
-    const char *set = daily["sunset"][0] | "";
-    if (strlen(rise) >= 16) snprintf(out.sunrise, sizeof(out.sunrise), "%.5s", rise + 11);
-    if (strlen(set) >= 16) snprintf(out.sunset, sizeof(out.sunset), "%.5s", set + 11);
-
-    struct tm today;
-    const bool haveDate = getLocalTime(&today, 20);
-    out.dayCount = 0;
-    for (int i = 1; i <= 3; ++i) {
-      JsonVariant hi = daily["temperature_2m_max"][i];
-      if (hi.isNull()) break;
-      Forecast &f = out.days[out.dayCount];
-      f.maxC = hi | 0.0f;
-      f.minC = daily["temperature_2m_min"][i] | 0.0f;
-      f.code = daily["weather_code"][i] | -1;
-      f.weekday = haveDate ? (today.tm_wday + i) % 7 : -1;
-      ++out.dayCount;
-    }
-  }
-
-  JsonArray hours = doc["hourly"]["temperature_2m"];
-  if (!hours.isNull()) {
-    struct tm now;
-    out.hourNow = getLocalTime(&now, 20) ? now.tm_hour : 0;
-    out.hourlyCount = 0;
-    for (int i = 0; i < 24 && i < (int)hours.size(); ++i) {
-      out.hourly[out.hourlyCount++] = hours[i] | 0.0f;
-    }
-  }
-
-  JsonArray press = doc["hourly"]["surface_pressure"];
-  if (!press.isNull() && out.hourNow >= 3 && out.pressure > 0) {
-    const float before = press[out.hourNow - 3] | 0.0f;
-    if (before > 0) out.pressureDelta = out.pressure - before;
-  }
-
-  JsonArray rain = doc["minutely_15"]["precipitation"];
-  if (!rain.isNull()) {
-    out.rain15Count = 0;
-    out.rainStartsInMin = -1;
-    for (int i = 0; i < 8 && i < (int)rain.size(); ++i) {
-      const float mm = rain[i] | 0.0f;
-      out.rain15[out.rain15Count++] = mm;
-      if (mm > 0.05f && out.rainStartsInMin < 0) out.rainStartsInMin = i * 15;
-    }
-  }
-
-  const long offset = doc["utc_offset_seconds"] | 0;
-  if (offset != place.tzOffsetSec) {
-    place.tzOffsetSec = offset;
-    netApplyTimezone(offset);
-  }
-
-  out.valid = true;
-  Serial.printf("[weather] %s %.1fC (%.0f-%.0f) %d%%\n", out.desc, out.tempC, out.minC,
-                out.maxC, out.humidity);
-  return true;
-}
-
-static const char *describeAqi(int aqi) {
-  if (aqi <= 20) return "excelente";
-  if (aqi <= 40) return "boa";
-  if (aqi <= 60) return "razoavel";
-  if (aqi <= 80) return "ruim";
-  if (aqi <= 100) return "muito ruim";
-  return "pessima";
-}
-
-bool netFetchAir(const Place &place, Air &out) {
-  if (!netOnline()) return false;
-
-  WiFiClient client;
-
-  char url[320];
-  snprintf(url, sizeof(url),
-           "http://air-quality-api.open-meteo.com/v1/air-quality"
-           "?latitude=%.4f&longitude=%.4f"
-           "&current=european_aqi,pm2_5,pm10&timezone=auto",
-           place.lat, place.lon);
-
-  HTTPClient http;
-  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
-  if (!http.begin(client, url)) return false;
-
-  const int status = http.GET();
-  if (status != HTTP_CODE_OK) {
-    Serial.printf("[air] HTTP %d\n", status);
-    http.end();
-    return false;
-  }
-
-  const String payload = http.getString();
-  http.end();
-
-  JsonDocument doc;
-  const DeserializationError err = deserializeJson(doc, payload);
-  if (err) {
-    Serial.printf("[air] json: %s\n", err.c_str());
-    return false;
-  }
-
-  JsonObject cur = doc["current"];
-  if (cur.isNull()) return false;
-
-  out.aqi = cur["european_aqi"] | 0;
-  out.pm25 = cur["pm2_5"] | 0.0f;
-  out.pm10 = cur["pm10"] | 0.0f;
-  out.label = describeAqi(out.aqi);
-  out.valid = true;
-
-  Serial.printf("[air] aqi %d (%s) pm2.5 %.1f\n", out.aqi, out.label, out.pm25);
-  return true;
-}
-
-bool netFetchMarket(Market &out) {
-  if (!netOnline()) return false;
-
-  WiFiClientSecure client;
-  client.setInsecure();
+  const bool secure = strncmp(DASH_API_URL, "https", 5) == 0;
+  WiFiClient plain;
+  WiFiClientSecure tls;
+  if (secure) tls.setInsecure();
 
   HTTPClient http;
   http.setTimeout(DASH_HTTP_TIMEOUT_MS);
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  if (!http.begin(client, DASH_MARKET_URL)) return false;
+  http.useHTTP10(true);
+
+  const bool opened = secure ? http.begin(tls, DASH_API_URL) : http.begin(plain, DASH_API_URL);
+  if (!opened) return false;
 
   const int status = http.GET();
   if (status != HTTP_CODE_OK) {
-    Serial.printf("[market] HTTP %d\n", status);
+    Serial.printf("[dash] HTTP %d\n", status);
     http.end();
     return false;
   }
 
-  const String payload = http.getString();
-  http.end();
-
   JsonDocument doc;
-  if (deserializeJson(doc, payload)) return false;
-
-  out.usd = atof(doc["USDBRL"]["bid"] | "0");
-  out.eur = atof(doc["EURBRL"]["bid"] | "0");
-  out.btc = atof(doc["BTCBRL"]["bid"] | "0");
-  out.usdPct = atof(doc["USDBRL"]["pctChange"] | "0");
-  out.eurPct = atof(doc["EURBRL"]["pctChange"] | "0");
-  out.btcPct = atof(doc["BTCBRL"]["pctChange"] | "0");
-  out.valid = out.usd > 0;
-
-  Serial.printf("[market] usd %.2f eur %.2f btc %.0f\n", out.usd, out.eur, out.btc);
-  return out.valid;
-}
-
-static void fetchProfile(DevStats &out) {
-  WiFiClientSecure client;
-  client.setInsecure();
-
-  char url[128];
-  snprintf(url, sizeof(url), "https://api.github.com/users/%s", DASH_GITHUB_USER);
-
-  HTTPClient http;
-  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
-  http.useHTTP10(true);
-  if (!http.begin(client, url)) return;
-  http.addHeader("User-Agent", "esp32-dash");
-
-  if (http.GET() == HTTP_CODE_OK) {
-    JsonDocument filter;
-    filter["public_repos"] = true;
-    filter["followers"] = true;
-
-    JsonDocument doc;
-    if (!deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter))) {
-      out.repos = doc["public_repos"] | 0;
-      out.followers = doc["followers"] | 0;
-    }
-  }
-  http.end();
-}
-
-bool netFetchDev(DevStats &out) {
-  if (!netOnline()) return false;
-
-  fetchProfile(out);
-
-  WiFiClientSecure client;
-  client.setInsecure();
-
-  char url[160];
-  snprintf(url, sizeof(url), "https://api.github.com/users/%s/events/public?per_page=100",
-           DASH_GITHUB_USER);
-
-  HTTPClient http;
-  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
-  http.useHTTP10(true);
-  if (!http.begin(client, url)) return false;
-  http.addHeader("User-Agent", "esp32-dash");
-
-  const int status = http.GET();
-  if (status != HTTP_CODE_OK) {
-    Serial.printf("[dev] HTTP %d\n", status);
-    http.end();
-    return false;
-  }
-
-  JsonDocument filter;
-  JsonObject item = filter.add<JsonObject>();
-  item["type"] = true;
-  item["created_at"] = true;
-  item["repo"]["name"] = true;
-  item["payload"]["size"] = true;
-
-  JsonDocument doc;
-  const DeserializationError err =
-      deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
+  const DeserializationError err = deserializeJson(doc, http.getStream());
   http.end();
   if (err) {
-    Serial.printf("[dev] json: %s\n", err.c_str());
+    Serial.printf("[dash] json: %s\n", err.c_str());
     return false;
   }
 
-  struct tm now;
-  char today[11] = "";
-  char weekAgo[11] = "";
-  if (getLocalTime(&now, 20)) {
-    strftime(today, sizeof(today), "%Y-%m-%d", &now);
-    time_t past = mktime(&now) - 7 * 86400;
-    struct tm *p = localtime(&past);
-    if (p) strftime(weekAgo, sizeof(weekAgo), "%Y-%m-%d", p);
+  out.tzOffsetSec = doc["tz"] | 0;
+  copyText(doc["city"] | "--", out.city, sizeof(out.city));
+
+  JsonObject w = doc["weather"];
+  Weather &weather = out.weather;
+  weather.valid = w["valid"] | false;
+  weather.tempC = w["temp"] | 0.0f;
+  weather.feelsC = w["feels"] | 0.0f;
+  weather.minC = w["min"] | 0.0f;
+  weather.maxC = w["max"] | 0.0f;
+  weather.humidity = w["hum"] | 0;
+  weather.windKph = w["wind"] | 0.0f;
+  weather.windDir = w["dir"] | 0;
+  weather.gustKph = w["gust"] | 0.0f;
+  weather.pressure = w["pres"] | 0.0f;
+  weather.pressureDelta = w["dpres"] | 0.0f;
+  weather.rainProb = w["rainp"] | 0;
+  weather.code = w["code"] | -1;
+  copyText(w["desc"] | "--", weather.desc, sizeof(weather.desc));
+  weather.uvMax = w["uv"] | 0.0f;
+  copyText(w["sunrise"] | "--:--", weather.sunrise, sizeof(weather.sunrise));
+  copyText(w["sunset"] | "--:--", weather.sunset, sizeof(weather.sunset));
+  weather.hourNow = w["hournow"] | 0;
+  weather.rainStartsInMin = w["rainin"] | -1;
+
+  weather.hourlyCount = 0;
+  for (float t : w["hourly"].as<JsonArray>()) {
+    if (weather.hourlyCount >= 24) break;
+    weather.hourly[weather.hourlyCount++] = t;
   }
 
-  out.commitsToday = 0;
-  out.commitsWeek = 0;
-  out.pushes = 0;
-  out.prs = 0;
-  out.issues = 0;
-  out.activeDays = 0;
-
-  char days[8][11] = {{0}};
-  int dayCount = 0;
-  char seenRepos[8][24] = {{0}};
-  int repoCount = 0;
-  bool gotRepo = false;
-
-  for (JsonObject ev : doc.as<JsonArray>()) {
-    const char *type = ev["type"] | "";
-    const char *at = ev["created_at"] | "";
-    if (strlen(at) < 10) continue;
-
-    const bool isToday = today[0] && strncmp(at, today, 10) == 0;
-    const bool inWeek = weekAgo[0] && strncmp(at, weekAgo, 10) >= 0;
-
-    const char *full = ev["repo"]["name"] | "";
-    const char *slash = strchr(full, '/');
-    const char *name = slash ? slash + 1 : full;
-
-    if (!gotRepo) {
-      snprintf(out.lastRepo, sizeof(out.lastRepo), "%s", name);
-      gotRepo = true;
-    }
-
-    if (name[0] && repoCount < 8) {
-      bool known = false;
-      for (int i = 0; i < repoCount; ++i) {
-        if (strcmp(seenRepos[i], name) == 0) {
-          known = true;
-          break;
-        }
-      }
-      if (!known) snprintf(seenRepos[repoCount++], sizeof(seenRepos[0]), "%s", name);
-    }
-
-    if (strcmp(type, "PushEvent") == 0) {
-      const int size = ev["payload"]["size"] | 1;
-      ++out.pushes;
-      if (isToday) out.commitsToday += size;
-      if (inWeek) {
-        out.commitsWeek += size;
-
-        bool seen = false;
-        for (int i = 0; i < dayCount; ++i) {
-          if (strncmp(days[i], at, 10) == 0) {
-            seen = true;
-            break;
-          }
-        }
-        if (!seen && dayCount < 8) {
-          snprintf(days[dayCount], sizeof(days[0]), "%.10s", at);
-          ++dayCount;
-        }
-      }
-    } else if (strcmp(type, "PullRequestEvent") == 0 && inWeek) {
-      ++out.prs;
-    } else if (strcmp(type, "IssuesEvent") == 0 && inWeek) {
-      ++out.issues;
-    }
+  weather.rain15Count = 0;
+  for (float mm : w["rain15"].as<JsonArray>()) {
+    if (weather.rain15Count >= 8) break;
+    weather.rain15[weather.rain15Count++] = mm;
   }
 
-  out.activeDays = dayCount;
-  out.activeRepos = repoCount;
+  weather.dayCount = 0;
+  for (JsonObject d : w["days"].as<JsonArray>()) {
+    if (weather.dayCount >= 3) break;
+    Forecast &slot = weather.days[weather.dayCount++];
+    copyText(d["day"] | "--", slot.day, sizeof(slot.day));
+    slot.minC = d["min"] | 0.0f;
+    slot.maxC = d["max"] | 0.0f;
+    slot.code = d["code"] | -1;
+  }
+
+  JsonObject a = doc["air"];
+  out.air.valid = a["valid"] | false;
+  out.air.aqi = a["aqi"] | 0;
+  out.air.pm25 = a["pm25"] | 0.0f;
+  out.air.pm10 = a["pm10"] | 0.0f;
+  copyText(a["label"] | "--", out.air.label, sizeof(out.air.label));
+
+  JsonObject m = doc["moon"];
+  out.moon.illum = m["illum"] | 0.0f;
+  out.moon.waxing = m["waxing"] | true;
+  copyText(m["name"] | "--", out.moon.name, sizeof(out.moon.name));
+
+  out.news.count = 0;
+  for (const char *item : doc["news"].as<JsonArray>()) {
+    if (out.news.count >= 3) break;
+    copyText(item, out.news.items[out.news.count], sizeof(out.news.items[0]));
+    ++out.news.count;
+  }
+  out.news.valid = out.news.count > 0;
+
+  JsonObject k = doc["market"];
+  out.market.valid = k["valid"] | false;
+  out.market.usd = k["usd"] | 0.0f;
+  out.market.usdPct = k["usdPct"] | 0.0f;
+  out.market.eur = k["eur"] | 0.0f;
+  out.market.eurPct = k["eurPct"] | 0.0f;
+  out.market.btc = k["btc"] | 0.0f;
+  out.market.btcPct = k["btcPct"] | 0.0f;
+
+  JsonObject r = doc["rates"];
+  out.rates.valid = r["valid"] | false;
+  out.rates.selic = r["selic"] | 0.0f;
+  out.rates.cdi = r["cdi"] | 0.0f;
+  out.rates.ipca = r["ipca"] | 0.0f;
+
+  JsonObject h = doc["holiday"];
+  out.holiday.valid = h["valid"] | false;
+  copyText(h["name"] | "--", out.holiday.name, sizeof(out.holiday.name));
+  copyText(h["date"] | "--", out.holiday.date, sizeof(out.holiday.date));
+  out.holiday.daysLeft = h["daysLeft"] | 0;
+
+  JsonObject t = doc["history"];
+  out.history.valid = t["valid"] | false;
+  out.history.year = t["year"] | 0;
+  copyText(t["text"] | "--", out.history.text, sizeof(out.history.text));
+
+  JsonObject s = doc["space"];
+  out.space.valid = s["valid"] | false;
+  out.space.people = s["people"] | 0;
+  out.space.lat = s["lat"] | 0.0f;
+  out.space.lon = s["lon"] | 0.0f;
+
+  JsonObject d = doc["dev"];
+  out.dev.valid = d["valid"] | false;
+  out.dev.today = d["today"] | 0;
+  out.dev.week = d["week"] | 0;
+  out.dev.activeDays = d["activeDays"] | 0;
+  out.dev.repos = d["repos"] | 0;
+  out.dev.followers = d["followers"] | 0;
+  copyText(d["repo"] | "--", out.dev.repo, sizeof(out.dev.repo));
+
+  copyText(doc["ai"] | "", out.ai, sizeof(out.ai));
+
   out.valid = true;
-  Serial.printf("[dev] hoje %d, semana %d em %d dias, %d repos ativos (%d publicos), repo %s\n",
-                out.commitsToday, out.commitsWeek, out.activeDays, out.activeRepos, out.repos,
-                out.lastRepo);
+  Serial.printf("[dash] %s, %.0fC, %d noticias, %d commits\n", out.city, weather.tempC,
+                out.news.count, out.dev.today);
   return true;
 }
 
-void netMoonPhase(time_t when, Moon &out) {
-  static const double kSynodic = 29.530588853;
-  static const time_t kNewMoon = 947182440;
-
-  double days = difftime(when, kNewMoon) / 86400.0;
-  double age = fmod(days, kSynodic);
-  if (age < 0) age += kSynodic;
-
-  out.age = (float)age;
-  out.illum = (float)((1.0 - cos(2.0 * PI * age / kSynodic)) / 2.0);
-  out.waxing = age < kSynodic / 2.0;
-
-  if (age < 1.0 || age > kSynodic - 1.0) {
-    out.name = "nova";
-  } else if (age < 6.4) {
-    out.name = "crescente";
-  } else if (age < 8.4) {
-    out.name = "quarto crescente";
-  } else if (age < 13.8) {
-    out.name = "gibosa crescente";
-  } else if (age < 15.8) {
-    out.name = "cheia";
-  } else if (age < 21.1) {
-    out.name = "gibosa minguante";
-  } else if (age < 23.1) {
-    out.name = "quarto minguante";
-  } else {
-    out.name = "minguante";
-  }
-}
-
-static bool secureGetJson(const char *url, JsonDocument &doc, JsonDocument *filter,
-                          const char *tag) {
-  if (!netOnline()) return false;
-
-  WiFiClientSecure client;
-  client.setInsecure();
-
-  HTTPClient http;
-  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
-  http.useHTTP10(true);
-  if (!http.begin(client, url)) return false;
-  http.addHeader("User-Agent", "esp32-dash");
-
-  const int status = http.GET();
-  if (status != HTTP_CODE_OK) {
-    Serial.printf("[%s] HTTP %d\n", tag, status);
-    http.end();
-    return false;
-  }
-
-  const DeserializationError err =
-      filter ? deserializeJson(doc, http.getStream(), DeserializationOption::Filter(*filter))
-             : deserializeJson(doc, http.getStream());
-  http.end();
-
-  if (err) {
-    Serial.printf("[%s] json: %s\n", tag, err.c_str());
-    return false;
-  }
-  return true;
-}
-
-static char foldLatin1(uint8_t c) {
-  if (c >= 0xC0 && c <= 0xC5) return 'A';
-  if (c == 0xC7) return 'C';
-  if (c >= 0xC8 && c <= 0xCB) return 'E';
-  if (c >= 0xCC && c <= 0xCF) return 'I';
-  if (c == 0xD1) return 'N';
-  if ((c >= 0xD2 && c <= 0xD6) || c == 0xD8) return 'O';
-  if (c >= 0xD9 && c <= 0xDC) return 'U';
-  if (c == 0xDD) return 'Y';
-  if (c >= 0xE0 && c <= 0xE5) return 'a';
-  if (c == 0xE7) return 'c';
-  if (c >= 0xE8 && c <= 0xEB) return 'e';
-  if (c >= 0xEC && c <= 0xEF) return 'i';
-  if (c == 0xF1) return 'n';
-  if ((c >= 0xF2 && c <= 0xF6) || c == 0xF8) return 'o';
-  if (c >= 0xF9 && c <= 0xFC) return 'u';
-  if (c == 0xFD || c == 0xFF) return 'y';
-  return 0;
-}
-
-static void deaccent(const char *in, char *out, size_t outLen) {
-  size_t o = 0;
-  for (size_t i = 0; in[i] && o + 1 < outLen;) {
-    const uint8_t c = (uint8_t)in[i];
-    if (c < 0x80) {
-      out[o++] = (c == '\n' || c == '\r' || c == '\t') ? ' ' : in[i];
-      ++i;
-      continue;
-    }
-    if ((c & 0xE0) == 0xC0 && in[i + 1]) {
-      const uint8_t cp = ((c & 0x1F) << 6) | ((uint8_t)in[i + 1] & 0x3F);
-      const char folded = foldLatin1(cp);
-      if (folded) out[o++] = folded;
-      i += 2;
-      continue;
-    }
-    if ((c & 0xF0) == 0xE0) {
-      i += 3;
-      continue;
-    }
-    if ((c & 0xF8) == 0xF0) {
-      i += 4;
-      continue;
-    }
-    ++i;
-  }
-  out[o] = '\0';
-}
-
-static void stripCdata(String &s) {
-  s.replace("<![CDATA[", "");
-  s.replace("]]>", "");
-  s.replace("&amp;", "&");
-  s.replace("&quot;", "\"");
-  s.replace("&#39;", "'");
-  s.trim();
-}
-
-bool netFetchNews(News &out) {
-  if (!netOnline()) return false;
-
-  WiFiClientSecure client;
-  client.setInsecure();
-
-  HTTPClient http;
-  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
-  http.useHTTP10(true);
-  if (!http.begin(client, DASH_NEWS_URL)) return false;
-  http.addHeader("User-Agent", "esp32-dash");
-
-  const int status = http.GET();
-  if (status != HTTP_CODE_OK) {
-    Serial.printf("[news] HTTP %d\n", status);
-    http.end();
-    return false;
-  }
-
-  Stream &s = http.getStream();
-  out.count = 0;
-
-  while (out.count < 3 && s.find("<item>")) {
-    if (!s.find("<title>")) break;
-    String title = s.readStringUntil('<');
-    stripCdata(title);
-    if (title.length() == 0) continue;
-    deaccent(title.c_str(), out.items[out.count], sizeof(out.items[0]));
-    ++out.count;
-  }
-  http.end();
-
-  out.valid = out.count > 0;
-  if (out.valid) Serial.printf("[news] %d manchetes: %s\n", out.count, out.items[0]);
-  return out.valid;
-}
-
-bool netFetchHoliday(Holiday &out) {
-  struct tm now;
-  if (!getLocalTime(&now, 100)) return false;
-
-  char url[96];
-  snprintf(url, sizeof(url), "%s%d", DASH_HOLIDAY_URL, now.tm_year + 1900);
-
-  JsonDocument doc;
-  if (!secureGetJson(url, doc, nullptr, "feriado")) return false;
-
-  char today[11];
-  strftime(today, sizeof(today), "%Y-%m-%d", &now);
-
-  for (JsonObject h : doc.as<JsonArray>()) {
-    const char *date = h["date"] | "";
-    if (strlen(date) < 10 || strcmp(date, today) < 0) continue;
-
-    struct tm target = {};
-    target.tm_year = atoi(date) - 1900;
-    target.tm_mon = atoi(date + 5) - 1;
-    target.tm_mday = atoi(date + 8);
-    target.tm_hour = 12;
-
-    struct tm ref = now;
-    ref.tm_hour = 12;
-    ref.tm_min = 0;
-    ref.tm_sec = 0;
-
-    const double diff = difftime(mktime(&target), mktime(&ref));
-    out.daysLeft = (int)(diff / 86400.0 + 0.5);
-    deaccent(h["name"] | "--", out.name, sizeof(out.name));
-    snprintf(out.date, sizeof(out.date), "%.10s", date);
-    out.valid = true;
-    Serial.printf("[feriado] %s em %d dias\n", out.name, out.daysLeft);
-    return true;
-  }
-  return false;
-}
-
-bool netFetchRates(Rates &out) {
-  JsonDocument doc;
-  if (!secureGetJson(DASH_RATES_URL, doc, nullptr, "taxas")) return false;
-
-  for (JsonObject r : doc.as<JsonArray>()) {
-    const char *name = r["nome"] | "";
-    const float value = r["valor"] | 0.0f;
-    if (strcmp(name, "Selic") == 0) out.selic = value;
-    else if (strcmp(name, "CDI") == 0) out.cdi = value;
-    else if (strcmp(name, "IPCA") == 0) out.ipca = value;
-  }
-
-  out.valid = out.selic > 0 || out.cdi > 0;
-  if (out.valid)
-    Serial.printf("[taxas] selic %.2f cdi %.2f ipca %.2f\n", out.selic, out.cdi, out.ipca);
-  return out.valid;
-}
-
-bool netFetchHistory(History &out) {
-  struct tm now;
-  if (!getLocalTime(&now, 100)) return false;
-
-  char url[128];
-  snprintf(url, sizeof(url), "%s%d/%d", DASH_HISTORY_URL, now.tm_mon + 1, now.tm_mday);
-
-  JsonDocument filter;
-  JsonObject sel = filter["selected"].add<JsonObject>();
-  sel["text"] = true;
-  sel["year"] = true;
-
-  JsonDocument doc;
-  if (!secureGetJson(url, doc, &filter, "historia")) return false;
-
-  JsonArray items = doc["selected"];
-  if (items.isNull() || items.size() == 0) return false;
-
-  JsonObject pick = items[random(items.size())];
-  out.year = pick["year"] | 0;
-  deaccent(pick["text"] | "--", out.text, sizeof(out.text));
-  out.valid = true;
-
-  Serial.printf("[historia] %d: %s\n", out.year, out.text);
-  return true;
-}
-
-bool netFetchSpace(Space &out) {
-  if (!netOnline()) return false;
-
-  WiFiClient client;
-  JsonDocument doc;
-
-  HTTPClient http;
-  http.setTimeout(DASH_HTTP_TIMEOUT_MS);
-  if (!http.begin(client, DASH_SPACE_URL)) return false;
-  if (http.GET() == HTTP_CODE_OK) {
-    if (!deserializeJson(doc, http.getString())) out.people = doc["number"] | 0;
-  }
-  http.end();
-
-  JsonDocument iss;
-  HTTPClient http2;
-  http2.setTimeout(DASH_HTTP_TIMEOUT_MS);
-  if (http2.begin(client, DASH_ISS_URL)) {
-    if (http2.GET() == HTTP_CODE_OK) {
-      if (!deserializeJson(iss, http2.getString())) {
-        out.issLat = atof(iss["iss_position"]["latitude"] | "0");
-        out.issLon = atof(iss["iss_position"]["longitude"] | "0");
-      }
-    }
-    http2.end();
-  }
-
-  out.valid = out.people > 0;
-  if (out.valid)
-    Serial.printf("[espaco] %d pessoas, iss %.1f %.1f\n", out.people, out.issLat, out.issLon);
-  return out.valid;
-}
-
-bool netFetchInsight(const Place &p, const Weather &w, char *out, size_t outLen) {
-  if (!netOnline() || outLen == 0) return false;
-
-  struct tm now;
-  if (!getLocalTime(&now, 100)) return false;
-
-  static const char *kInstruction =
-      "Voce e o painel de um relogio de mesa. Escreva UMA frase em portugues do "
-      "Brasil, no maximo 10 palavras, util ou espirituosa, sobre a hora e o clima. "
-      "Sem emojis, sem aspas, sem explicacao.\n\n";
-
-  char user[384];
-  if (w.valid) {
-    snprintf(user, sizeof(user),
-             "%sSao %02d:%02d em %s. Tempo: %s, %.0f graus, sensacao %.0f, minima "
-             "%.0f, maxima %.0f, umidade %d por cento, chance de chuva %d por cento.",
-             kInstruction, now.tm_hour, now.tm_min, p.city, w.desc, w.tempC, w.feelsC,
-             w.minC, w.maxC, w.humidity, w.rainProb);
-  } else {
-    snprintf(user, sizeof(user), "%sSao %02d:%02d em %s. Sem dados de clima.",
-             kInstruction, now.tm_hour, now.tm_min, p.city);
-  }
-
-  JsonDocument req;
-  req["model"] = DASH_OLLAMA_MODEL;
-  req["stream"] = false;
-  req["think"] = false;
-  JsonObject opts = req["options"].to<JsonObject>();
-  opts["temperature"] = 0.8;
-  opts["num_predict"] = 80;
-  JsonArray msgs = req["messages"].to<JsonArray>();
-  JsonObject usr = msgs.add<JsonObject>();
-  usr["role"] = "user";
-  usr["content"] = user;
-
-  String body;
-  serializeJson(req, body);
-
-  WiFiClient plain;
-  WiFiClientSecure tls;
-  WiFiClient *client = &plain;
-  if (strncmp(DASH_OLLAMA_URL, "https:", 6) == 0) {
-    tls.setInsecure();
-    tls.setTimeout(DASH_AI_TIMEOUT_MS / 1000);
-    client = &tls;
-  }
-
-  HTTPClient http;
-  http.setTimeout(DASH_AI_TIMEOUT_MS);
-  if (!http.begin(*client, DASH_OLLAMA_URL)) return false;
-  http.addHeader("Content-Type", "application/json");
-
-  const int status = http.POST(body);
-  if (status != HTTP_CODE_OK) {
-    Serial.printf("[ai] HTTP %d\n", status);
-    http.end();
-    return false;
-  }
-
-  const String payload = http.getString();
-  http.end();
-
-  JsonDocument res;
-  const DeserializationError err = deserializeJson(res, payload);
-  if (err) {
-    Serial.printf("[ai] json: %s\n", err.c_str());
-    return false;
-  }
-
-  const char *content = res["message"]["content"];
-  if (!content || !*content) return false;
-
-  deaccent(content, out, outLen);
-  return true;
-}
