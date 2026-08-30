@@ -6,10 +6,16 @@ import type { Weather } from "./weather.js";
 const SYNODIC = 29.530588853;
 const NEW_MOON = 947_182_440_000;
 
-export type Moon = { age: number; illum: number; waxing: boolean; name: string };
+export type Moon = {
+  age: number;
+  illum: number;
+  waxing: boolean;
+  name: string;
+};
 
 export const moonPhase = (when = Date.now()): Moon => {
-  const age = (((when - NEW_MOON) / 86_400_000) % SYNODIC + SYNODIC) % SYNODIC;
+  const age =
+    ((((when - NEW_MOON) / 86_400_000) % SYNODIC) + SYNODIC) % SYNODIC;
 
   const name =
     age < 1 || age > SYNODIC - 1
@@ -30,7 +36,9 @@ export const moonPhase = (when = Date.now()): Moon => {
 
   return {
     age: Math.round(age * 10) / 10,
-    illum: Math.round(((1 - Math.cos((2 * Math.PI * age) / SYNODIC)) / 2) * 100) / 100,
+    illum:
+      Math.round(((1 - Math.cos((2 * Math.PI * age) / SYNODIC)) / 2) * 100) /
+      100,
     waxing: age < SYNODIC / 2,
     name,
   };
@@ -55,17 +63,26 @@ export const fetchInsight = async (weather: Weather): Promise<string> => {
     "maximo 18 palavras, util ou espirituosa, sobre a hora e o clima. Sem emojis, sem aspas, " +
     `sem explicacao.\n\n${context}`;
 
-  const body = await fetchJson<{ message?: { content?: string } }>(config.ollamaUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      model: config.ollamaModel,
-      stream: false,
-      think: false,
-      options: { num_predict: 80, temperature: 0.8 },
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
+  const body = await fetchJson<{ message?: { content?: string } }>(
+    config.aiUrl,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(config.aiToken
+          ? { authorization: `Bearer ${config.aiToken}` }
+          : {}),
+      },
+      body: JSON.stringify({
+        model: config.aiModel,
+        stream: false,
+        think: false,
+        options: { num_predict: 80, temperature: 0.8 },
+        messages: [{ role: "user", content: prompt }],
+      }),
+    },
+    60_000,
+  );
 
   const text = body.message?.content ?? "";
   if (!text.trim()) throw new Error("resposta vazia");

@@ -18,8 +18,9 @@ export const config = {
   githubUser: str("DASH_GITHUB_USER", "LuizEduPP"),
   githubToken: str("DASH_GITHUB_TOKEN", ""),
 
-  ollamaUrl: str("DASH_OLLAMA_URL", "https://ollama.kmali.online/api/chat"),
-  ollamaModel: str("DASH_OLLAMA_MODEL", "gemma4:e4b"),
+  aiUrl: str("DASH_AI_URL", "https://ai-gateway.kmali.online/api/chat"),
+  aiModel: str("DASH_AI_MODEL", "qwen3.5:0.8b"),
+  aiToken: str("DASH_AI_TOKEN", ""),
 
   newsUrl: str("DASH_NEWS_URL", "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml"),
 

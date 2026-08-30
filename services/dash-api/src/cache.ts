@@ -19,11 +19,18 @@ export class Source<T> {
   }
 
   get age(): number {
-    return this.updatedAt === 0 ? -1 : Math.round((Date.now() - this.updatedAt) / 1000);
+    return this.updatedAt === 0
+      ? -1
+      : Math.round((Date.now() - this.updatedAt) / 1000);
   }
 
   async refresh(force = false): Promise<void> {
-    if (!force && this.updatedAt > 0 && Date.now() - this.updatedAt < this.ttlMs) return;
+    if (
+      !force &&
+      this.updatedAt > 0 &&
+      Date.now() - this.updatedAt < this.ttlMs
+    )
+      return;
     if (this.inFlight) return this.inFlight;
 
     this.inFlight = (async () => {
@@ -47,13 +54,22 @@ export class Source<T> {
   }
 }
 
-export const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
+export const fetchJson = async <T>(
+  url: string,
+  init?: RequestInit,
+  timeoutMs = 20_000,
+): Promise<T> => {
   const response = await fetch(url, {
     ...init,
-    signal: AbortSignal.timeout(20_000),
-    headers: { "user-agent": "dash-api", accept: "application/json", ...init?.headers },
+    signal: AbortSignal.timeout(timeoutMs),
+    headers: {
+      "user-agent": "dash-api",
+      accept: "application/json",
+      ...init?.headers,
+    },
   });
-  if (!response.ok) throw new Error(`HTTP ${response.status} on ${new URL(url).host}`);
+  if (!response.ok)
+    throw new Error(`HTTP ${response.status} on ${new URL(url).host}`);
   return (await response.json()) as T;
 };
 
@@ -62,6 +78,7 @@ export const fetchText = async (url: string): Promise<string> => {
     signal: AbortSignal.timeout(20_000),
     headers: { "user-agent": "dash-api" },
   });
-  if (!response.ok) throw new Error(`HTTP ${response.status} on ${new URL(url).host}`);
+  if (!response.ok)
+    throw new Error(`HTTP ${response.status} on ${new URL(url).host}`);
   return await response.text();
 };

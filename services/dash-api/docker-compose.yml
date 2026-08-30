@@ -13,8 +13,9 @@ services:
       DASH_TIMEZONE: ${DASH_TIMEZONE:-America/Sao_Paulo}
       DASH_GITHUB_USER: ${DASH_GITHUB_USER:-LuizEduPP}
       DASH_GITHUB_TOKEN: ${DASH_GITHUB_TOKEN:-}
-      DASH_OLLAMA_URL: ${DASH_OLLAMA_URL:-https://ollama.kmali.online/api/chat}
-      DASH_OLLAMA_MODEL: ${DASH_OLLAMA_MODEL:-gemma4:e4b}
+      DASH_AI_URL: ${DASH_AI_URL:-https://ai-gateway.kmali.online/api/chat}
+      DASH_AI_MODEL: ${DASH_AI_MODEL:-qwen3.5:0.8b}
+      DASH_AI_TOKEN: ${DASH_AI_TOKEN:-}
       DASH_OTA_TOKEN: ${DASH_OTA_TOKEN:-}
       DASH_DATA_DIR: /data
     volumes:
