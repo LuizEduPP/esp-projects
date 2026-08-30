@@ -106,40 +106,36 @@ static void tickClock() {
 static void refreshDash() {
   sNextFetch = millis() + DASH_API_INTERVAL_MS;
   uiBusy(true);
-  if (netFetchDash()) uiRefreshValues();
+  uiSuspend();
+  const bool ok = netFetchDash();
+  uiResume();
   uiBusy(false);
+  if (ok) uiRefreshValues();
 }
 
 static void syncUi(bool force) {
   sNextUi = millis() + DASH_UI_POLL_MS;
-  if (uiDocSync(force)) uiRebuild();
-}
-
-static void heapMark(const char *stage) {
-  Serial.printf("[heap] %-12s livre %u maior %u\n", stage, (unsigned)ESP.getFreeHeap(),
-                (unsigned)ESP.getMaxAllocHeap());
+  uiSuspend();
+  const bool changed = uiDocSync(force);
+  uiResume();
+  if (changed) uiRebuild();
 }
 
 void setup() {
   Serial.begin(115200);
-  delay(300);
-  heapMark("boot");
   btnDown.begin(BTN_DOWN);
   btnUp.begin(BTN_UP);
   btnBoot.begin(BTN_BOOT);
 
   uiBegin();
-  heapMark("uiBegin");
   uiSplash("dash", "iniciando");
 
   uiDocBegin();
-  heapMark("uiDocBegin");
   timerReset(false);
   dataUpdateClock(false);
   dataUpdateSystem();
 
   netBegin();
-  heapMark("netBegin");
   sNextTimeSync = millis();
   keepAwake();
 }
@@ -153,7 +149,6 @@ void loop() {
     if (state == NET_PROVISIONING) {
       uiShowProvisioning(true);
     } else if (state == NET_ONLINE) {
-      heapMark("online");
       netSyncTime();
       syncUi(false);
       uiShowDash();
@@ -215,7 +210,9 @@ void loop() {
     if ((long)(now - sNextUi) >= 0) syncUi(false);
     if ((long)(now - sNextOta) >= 0) {
       sNextOta = now + DASH_OTA_INTERVAL_MS;
+      uiSuspend();
       otaCheck();
+      uiResume();
     }
   }
 

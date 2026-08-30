@@ -112,6 +112,22 @@ void uiShowProvisioning(bool armed) {
   lv_obj_move_foreground(sOverlay);
 }
 
+static bool sSuspended = false;
+
+void uiSuspend() {
+  if (sSuspended) return;
+  sSuspended = true;
+  renderClear();
+  lv_obj_clean(sStage);
+  lv_timer_handler();
+}
+
+void uiResume() {
+  if (!sSuspended) return;
+  sSuspended = false;
+  uiRebuild();
+}
+
 void uiShowDash() {
   lv_obj_add_flag(sOverlay, LV_OBJ_FLAG_HIDDEN);
   uiRebuild();

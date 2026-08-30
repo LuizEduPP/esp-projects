@@ -27,4 +27,6 @@ void uiSetNight(bool on);
 bool uiIsNight();
 
 void uiBusy(bool on);
+void uiSuspend();
+void uiResume();
 void uiStatus(const char *text);
