@@ -77,9 +77,37 @@ const joinStrip = (metrics: Field[]): { bind: string; fmt: string } | null => {
   return { bind: first.bind, fmt: first.fmt ?? "%s" };
 };
 
+type Area = { x: number; y: number; w: number; h: number };
+
+const textArea = (t: Theme, skin: Skin, box: Area): Area => {
+  const line = Math.round(t.body * 1.15) + 2;
+  const tagBottom = skin.tag ? skin.tag.y + Math.round(skin.tag.font * 1.35) : 2;
+  const y = Math.max(box.y, tagBottom + 4);
+  const x = Math.max(4, box.x);
+  const w = Math.min(124, box.x + box.w) - x;
+  const rows = Math.max(1, Math.floor((124 - y) / line));
+
+  return { x, y, w, h: rows * line };
+};
+
+const clearsText = (it: Item, area: Area): boolean => {
+  if (it.t !== "plate") return true;
+  const inside = it.x >= 0 && it.y >= 0 && it.x + it.w <= 128 && it.y + it.h <= 128;
+  const overlaps =
+    it.x < area.x + area.w &&
+    it.x + it.w > area.x &&
+    it.y < area.y + area.h &&
+    it.y + it.h > area.y;
+
+  return !(inside && overlaps);
+};
+
 export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
   const isText = Boolean(s.body || s.list);
-  const items: Item[] = [...((isText && skin.textOrn) || skin.orn || [])];
+  const ornaments = (isText && skin.textOrn) || skin.orn || [];
+  const items: Item[] = isText
+    ? ornaments.filter((it) => clearsText(it, textArea(t, skin, skin.textBox ?? skin.content)))
+    : [...ornaments];
 
   if (skin.tag) {
     const tagValue = skin.tag.upper ? s.tag.toUpperCase() : s.tag;
@@ -147,12 +175,13 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
 
   const flow: Field[] | undefined = s.body ? [s.body] : s.list;
   if (flow) {
+    const area = textArea(t, skin, box);
     items.push({
       t: "stack",
-      x: box.x,
-      y: box.y,
-      w: box.w,
-      h: box.h,
+      x: area.x,
+      y: area.y,
+      w: area.w,
+      h: area.h,
       align: "left",
       lines: flow.map((f) => ({
         font: t.body,
