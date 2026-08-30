@@ -18,6 +18,7 @@ struct Bind {
   char fmt[20];
   float min;
   float max;
+  bool up;
 };
 
 static Bind sBinds[MAX_BINDS];
