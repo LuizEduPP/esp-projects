@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 
 import { buildPages } from "./pages.js";
 import { themeById, themes } from "./themes.js";
-import type { UiDoc } from "./types.js";
+import type { Page, UiDoc } from "./types.js";
 
 type Stored = { theme: string; version: number; hidden: string[] };
 
@@ -35,10 +35,14 @@ function persist(): void {
   }
 }
 
-export const uiVersion = (): { version: number; theme: string } => ({
+export const uiVersion = () => ({
   version: state.version,
   theme: state.theme,
+  pages: uiDoc().pages.map((page) => ({ id: page.id, title: page.title })),
 });
+
+export const uiPage = (id: string): Page | undefined =>
+  uiDoc().pages.find((page) => page.id === id);
 
 export const uiDoc = (): UiDoc => {
   const theme = themeById(state.theme);

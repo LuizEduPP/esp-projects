@@ -18,7 +18,15 @@ import {
 import { emptyDev, fetchDev } from "./sources/github.js";
 import { fetchInsight, moonPhase } from "./sources/insight.js";
 import { emptyAir, emptyWeather, fetchAir, fetchWeather } from "./sources/weather.js";
-import { hiddenPages, previewDoc, setUi, themeList, uiDoc, uiVersion } from "./ui/state.js";
+import {
+  hiddenPages,
+  previewDoc,
+  setUi,
+  themeList,
+  uiDoc,
+  uiPage,
+  uiVersion,
+} from "./ui/state.js";
 import { editorPage } from "./ui/editor.js";
 import { otaAuthorized, otaBinary, otaManifest, otaPublish } from "./ota.js";
 
@@ -107,6 +115,12 @@ app.get("/ui", async () => uiDoc());
 app.get("/ui/version", async () => uiVersion());
 
 app.get("/ui/themes", async () => ({ themes: themeList(), hidden: hiddenPages() }));
+
+app.get<{ Params: { id: string } }>("/ui/page/:id", async (req, reply) => {
+  const page = uiPage(req.params.id);
+  if (!page) return reply.code(404).send({ error: "tela desconhecida" });
+  return page;
+});
 
 app.get<{ Params: { id: string } }>("/ui/preview/:id", async (req) => previewDoc(req.params.id));
 
