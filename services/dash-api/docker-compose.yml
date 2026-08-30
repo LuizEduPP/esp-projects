@@ -1,0 +1,22 @@
+services:
+  dash-api:
+    build: .
+    container_name: dash-api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8090}:8090"
+    environment:
+      PORT: 8090
+      DASH_CITY: ${DASH_CITY:-Cesario Lange}
+      DASH_LAT: ${DASH_LAT:--23.2267}
+      DASH_LON: ${DASH_LON:--47.9531}
+      DASH_TIMEZONE: ${DASH_TIMEZONE:-America/Sao_Paulo}
+      DASH_GITHUB_USER: ${DASH_GITHUB_USER:-LuizEduPP}
+      DASH_GITHUB_TOKEN: ${DASH_GITHUB_TOKEN:-}
+      DASH_OLLAMA_URL: ${DASH_OLLAMA_URL:-https://ollama.kmali.online/api/chat}
+      DASH_OLLAMA_MODEL: ${DASH_OLLAMA_MODEL:-gemma4:e4b}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8090/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
