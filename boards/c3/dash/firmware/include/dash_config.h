@@ -7,12 +7,9 @@
 #define WIFI_PASS ""
 #endif
 
-#ifndef DASH_CITY
-#define DASH_CITY "Cesario Lange"
-#endif
-
+// Base da API. Os caminhos (/dash, /ui, /firmware) sao anexados no netUrl().
 #ifndef DASH_API_URL
-#define DASH_API_URL "https://dash-esp32.kmali.online/dash"
+#define DASH_API_URL "https://dash-esp32.kmali.online"
 #endif
 
 #ifndef DASH_NTP_SERVER
@@ -53,5 +50,3 @@
 #ifndef DASH_POMODORO_BREAK_S
 #define DASH_POMODORO_BREAK_S 300
 #endif
-
-#define DASH_AI_TEXT_MAX 192
