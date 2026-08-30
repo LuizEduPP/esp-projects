@@ -28,12 +28,15 @@ export type MetricSlot = { box?: Box; label: Slot; value: Slot };
 
 export type Skin = {
   orn?: Item[];
-  tag: Slot;
+  textOrn?: Item[];
+  tag?: Slot;
   hero: Slot;
   unit?: Slot;
   caption?: Slot;
   metrics?: MetricSlot[];
+  pick?: number[];
   strip?: Slot;
+  textBox?: { x: number; y: number; w: number; h: number };
   content: { x: number; y: number; w: number; h: number };
 };
 
@@ -47,6 +50,7 @@ const text = (s: Slot, value: string, bind?: string, fmt?: string): Item => ({
   font: s.font,
   color: s.color,
   ...(s.wrap ? { wrap: true } : {}),
+  ...(s.upper ? { up: true } : {}),
   ...(bind ? { bind, ...(fmt ? { fmt } : {}) } : { text: value }),
 });
 
@@ -74,10 +78,13 @@ const joinStrip = (metrics: Field[]): { bind: string; fmt: string } | null => {
 };
 
 export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
-  const items: Item[] = [...(skin.orn ?? [])];
+  const isText = Boolean(s.body || s.list);
+  const items: Item[] = [...((isText && skin.textOrn) || skin.orn || [])];
 
-  const tagValue = t.upper || skin.tag.upper ? s.tag.toUpperCase() : s.tag;
-  items.push(text(skin.tag, tagValue, s.tagBind));
+  if (skin.tag) {
+    const tagValue = skin.tag.upper ? s.tag.toUpperCase() : s.tag;
+    items.push(text(skin.tag, tagValue, s.tagBind));
+  }
 
   if (s.hero) {
     items.push(fieldText(s.hero, skin.hero));
@@ -86,7 +93,7 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
 
   if (s.caption && skin.caption) items.push(fieldText(s.caption, skin.caption));
 
-  const box = skin.content;
+  const box = isText && skin.textBox ? skin.textBox : skin.content;
 
   if (s.chart) {
     items.push({
@@ -200,9 +207,12 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
   }
 
   if (s.metrics && skin.metrics) {
-    const n = Math.min(s.metrics.length, skin.metrics.length);
+    const chosen = skin.pick
+      ? skin.pick.map((i) => s.metrics![i]).filter((m): m is Field => m !== undefined)
+      : s.metrics;
+    const n = Math.min(chosen.length, skin.metrics.length);
     for (let i = 0; i < n; i++) {
-      const m = s.metrics[i]!;
+      const m = chosen[i]!;
       const slot = skin.metrics[i]!;
       if (slot.box) items.push(boxItem(slot.box));
       items.push(text(slot.label, (m.label ?? "").toUpperCase()));

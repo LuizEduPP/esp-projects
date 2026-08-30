@@ -48,7 +48,8 @@ function renderItem(it, DATA) {
 
   if (it.t === "label") {
     const raw = it.bind ? get(DATA, it.bind) : it.text;
-    d.textContent = it.text !== undefined && !it.bind ? it.text : fmt(it.fmt, raw);
+    const txt = it.text !== undefined && !it.bind ? it.text : fmt(it.fmt, raw);
+    d.textContent = it.up ? String(txt).toUpperCase() : txt;
     at("left:" + px(it.x) + ";top:" + px(it.y) + ";width:" + px(it.w) +
       ";font-size:" + px(it.font) + ";color:" + it.color +
       ";text-align:" + (it.align || "center") + ";line-height:1.12;overflow:hidden;" +

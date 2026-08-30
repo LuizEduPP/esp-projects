@@ -27,6 +27,7 @@ export type LabelItem = {
   wrap?: boolean;
   h?: number;
   scroll?: boolean;
+  up?: boolean;
 };
 
 export type PlateItem = {
@@ -128,10 +129,6 @@ export type Theme = {
   id: string;
   name: string;
   desc: string;
-  layout: string;
-  chrome: string;
-  radius: number;
-  border: number;
   bg: Background;
   fg: string;
   muted: string;
