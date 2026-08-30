@@ -83,14 +83,18 @@ static void driftY(void *obj, int32_t v) { lv_obj_set_y((lv_obj_t *)obj, v); }
 
 static void scrollWrapped(lv_obj_t *label) {
   lv_obj_update_layout(label);
-  lv_anim_delete(label, driftY);
-  lv_obj_set_y(label, 0);
 
   const int boxH = lv_obj_get_height(lv_obj_get_parent(label));
   const int textH = lv_obj_get_height(label);
-  if (textH <= boxH) return;
-
   const int travel = textH - boxH;
+
+  lv_anim_t *live = lv_anim_get(label, driftY);
+  if (live && live->end_value == -travel) return;
+
+  lv_anim_delete(label, driftY);
+  lv_obj_set_y(label, 0);
+  if (travel <= 0) return;
+
   lv_anim_t a;
   lv_anim_init(&a);
   lv_anim_set_var(&a, label);
