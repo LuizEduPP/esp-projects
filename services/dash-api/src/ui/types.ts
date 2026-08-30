@@ -37,6 +37,9 @@ export type PlateItem = {
   h: number;
   style: PlateStyle;
   color?: string;
+  r?: number;
+  opa?: number;
+  border?: number;
 };
 
 export type RuleItem = { t: "rule"; x: number; y: number; w: number; h: number; color: string };
@@ -126,6 +129,9 @@ export type Theme = {
   name: string;
   desc: string;
   layout: string;
+  chrome: string;
+  radius: number;
+  border: number;
   bg: Background;
   fg: string;
   muted: string;

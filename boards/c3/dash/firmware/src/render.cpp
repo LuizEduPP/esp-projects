@@ -204,19 +204,25 @@ static void buildPlate(lv_obj_t *par, JsonObjectConst it) {
   if (strcmp(style, "none") == 0) return;
 
   const uint32_t color = colorOf(it["color"] | "#ffffff");
-  lv_obj_t *o = bare(par, it["x"] | 0, it["y"] | 0, it["w"] | 10, it["h"] | 10);
-  lv_obj_set_style_radius(o, 12, 0);
+  const int w = it["w"] | 10;
+  const int h = it["h"] | 10;
+  lv_obj_t *o = bare(par, it["x"] | 0, it["y"] | 0, w, h);
+
+  const int radius = it["r"] | 12;
+  lv_obj_set_style_radius(o, radius * 2 >= (w < h ? w : h) ? LV_RADIUS_CIRCLE : radius, 0);
+
+  const int border = it["border"] | 1;
 
   if (strcmp(style, "solid") == 0) {
     lv_obj_set_style_bg_color(o, lv_color_hex(color), 0);
-    lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_opa(o, it["opa"] | 255, 0);
     return;
   }
 
   if (strcmp(style, "outline") == 0) {
     lv_obj_set_style_border_color(o, lv_color_hex(color), 0);
     lv_obj_set_style_border_opa(o, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(o, 1, 0);
+    lv_obj_set_style_border_width(o, border < 1 ? 1 : border, 0);
     return;
   }
 
@@ -227,7 +233,7 @@ static void buildPlate(lv_obj_t *par, JsonObjectConst it) {
   lv_obj_set_style_bg_grad_opa(o, 12, 0);
   lv_obj_set_style_border_color(o, lv_color_hex(color), 0);
   lv_obj_set_style_border_opa(o, 60, 0);
-  lv_obj_set_style_border_width(o, 1, 0);
+  lv_obj_set_style_border_width(o, border < 1 ? 1 : border, 0);
 }
 
 static void buildRule(lv_obj_t *par, JsonObjectConst it) {

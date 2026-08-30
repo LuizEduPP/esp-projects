@@ -1,10 +1,17 @@
-// Gera um HTML autocontido com os 30 temas nas 19 telas, sem precisar subir o
-// servidor. Usa o mesmo renderizador do editor.
 import { writeFileSync } from "node:fs";
 
 import { buildPages } from "./pages.js";
-import { previewCss, renderJs, sampleData } from "./renderjs.js";
+import { previewCss, renderJs } from "./renderjs.js";
 import { themes } from "./themes.js";
+
+const source = process.env.DASH_API_URL ?? "http://127.0.0.1:8090";
+
+const live = await fetch(`${source}/dash`)
+  .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+  .catch((error: Error) => {
+    console.warn(`sem /dash em ${source} (${error.message}): as telas saem com traco`);
+    return {};
+  });
 
 const docs = themes.map((theme) => ({
   id: theme.id,
@@ -40,12 +47,14 @@ ${previewCss}
 </head>
 <body>
 <h1>dash &middot; 30 temas &times; 19 telas</h1>
-<p class="sub">Gerado pelos mesmos documentos que o servidor entrega a placa. A familia de layout
-aparece a direita de cada nome: e ela que muda a estrutura, nao so as cores.</p>
+<p class="sub">Gerado pelos mesmos documentos que o servidor entrega a placa, com os dados reais
+de ${source}/dash. A familia de layout aparece a direita de cada nome: e ela que muda a
+estrutura, nao so as cores. Campos que a placa gera sozinha (relogio, rede, timer) aparecem
+como traco aqui.</p>
 <div id="out"></div>
 <script>
 ${renderJs}
-const DATA = ${JSON.stringify(sampleData)};
+const DATA = ${JSON.stringify(live)};
 const DOCS = ${JSON.stringify(docs)};
 
 const out = document.getElementById("out");

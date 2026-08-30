@@ -1,4 +1,4 @@
-import { previewCss, renderJs, sampleData } from "./renderjs.js";
+import { previewCss, renderJs } from "./renderjs.js";
 
 export const editorPage = (): string => `<!doctype html>
 <html lang="pt-BR">
@@ -49,15 +49,16 @@ regravar nada. Clique numa tela da secao de baixo para tira-la do ciclo.</p>
 <script>
 ${renderJs}
 
-let DATA = ${JSON.stringify(sampleData)};
+let DATA = {};
 let hidden = [];
 let active = "";
 
 async function loadData() {
   try {
-    const live = await (await fetch("/dash")).json();
-    DATA = Object.assign({}, DATA, live);
-  } catch (e) { /* sem rede: segue com a amostra */ }
+    DATA = await (await fetch("/dash")).json();
+  } catch (e) {
+    status("sem dados do /dash - os valores aparecem como traco", false);
+  }
 }
 
 async function loadThemes() {

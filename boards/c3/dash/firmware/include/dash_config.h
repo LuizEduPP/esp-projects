@@ -7,7 +7,6 @@
 #define WIFI_PASS ""
 #endif
 
-// Base da API. Os caminhos (/dash, /ui, /firmware) sao anexados no netUrl().
 #ifndef DASH_API_URL
 #define DASH_API_URL "https://dash-esp32.kmali.online"
 #endif

@@ -8,7 +8,6 @@ const INNER = W - M * 2;
 
 const tone = (t: Theme, name: Tone = "fg"): string => t[name];
 
-// Herois de texto (relogio, SSID, duracao) nao cabem na fonte gigante.
 const isText = (f?: Field): boolean =>
   !!f && (f.fmt === "%s" || !f.fmt || /time|clock|daylight|ssid/.test(f.bind ?? ""));
 
@@ -61,9 +60,11 @@ const plate = (t: Theme, x: number, y: number, w: number, h: number, color?: str
   h,
   style: t.plate,
   color: color ?? t.plateColor,
+  r: t.radius,
+  border: t.border,
 });
 
-const solid = (x: number, y: number, w: number, h: number, color: string): Item => ({
+const solid = (t: Theme, x: number, y: number, w: number, h: number, color: string): Item => ({
   t: "plate",
   x,
   y,
@@ -71,6 +72,7 @@ const solid = (x: number, y: number, w: number, h: number, color: string): Item 
   h,
   style: "solid",
   color,
+  r: t.radius,
 });
 
 const rule = (t: Theme, x: number, y: number, w: number, h = 1, color?: string): Item => ({
@@ -81,10 +83,6 @@ const rule = (t: Theme, x: number, y: number, w: number, h = 1, color?: string):
   h,
   color: color ?? t.line,
 });
-
-// --- blocos compartilhados -------------------------------------------------
-// Telas sem heroi (previsao, cotacoes, noticias, graficos, textos) usam estas
-// pecas em qualquer familia, coloridas pelos tokens do tema.
 
 const chartBlock = (t: Theme, s: Screen, y: number, h: number): Item[] => [
   { t: "chart", x: M, y, w: INNER, h, color: tone(t, s.chart!.tone), bind: s.chart!.bind },
@@ -181,7 +179,6 @@ const rowsBlock = (t: Theme, s: Screen, y: number, boxed: boolean): Item[] => {
   return items;
 };
 
-// Trio de metricas numa faixa horizontal, o padrao das familias centradas.
 const metricStrip = (t: Theme, s: Screen, y: number, h = 34): Item[] => {
   const cells = s.metrics!;
   const items: Item[] = t.plate === "none" ? [] : [plate(t, M, y, INNER, h)];
@@ -201,11 +198,8 @@ const metricStrip = (t: Theme, s: Screen, y: number, h = 34): Item[] => {
   return items;
 };
 
-// --- familias --------------------------------------------------------------
-
 type Layout = (t: Theme, s: Screen) => Item[];
 
-// 01 Heroi centrado: tag, valor grande no meio, legenda, faixa de metricas.
 const hero: Layout = (t, s) => {
   const items: Item[] = [tag(t, s)];
 
@@ -311,13 +305,12 @@ const hero: Layout = (t, s) => {
   return items;
 };
 
-// 02 Bento: blocos de tamanhos diferentes, sem espaco morto.
 const bento: Layout = (t, s) => {
   if (s.rows) return [tag(t, s, 6), ...rowsBlock(t, s, 22, true)];
   if (s.list) return [tag(t, s, 6), ...listBlock(t, s, 22)];
   if (s.chart) {
     return [
-      solid(5, 5, 118, 30, t.plateColor),
+      solid(t, 5, 5, 118, 30, t.plateColor),
       txt({ x: 11, y: 13, w: 106, align: "left", font: t.body, color: t.fg, text: s.tag.toUpperCase() }),
       ...chartBlock(t, s, 40, 60),
       ...(s.caption ? [txt({ y: 106, font: t.tag, color: t.muted, field: s.caption })] : []),
@@ -327,10 +320,10 @@ const bento: Layout = (t, s) => {
   const items: Item[] = [];
   const cells = s.metrics ?? [];
 
-  items.push(solid(5, 5, 74, 62, t.accent));
-  items.push(solid(83, 5, 40, 62, t.plateColor));
-  items.push(solid(5, 71, 56, 52, t.plateColor));
-  items.push(solid(65, 71, 58, 52, t.plateColor));
+  items.push(solid(t, 5, 5, 74, 62, t.accent));
+  items.push(solid(t, 83, 5, 40, 62, t.plateColor));
+  items.push(solid(t, 5, 71, 56, 52, t.plateColor));
+  items.push(solid(t, 65, 71, 58, 52, t.plateColor));
 
   if (s.hero) {
     items.push(
@@ -339,7 +332,7 @@ const bento: Layout = (t, s) => {
         y: 12,
         w: 62,
         align: "left",
-        font: isText(s.hero) ? t.big : 34,
+        font: isText(s.hero) ? t.big : t.hero,
         color: t.bg.from,
         field: s.hero,
       }),
@@ -387,7 +380,6 @@ const bento: Layout = (t, s) => {
   return items;
 };
 
-// 05 Swiss: grade rigida, tudo alinhado a esquerda, reguas grossas.
 const swiss: Layout = (t, s) => {
   const items: Item[] = [
     tag(t, s, 8, M, INNER, "left"),
@@ -410,7 +402,7 @@ const swiss: Layout = (t, s) => {
   let y = 24;
 
   if (s.hero) {
-    const font = isText(s.hero) ? 34 : 48;
+    const font = isText(s.hero) ? Math.min(t.hero, 34) : t.hero;
     items.push(
       txt({ x: M, y, w: 104, align: "left", font, color: tone(t, s.hero.tone ?? "fg"), field: s.hero }),
     );
@@ -442,7 +434,6 @@ const swiss: Layout = (t, s) => {
   return items;
 };
 
-// 16 Ficha tecnica: tabela densa de chave e valor.
 const rowsLayout: Layout = (t, s) => {
   const items: Item[] = [
     txt({ x: 6, y: 6, w: 116, align: "left", font: t.tag, color: t.accent, text: s.tag.toUpperCase() }),
@@ -473,15 +464,14 @@ const rowsLayout: Layout = (t, s) => {
   return items;
 };
 
-// 25 Split vertical: coluna solida a esquerda, metricas empilhadas a direita.
 const split: Layout = (t, s) => {
-  const items: Item[] = [solid(0, 0, 62, H, t.accent)];
+  const items: Item[] = [solid(t, 0, 0, 62, H, t.accent)];
 
   items.push(txt({ x: 8, y: 12, w: 48, align: "left", font: t.tag, color: t.bg.from, text: s.tag.toUpperCase() }));
 
   if (s.hero) {
     items.push(
-      txt({ x: 8, y: 32, w: 50, align: "left", font: isText(s.hero) ? t.big : 34, color: t.bg.from, field: s.hero }),
+      txt({ x: 8, y: 32, w: 50, align: "left", font: isText(s.hero) ? t.big : t.hero, color: t.bg.from, field: s.hero }),
     );
   }
   if (s.unit) items.push(txt({ x: 8, y: 74, w: 50, align: "left", font: t.tag, color: t.bg.from, text: s.unit }));
@@ -515,12 +505,11 @@ const split: Layout = (t, s) => {
   return items;
 };
 
-// 26 Barras de dados: cada metrica vira um trilho.
 const bars: Layout = (t, s) => {
   const items: Item[] = [];
 
   if (s.hero) {
-    items.push(txt({ x: M, y: 6, w: 60, align: "left", font: isText(s.hero) ? t.body : t.big, color: tone(t, s.hero.tone ?? "fg"), field: s.hero }));
+    items.push(txt({ x: M, y: 6, w: 60, align: "left", font: isText(s.hero) ? t.body : Math.min(t.hero, 24), color: tone(t, s.hero.tone ?? "fg"), field: s.hero }));
   }
   items.push(txt({ x: 70, y: 12, w: 52, align: "right", font: t.tag, color: t.muted, text: s.tag.toUpperCase() }));
 
@@ -559,7 +548,6 @@ const bars: Layout = (t, s) => {
   return items;
 };
 
-// 14 Arco de foco: anel grande como elemento principal.
 const arcLayout: Layout = (t, s) => {
   if (s.rows) return [tag(t, s), ...rowsBlock(t, s, 24, t.plate !== "none")];
   if (s.list) return [tag(t, s), ...listBlock(t, s, 24)];
@@ -584,7 +572,7 @@ const arcLayout: Layout = (t, s) => {
 
   if (s.hero) {
     items.push(
-      txt({ x: 24, y: 40, w: 80, font: isText(s.hero) ? t.big : 34, color: tone(t, s.hero.tone ?? "fg"), field: s.hero }),
+      txt({ x: 24, y: 40, w: 80, font: isText(s.hero) ? t.big : t.hero, color: tone(t, s.hero.tone ?? "fg"), field: s.hero }),
     );
   }
   if (s.unit) items.push(txt({ x: 24, y: 76, w: 80, font: t.tag, color: t.muted, text: s.unit }));
@@ -610,22 +598,21 @@ const arcLayout: Layout = (t, s) => {
   return items;
 };
 
-// 18 Cartao empilhado: um card grande no topo, dois embaixo.
 const cards: Layout = (t, s) => {
   if (s.list) return [tag(t, s, 8), ...listBlock(t, s, 24)];
   if (s.rows) return [tag(t, s, 8), ...rowsBlock(t, s, 24, true)];
 
   const items: Item[] = [
-    solid(12, 5, 104, 18, t.plateColor),
+    solid(t, 12, 5, 104, 18, t.plateColor),
     txt({ x: 16, y: 8, w: 96, font: t.tag, color: t.muted, text: s.tag.toUpperCase() }),
-    solid(6, 27, 116, 52, t.accent),
+    solid(t, 6, 27, 116, 52, t.accent),
   ];
 
   if (s.chart) {
     items.push({ t: "chart", x: 12, y: 33, w: 104, h: 40, color: t.bg.from, bind: s.chart.bind });
   } else if (s.hero) {
     items.push(
-      txt({ x: 14, y: 34, w: 100, align: "left", font: isText(s.hero) ? t.big : 34, color: t.bg.from, field: s.hero }),
+      txt({ x: 14, y: 34, w: 100, align: "left", font: isText(s.hero) ? t.big : t.hero, color: t.bg.from, field: s.hero }),
     );
     if (s.unit) {
       items.push(txt({ x: 14, y: 64, w: 100, align: "left", font: t.tag, color: t.bg.from, text: s.unit }));
@@ -635,7 +622,7 @@ const cards: Layout = (t, s) => {
   }
 
   if (s.body) {
-    items.push(solid(6, 83, 116, 40, t.plateColor));
+    items.push(solid(t, 6, 83, 116, 40, t.plateColor));
     items.push(txt({ x: 12, y: 88, w: 104, font: t.tag, color: t.fg, field: s.body, wrap: true, h: 30 }));
     return items;
   }
@@ -645,12 +632,12 @@ const cards: Layout = (t, s) => {
   const b = cells[1] ?? cells[2];
 
   if (a) {
-    items.push(solid(6, 83, 55, 40, t.plateColor));
+    items.push(solid(t, 6, 83, 55, 40, t.plateColor));
     items.push(txt({ x: 10, y: 88, w: 47, align: "left", font: t.tag, color: t.muted, text: a.label ?? "" }));
     items.push(txt({ x: 10, y: 100, w: 47, align: "left", font: t.big, color: tone(t, a.tone ?? "fg"), field: a }));
   }
   if (b) {
-    items.push(solid(67, 83, 55, 40, t.plateColor));
+    items.push(solid(t, 67, 83, 55, 40, t.plateColor));
     items.push(txt({ x: 71, y: 88, w: 47, align: "left", font: t.tag, color: t.muted, text: b.label ?? "" }));
     items.push(txt({ x: 71, y: 100, w: 47, align: "left", font: t.big, color: tone(t, b.tone ?? "fg"), field: b }));
   }
@@ -661,7 +648,6 @@ const cards: Layout = (t, s) => {
   return items;
 };
 
-// 11 Numero gigante: o dado principal ocupa a tela.
 const huge: Layout = (t, s) => {
   if (s.rows) return [tag(t, s, 6, M, INNER, "left"), ...rowsBlock(t, s, 22, false)];
   if (s.list) return [tag(t, s, 6, M, INNER, "left"), ...listBlock(t, s, 22)];
@@ -682,7 +668,7 @@ const huge: Layout = (t, s) => {
   const items: Item[] = [];
 
   if (s.hero) {
-    const font = isText(s.hero) ? 40 : 48;
+    const font = isText(s.hero) ? Math.min(t.hero, 40) : t.hero;
     items.push(txt({ x: 4, y: 4, w: 120, align: "left", font, color: tone(t, s.hero.tone ?? "accent"), field: s.hero }));
   }
 

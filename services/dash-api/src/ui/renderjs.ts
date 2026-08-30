@@ -1,5 +1,3 @@
-// Renderizador JS do documento de UI. E o mesmo codigo usado pelo editor e pelo
-// export estatico, para que preview e placa nao possam divergir por descuido.
 export const renderJs = String.raw`
 const px = (n) => n + "px";
 const get = (obj, path) => path.split(".").reduce((acc, k) => (acc == null ? acc : acc[k]), obj);
@@ -60,12 +58,17 @@ function renderItem(it, DATA) {
   }
 
   if (it.t === "plate") {
+    if (it.style === "none") return d;
+    const bw = it.border == null ? 1 : Math.max(1, it.border);
+    const r = it.r == null ? 12 : it.r;
+    const radius = r * 2 >= Math.min(it.w, it.h) ? "50%" : px(r);
+    const opa = it.opa == null ? 255 : it.opa;
     const style = it.style === "glass"
-      ? "background:" + it.color + "22;border:1px solid " + it.color + "3a"
-      : it.style === "solid" ? "background:" + it.color
-      : it.style === "outline" ? "border:1px solid " + it.color : "";
+      ? "background:" + it.color + "22;border:" + bw + "px solid " + it.color + "3a"
+      : it.style === "solid" ? "background:" + it.color + ";opacity:" + (opa / 255)
+      : "border:" + bw + "px solid " + it.color;
     at("left:" + px(it.x) + ";top:" + px(it.y) + ";width:" + px(it.w) +
-      ";height:" + px(it.h) + ";border-radius:10px;" + style);
+      ";height:" + px(it.h) + ";border-radius:" + radius + ";" + style);
     return d;
   }
 
@@ -165,40 +168,3 @@ export const previewCss = String.raw`
     font-family:"Montserrat","Segoe UI",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
   .screen * { position:absolute; margin:0; padding:0; box-sizing:border-box; }
 `;
-
-export const sampleData = {
-  city: "CESARIO LANGE",
-  time: "14:32",
-  weekday: "DOM",
-  date: "30 de agosto",
-  ai: "Tarde estavel, sem chuva ate a noite. Bom momento para focar.",
-  weather: {
-    temp: 24, feels: 25, min: 17, max: 29, hum: 68, wind: 12, dir: 135, gust: 22,
-    pres: 1014, rainp: 20, rainin: 45, code: 2, desc: "parcialmente nublado", uv: 7,
-    sunrise: "06:21", sunset: "18:04",
-    hourly: [19, 18, 18, 20, 23, 26, 28, 29, 28, 26, 24, 22, 21, 20, 19, 19],
-    rain15: [0, 0, 1, 3, 6, 4, 2, 0],
-    days: [
-      { day: "SEG", min: 16, max: 27, code: 3 },
-      { day: "TER", min: 18, max: 30, code: 1 },
-      { day: "QUA", min: 17, max: 25, code: 61 },
-    ],
-  },
-  air: { aqi: 34, pm25: 8, pm10: 14, label: "boa" },
-  moon: { illum: 62, name: "crescente gibosa" },
-  sun: { progress: 62, daylight: "11h 43min" },
-  news: [
-    "Governo anuncia novo pacote de investimento em energia solar no Nordeste",
-    "Selic mantida em reuniao do Copom desta quarta-feira",
-    "Pesquisa aponta queda no desmatamento pelo terceiro mes seguido",
-  ],
-  market: { usd: 5.42, eur: 5.88, btc: 412350 },
-  rates: { selic: 10.5, cdi: 10.4, ipca: 4.32 },
-  holiday: { name: "Independencia do Brasil", date: "07/09/2026", daysLeft: 8 },
-  history: { year: 1930, text: "Inaugurada a primeira transmissao de radio em onda curta do pais." },
-  space: { people: 7, lat: -12, lon: 148 },
-  dev: { today: 6, week: 23, activeDays: 5, repos: 21, repo: "015-esp-projects" },
-  timer: { clock: "18:42", mode: "foco", percent: 25 },
-  net: { ssid: "hotspot", ip: "10.31.254.103", rssi: -58 },
-  sys: { heap: 187, uptime: "2h 14m" },
-};

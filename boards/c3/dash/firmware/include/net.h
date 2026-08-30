@@ -23,17 +23,12 @@ bool netTimeReady();
 void netSyncTime();
 void netApplyTimezone(long offsetSec);
 
-// Monta DASH_API_URL + path. Buffer proprio, valido ate a proxima chamada.
 const char *netUrl(const char *path);
 
-// Abre uma requisicao GET ja com TLS resolvido. Devolve o codigo HTTP;
-// o chamador deve sempre chamar http.end().
 int netOpen(HTTPClient &http, WiFiClient *&client, const char *url);
 
 bool netGetJson(const char *url, JsonDocument &out);
 
-// Baixa direto para um arquivo do LittleFS, sem passar por RAM.
 bool netGetToFile(const char *url, const char *path);
 
-// Busca o payload de dados e joga dentro do documento global de dados.
 bool netFetchDash();

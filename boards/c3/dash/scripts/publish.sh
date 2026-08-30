@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Publica o firmware recem compilado no dash-api. A placa pega sozinha na
-# proxima verificacao horaria.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

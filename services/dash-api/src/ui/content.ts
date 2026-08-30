@@ -1,7 +1,3 @@
-// As 19 telas descritas pelo que elas *mostram*, nao por onde os pixels caem.
-// Cada familia de layout em layouts.ts decide a forma final, e e isso que faz
-// os 30 temas serem 30 estruturas diferentes em vez de 30 paletas.
-
 export type Tone = "fg" | "muted" | "accent" | "accent2" | "hot" | "cold" | "good" | "bad";
 
 export type Field = {
@@ -16,6 +12,7 @@ export type Screen = {
   id: string;
   title: string;
   tag: string;
+  tagBind?: string;
   hero?: Field;
   unit?: string;
   caption?: Field;
@@ -46,8 +43,9 @@ export const screens: Screen[] = [
     id: "weather",
     title: "Clima",
     tag: "clima",
+    tagBind: "city",
     hero: { bind: "weather.temp", fmt: "%.0f" },
-    unit: "graus",
+    unit: "°C",
     caption: { bind: "weather.desc" },
     icon: "weather.code",
     metrics: [
@@ -71,7 +69,7 @@ export const screens: Screen[] = [
     title: "24 horas",
     tag: "24 horas",
     chart: { bind: "weather.hourly", tone: "accent" },
-    caption: { bind: "weather.temp", fmt: "agora %.0f graus", tone: "muted" },
+    caption: { bind: "weather.temp", fmt: "agora %.0f°", tone: "muted" },
   },
   {
     id: "rain",
