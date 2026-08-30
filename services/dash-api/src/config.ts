@@ -19,7 +19,7 @@ export const config = {
   githubToken: str("DASH_GITHUB_TOKEN", ""),
 
   aiUrl: str("DASH_AI_URL", "https://ai-gateway.kmali.online/api/chat"),
-  aiModel: str("DASH_AI_MODEL", "qwen3.5:0.8b"),
+  aiModel: str("DASH_AI_MODEL", "lfm2.5-thinking:latest"),
   aiToken: str("DASH_AI_TOKEN", ""),
 
   newsUrl: str("DASH_NEWS_URL", "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml"),

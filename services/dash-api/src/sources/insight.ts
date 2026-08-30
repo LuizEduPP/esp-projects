@@ -140,14 +140,20 @@ export const fetchInsight = async (ctx: InsightContext): Promise<string> => {
         model: config.aiModel,
         stream: false,
         think: false,
-        options: { num_predict: 60, temperature: 0.7 },
+        options: { num_predict: 900, temperature: 0.7 },
         messages: [{ role: "user", content: prompt }],
       }),
     },
     60_000,
   );
 
-  const text = body.message?.content ?? "";
-  if (!text.trim()) throw new Error("resposta vazia");
-  return clamp(text.replace(/^["']|["']$/g, ""), 180);
+  const raw = body.message?.content ?? "";
+  const text = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<think>[\s\S]*$/i, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
+
+  if (!text) throw new Error("resposta vazia");
+  return clamp(text, 180);
 };

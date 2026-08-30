@@ -79,13 +79,22 @@ const joinStrip = (metrics: Field[]): { bind: string; fmt: string } | null => {
 
 type Area = { x: number; y: number; w: number; h: number };
 
-const textArea = (t: Theme, skin: Skin, box: Area): Area => {
+const widthOf = (f: Field): number => {
+  if (f.wide) return f.wide;
+  const fmt = f.fmt ?? "";
+  if (fmt.includes("%%")) return 6;
+  if (fmt.includes(".2f")) return 5;
+  if (fmt.includes(".1f")) return 4;
+  return 3;
+};
+
+const textArea = (t: Theme, skin: Skin, box: Area, heroBottom = 0, bottom = 124): Area => {
   const line = Math.round(t.body * 1.15) + 2;
   const tagBottom = skin.tag ? skin.tag.y + Math.round(skin.tag.font * 1.35) : 2;
-  const y = Math.max(box.y, tagBottom + 4);
+  const y = Math.max(box.y, tagBottom + 4, heroBottom);
   const x = Math.max(4, box.x);
   const w = Math.min(124, box.x + box.w) - x;
-  const rows = Math.max(1, Math.floor((124 - y) / line));
+  const rows = Math.max(1, Math.floor((bottom - y) / line));
 
   return { x, y, w, h: rows * line };
 };
@@ -117,9 +126,12 @@ const fitLabel = (font: number, chars: number, width: number): number =>
 
 export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
   const isText = Boolean(s.body || s.list);
+  const heroBottom = s.hero ? skin.hero.y + Math.round(skin.hero.font * 1.25) + 2 : 0;
   const ornaments = (isText && skin.textOrn) || skin.orn || [];
   const items: Item[] = isText
-    ? ornaments.filter((it) => clearsText(it, textArea(t, skin, skin.textBox ?? skin.content)))
+    ? ornaments.filter((it) =>
+        clearsText(it, textArea(t, skin, skin.textBox ?? skin.content, heroBottom)),
+      )
     : [...ornaments];
 
   if (skin.tag) {
@@ -132,7 +144,10 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
     if (s.unit && skin.unit) items.push(text(skin.unit, s.unit));
   }
 
-  if (s.caption && skin.caption) items.push(fieldText(s.caption, skin.caption));
+  const footer = isText && Boolean(s.caption);
+  if (s.caption && skin.caption) {
+    items.push(fieldText(s.caption, footer ? { ...skin.caption, y: 116 } : skin.caption));
+  }
 
   const content = skin.content;
   const heroTop = Math.min(skin.hero.y, content.y);
@@ -233,7 +248,7 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
 
   const flow: Field[] | undefined = s.body ? [s.body] : s.list;
   if (flow) {
-    const area = textArea(t, skin, box);
+    const area = textArea(t, skin, box, heroBottom, footer ? 113 : 124);
     items.push({
       t: "stack",
       x: area.x,
@@ -253,11 +268,16 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
   if (s.rows) {
     const area = freed ? graph : content;
     const step = Math.floor(area.h / s.rows.length);
-    const valueFont = fitFont(Math.min(t.big, step - 2));
+    const split = Math.floor(area.w * 0.42);
+    const room = area.w - split;
+    const widest = Math.max(...s.rows.map((r) => widthOf(r.right)));
+    const valueFont = Math.min(
+      fitFont(Math.min(t.big, step - 2)),
+      fitLabel(fitFont(t.big), widest, room),
+    );
     const labelFont = fitFont(Math.min(t.tag, step - 2));
     const labelColor = skin.metrics?.[0]?.label.color ?? t[s.rows[0]!.left.tone ?? "muted"];
     const valueColor = skin.metrics?.[0]?.value.color ?? t[s.rows[0]!.right.tone ?? "fg"];
-    const split = Math.floor(area.w * 0.55);
 
     s.rows.forEach((r, i) => {
       const y = area.y + i * step;
@@ -276,7 +296,7 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
         fieldText(r.right, {
           x: area.x + split,
           y,
-          w: area.w - split,
+          w: room,
           align: "right",
           font: valueFont,
           color: valueColor,

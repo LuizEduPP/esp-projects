@@ -6,6 +6,7 @@ export type Field = {
   text?: string;
   fmt?: string;
   tone?: Tone;
+  wide?: number;
 };
 
 export type Screen = {
@@ -139,7 +140,7 @@ export const screens: Screen[] = [
     rows: [
       { left: { text: "USD", tone: "muted" }, right: { bind: "market.usd", fmt: "%.2f" } },
       { left: { text: "EUR", tone: "muted" }, right: { bind: "market.eur", fmt: "%.2f" } },
-      { left: { text: "BTC", tone: "muted" }, right: { bind: "market.btc", fmt: "%.0f" } },
+      { left: { text: "BTC", tone: "muted" }, right: { bind: "market.btc", fmt: "%.0f", wide: 7 } },
     ],
   },
   {
