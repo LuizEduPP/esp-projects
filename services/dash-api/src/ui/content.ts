@@ -120,7 +120,7 @@ export const screens: Screen[] = [
     tag: "lua",
     moon: true,
     caption: { bind: "moon.name", tone: "accent" },
-    metrics: [{ label: "ILUMINADA", bind: "moon.illum", fmt: "%.0f%%" }],
+    metrics: [{ label: "ILUM", bind: "moon.illum", fmt: "%.0f%%" }],
   },
   {
     id: "news",

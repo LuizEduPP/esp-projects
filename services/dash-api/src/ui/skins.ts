@@ -9,11 +9,11 @@ const cols = (
   labelFont = 10,
 ): MetricSlot[] =>
   [8, 48, 88].map((x, i) => ({
-    label: { x, y, w: 34, align: "left" as const, font: labelFont, color: labelColor, upper: true },
+    label: { x, y, w: 38, align: "left" as const, font: labelFont, color: labelColor, upper: true },
     value: {
       x,
       y: y + 11,
-      w: 34,
+      w: 38,
       align: "left" as const,
       font,
       color: Array.isArray(valueColor) ? valueColor[i]! : valueColor,

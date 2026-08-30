@@ -102,6 +102,19 @@ const clearsText = (it: Item, area: Area): boolean => {
   return !(inside && overlaps);
 };
 
+const FONTS = [8, 10, 12, 14, 16, 20, 24, 28, 34, 40, 48];
+
+const fitFont = (max: number): number => {
+  let best = FONTS[0]!;
+  for (const f of FONTS) {
+    if (f <= max) best = f;
+  }
+  return best;
+};
+
+const fitLabel = (font: number, chars: number, width: number): number =>
+  chars * font * 0.68 <= width ? font : fitFont(Math.floor(width / (chars * 0.68)));
+
 export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
   const isText = Boolean(s.body || s.list);
   const ornaments = (isText && skin.textOrn) || skin.orn || [];
@@ -121,26 +134,70 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
 
   if (s.caption && skin.caption) items.push(fieldText(s.caption, skin.caption));
 
-  const box = isText && skin.textBox ? skin.textBox : skin.content;
+  const content = skin.content;
+  const heroTop = Math.min(skin.hero.y, content.y);
+  const freed = !s.hero && heroTop < content.y;
+  const crowded = Boolean(s.metrics || s.caption);
+  const heroRight = skin.hero.x + (skin.hero.w ?? 128 - skin.hero.x);
+  const wraps = (it: Item) =>
+    it.t === "plate" &&
+    it.style !== "none" &&
+    it.x >= 0 &&
+    it.y >= 0 &&
+    it.x + it.w <= 128 &&
+    it.y + it.h <= 128 &&
+    it.x <= skin.hero.x &&
+    it.y <= skin.hero.y &&
+    it.x + it.w >= heroRight &&
+    it.y + it.h >= skin.hero.y;
+
+  const card = (skin.orn ?? []).find(wraps);
+  const floor = card && card.t === "plate" ? card.y + card.h - 4 : 128;
+  const tall = Boolean(s.rows) && freed;
+
+  if (tall) {
+    for (let i = items.length - 1; i >= 0; i--) {
+      if (wraps(items[i]!)) items.splice(i, 1);
+    }
+  }
+
+  const nook =
+    card && card.t === "plate" && s.hero
+      ? (() => {
+          const top = Math.max(
+            card.y + 4,
+            skin.tag ? skin.tag.y + Math.round(skin.tag.font * 1.35) : 0,
+          );
+          const size = Math.max(20, Math.min(40, card.y + card.h - 4 - top));
+          return { x: card.x + card.w - size - 6, y: top, size };
+        })()
+      : null;
+
+  const openTo = crowded ? content.y - 2 : content.y + content.h;
+  const graph = !freed
+    ? content
+    : { x: content.x, y: heroTop, w: content.w, h: (tall ? openTo : Math.min(openTo, floor)) - heroTop };
+
+  const box = isText && skin.textBox ? skin.textBox : freed ? graph : content;
 
   if (s.chart) {
     items.push({
       t: "chart",
-      x: box.x,
-      y: box.y,
-      w: box.w,
-      h: box.h,
+      x: graph.x,
+      y: graph.y,
+      w: graph.w,
+      h: graph.h,
       bind: s.chart.bind,
-      color: t[s.chart.tone === "fg" ? "fg" : s.chart.tone],
+      color: freed && card ? skin.hero.color : t[s.chart.tone === "fg" ? "fg" : s.chart.tone],
     });
   }
 
   if (s.gauge) {
-    const size = Math.min(box.w, box.h);
+    const size = nook ? nook.size : Math.min(graph.w, graph.h);
     items.push({
       t: "arc",
-      x: box.x + (box.w - size) / 2,
-      y: box.y,
+      x: nook ? nook.x : graph.x + (graph.w - size) / 2,
+      y: nook ? nook.y : graph.y,
       size,
       width: 8,
       min: s.gauge.min,
@@ -152,11 +209,12 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
   }
 
   if (s.moon) {
+    const size = nook ? nook.size : Math.min(48, graph.h - 4);
     items.push({
       t: "moon",
-      x: box.x + (box.w - 48) / 2,
-      y: box.y,
-      size: 48,
+      x: nook ? nook.x : graph.x + (graph.w - size) / 2,
+      y: nook ? nook.y : graph.y + Math.max(0, (graph.h - size) / 2),
+      size,
       color: t.fg,
     });
   }
@@ -164,9 +222,9 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
   if (s.needle) {
     items.push({
       t: "needle",
-      x: box.x + box.w - 40,
-      y: box.y,
-      size: 38,
+      x: nook ? nook.x : graph.x + graph.w - 40,
+      y: nook ? nook.y : graph.y,
+      size: nook ? nook.size - 2 : 38,
       bind: s.needle,
       color: t.accent,
       track: t.line,
@@ -193,28 +251,35 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
   }
 
   if (s.rows) {
-    const step = Math.floor(box.h / s.rows.length);
+    const area = freed ? graph : content;
+    const step = Math.floor(area.h / s.rows.length);
+    const valueFont = fitFont(Math.min(t.big, step - 2));
+    const labelFont = fitFont(Math.min(t.tag, step - 2));
+    const labelColor = skin.metrics?.[0]?.label.color ?? t[s.rows[0]!.left.tone ?? "muted"];
+    const valueColor = skin.metrics?.[0]?.value.color ?? t[s.rows[0]!.right.tone ?? "fg"];
+    const split = Math.floor(area.w * 0.55);
+
     s.rows.forEach((r, i) => {
-      const y = box.y + i * step;
+      const y = area.y + i * step;
       items.push(
         fieldText(r.left, {
-          x: box.x,
-          y,
-          w: Math.floor(box.w * 0.55),
+          x: area.x,
+          y: y + Math.max(0, valueFont - labelFont) / 2,
+          w: split,
           align: "left",
-          font: t.tag,
-          color: t[r.left.tone ?? "muted"],
+          font: labelFont,
+          color: labelColor,
           upper: true,
         }),
       );
       items.push(
         fieldText(r.right, {
-          x: box.x + Math.floor(box.w * 0.55),
-          y: y - 3,
-          w: box.w - Math.floor(box.w * 0.55),
+          x: area.x + split,
+          y,
+          w: area.w - split,
           align: "right",
-          font: t.big,
-          color: t[r.right.tone ?? "fg"],
+          font: valueFont,
+          color: valueColor,
         }),
       );
     });
@@ -228,8 +293,14 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
     for (let i = 0; i < n; i++) {
       const m = chosen[i]!;
       const slot = skin.metrics[i]!;
+      const caption = (m.label ?? "").toUpperCase();
       if (slot.box) items.push(boxItem(slot.box));
-      items.push(text(slot.label, (m.label ?? "").toUpperCase()));
+      items.push(
+        text(
+          { ...slot.label, font: fitLabel(slot.label.font, caption.length, slot.label.w ?? 128) },
+          caption,
+        ),
+      );
       items.push(fieldText(m, slot.value));
     }
   } else if (s.metrics && skin.strip) {

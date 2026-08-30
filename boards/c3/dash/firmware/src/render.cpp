@@ -48,6 +48,8 @@ static const lv_font_t *fontOf(int size) {
       return &lv_font_montserrat_14;
     case 10:
       return &lv_font_montserrat_10;
+    case 8:
+      return &lv_font_montserrat_8;
     default:
       return &lv_font_montserrat_12;
   }

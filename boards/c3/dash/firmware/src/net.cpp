@@ -102,6 +102,13 @@ void netForgetCredentials() {
   sPrefs.end();
   sSsid = "";
   sPass = "";
+
+  if (sBtFreed) {
+    Serial.println("[wifi] credenciais apagadas, reiniciando para abrir o BLE");
+    delay(300);
+    ESP.restart();
+  }
+
   netStartProvisioning();
 }
 
