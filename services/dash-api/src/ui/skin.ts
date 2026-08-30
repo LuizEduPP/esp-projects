@@ -79,6 +79,25 @@ const joinStrip = (metrics: Field[]): { bind: string; fmt: string } | null => {
 
 type Area = { x: number; y: number; w: number; h: number };
 
+const wide = (m: MetricSlot): MetricSlot => {
+  const x = Math.max(4, Math.min(m.label.x, m.value.x));
+  const w = Math.max(24, 124 - x);
+  const y = Math.min(m.label.y, m.value.y);
+  const font = fitFont(Math.min(28, Math.max(m.value.font, Math.floor(w / 4))));
+  const half = Math.floor(w / 2);
+  return {
+    ...m,
+    label: {
+      ...m.label,
+      x,
+      y: y + Math.max(0, Math.round((font - m.label.font) * 0.6)),
+      w: half,
+      align: "left",
+    },
+    value: { ...m.value, x: x + half, y, w: w - half, align: "right", font },
+  };
+};
+
 const widthOf = (f: Field): number => {
   if (f.wide) return f.wide;
   const fmt = f.fmt ?? "";
@@ -310,9 +329,11 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
       ? skin.pick.map((i) => s.metrics![i]).filter((m): m is Field => m !== undefined)
       : s.metrics;
     const n = Math.min(chosen.length, skin.metrics.length);
+    const solo = n === 1;
     for (let i = 0; i < n; i++) {
       const m = chosen[i]!;
-      const slot = skin.metrics[i]!;
+      const base = skin.metrics[i]!;
+      const slot = solo ? wide(base) : base;
       const caption = (m.label ?? "").toUpperCase();
       if (slot.box) items.push(boxItem(slot.box));
       items.push(
