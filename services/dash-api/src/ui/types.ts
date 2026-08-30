@@ -30,6 +30,25 @@ export type LabelItem = {
   up?: boolean;
 };
 
+export type StackLine = {
+  text?: string;
+  bind?: string;
+  fmt?: string;
+  font: number;
+  color: string;
+  gap?: number;
+};
+
+export type StackItem = {
+  t: "stack";
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  align?: Align;
+  lines: StackLine[];
+};
+
 export type PlateItem = {
   t: "plate";
   x: number;
@@ -107,6 +126,7 @@ export type NeedleItem = {
 
 export type Item =
   | LabelItem
+  | StackItem
   | PlateItem
   | RuleItem
   | ArcItem

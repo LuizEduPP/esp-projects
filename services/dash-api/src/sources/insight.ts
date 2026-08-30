@@ -140,7 +140,7 @@ export const fetchInsight = async (ctx: InsightContext): Promise<string> => {
         model: config.aiModel,
         stream: false,
         think: false,
-        options: { num_predict: 80, temperature: 0.8 },
+        options: { num_predict: 60, temperature: 0.7 },
         messages: [{ role: "user", content: prompt }],
       }),
     },

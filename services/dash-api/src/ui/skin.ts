@@ -145,36 +145,21 @@ export const applySkin = (t: Theme, skin: Skin, s: Screen): Item[] => {
     });
   }
 
-  if (s.body) {
+  const flow: Field[] | undefined = s.body ? [s.body] : s.list;
+  if (flow) {
     items.push({
-      t: "label",
+      t: "stack",
       x: box.x,
       y: box.y,
       w: box.w,
       h: box.h,
       align: "left",
-      font: t.body,
-      color: t[s.body.tone ?? "fg"],
-      wrap: true,
-      bind: s.body.bind,
-    });
-  }
-
-  if (s.list) {
-    const step = Math.floor(box.h / s.list.length);
-    s.list.forEach((f, i) => {
-      items.push({
-        t: "label",
-        x: box.x,
-        y: box.y + i * step,
-        w: box.w,
-        h: step - 2,
-        align: "left",
+      lines: flow.map((f) => ({
         font: t.body,
         color: t[f.tone ?? "fg"],
-        wrap: true,
-        ...(f.bind ? { bind: f.bind } : { text: f.text ?? "" }),
-      });
+        gap: 6,
+        ...(f.bind ? { bind: f.bind, ...(f.fmt ? { fmt: f.fmt } : {}) } : { text: f.text ?? "" }),
+      })),
     });
   }
 
