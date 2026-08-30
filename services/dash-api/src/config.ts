@@ -22,4 +22,6 @@ export const config = {
   ollamaModel: str("DASH_OLLAMA_MODEL", "gemma4:e4b"),
 
   newsUrl: str("DASH_NEWS_URL", "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml"),
+
+  otaToken: str("DASH_OTA_TOKEN", ""),
 } as const;

@@ -20,6 +20,7 @@ import { fetchInsight, moonPhase } from "./sources/insight.js";
 import { emptyAir, emptyWeather, fetchAir, fetchWeather } from "./sources/weather.js";
 import { hiddenPages, previewDoc, setUi, themeList, uiDoc, uiVersion } from "./ui/state.js";
 import { editorPage } from "./ui/editor.js";
+import { otaAuthorized, otaBinary, otaManifest, otaPublish } from "./ota.js";
 
 const MINUTE = 60_000;
 
@@ -39,7 +40,13 @@ const insight = new Source("ai", () => fetchInsight(weather.get()), 10 * MINUTE,
 
 const sources = [weather, air, news, market, rates, holiday, history, space, dev, insight];
 
-const app = Fastify({ logger: { level: "warn" } });
+const app = Fastify({ logger: { level: "warn" }, bodyLimit: 8 * 1024 * 1024 });
+
+app.addContentTypeParser(
+  "application/octet-stream",
+  { parseAs: "buffer" },
+  (_req, body, done) => done(null, body),
+);
 
 app.get("/health", async () => ({
   ok: true,
@@ -106,6 +113,31 @@ app.get<{ Params: { id: string } }>("/ui/preview/:id", async (req) => previewDoc
 app.post<{ Body: { theme?: string; hidden?: string[] } }>("/ui", async (req) => {
   const doc = setUi(req.body ?? {});
   return { ok: true, version: doc.version, theme: doc.theme };
+});
+
+app.get("/firmware/version", async (_req, reply) => {
+  const manifest = otaManifest();
+  if (!manifest) return reply.code(404).send({ error: "sem firmware publicado" });
+  return manifest;
+});
+
+app.get("/firmware/bin", async (_req, reply) => {
+  const binary = otaBinary();
+  if (!binary) return reply.code(404).send({ error: "sem firmware publicado" });
+  reply.type("application/octet-stream");
+  return binary;
+});
+
+app.post<{ Querystring: { version?: string } }>("/firmware", async (req, reply) => {
+  if (!otaAuthorized(req.headers["x-ota-token"] as string | undefined)) {
+    return reply.code(401).send({ error: "token invalido" });
+  }
+  const version = req.query.version;
+  if (!version) return reply.code(400).send({ error: "informe ?version=" });
+  if (!Buffer.isBuffer(req.body) || req.body.length < 1024) {
+    return reply.code(400).send({ error: "corpo vazio ou pequeno demais" });
+  }
+  return otaPublish(version, req.body);
 });
 
 app.get("/", async (_req, reply) => {
