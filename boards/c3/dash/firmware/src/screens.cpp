@@ -81,8 +81,6 @@ static void marquee(lv_obj_t *l) {
   lv_obj_set_style_anim_duration(l, 6000, 0);
 }
 
-/* Label that wraps inside a clipped box and, when the text is taller than the
-   box, drifts up and back so nothing is lost. */
 static lv_obj_t *wrapBox(lv_obj_t *par, const lv_font_t *font, uint32_t color, int cx, int y,
                          int w, int h) {
   lv_obj_t *box = lv_obj_create(par);

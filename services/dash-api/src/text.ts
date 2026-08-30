@@ -1,5 +1,3 @@
-/* The ESP renders with LVGL's Montserrat subset, which has no accented glyphs,
-   so every string leaving this API is already folded to ASCII. */
 export const deaccent = (input: string): string =>
   input
     .normalize("NFD")

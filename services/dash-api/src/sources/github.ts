@@ -31,9 +31,6 @@ const startOfWeekAgo = (): string => {
   return date.toISOString();
 };
 
-/* The public events feed hides private work and only spans 90 days. With a
-   token the contributions graph reports every commit, private ones included,
-   which is what the board should show. */
 const fetchWithToken = async (): Promise<Dev> => {
   const query = `
     query($login: String!, $from: DateTime!) {

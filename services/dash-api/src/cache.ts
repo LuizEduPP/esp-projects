@@ -1,8 +1,5 @@
 type Loader<T> = () => Promise<T>;
 
-/* Keeps the last good value forever and refreshes it on a timer, so a GET from
-   the board never waits on an upstream API and a flaky source degrades into
-   stale data instead of an empty screen. */
 export class Source<T> {
   private value: T;
   private updatedAt = 0;

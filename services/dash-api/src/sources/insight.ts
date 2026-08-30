@@ -36,8 +36,6 @@ export const moonPhase = (when = Date.now()): Moon => {
   };
 };
 
-/* gemma models reject a system role and will leak reasoning tokens unless
-   thinking is switched off, so everything goes in the user turn. */
 export const fetchInsight = async (weather: Weather): Promise<string> => {
   const now = new Date().toLocaleTimeString("pt-BR", {
     timeZone: config.timezone,
