@@ -39,6 +39,9 @@
 #ifndef DASH_HTTP_TIMEOUT_MS
 #define DASH_HTTP_TIMEOUT_MS 12000
 #endif
+#ifndef DASH_OFFLINE_PROV_MS
+#define DASH_OFFLINE_PROV_MS 45000UL
+#endif
 #ifndef DASH_PROV_POP
 #define DASH_PROV_POP "dash1234"
 #endif

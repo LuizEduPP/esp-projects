@@ -7,6 +7,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <WiFiProv.h>
+#include <esp_bt.h>
 
 #include <time.h>
 
@@ -21,6 +22,9 @@ static String sSsid;
 static String sPass;
 static char sIp[16] = "0.0.0.0";
 static char sProvName[16] = "";
+static bool sBtFreed = false;
+static unsigned long sOfflineSince = 0;
+static unsigned long sRetryStored = 0;
 
 static void loadCredentials() {
   if (sPrefs.begin("dash", false)) sPrefs.end();
@@ -46,6 +50,7 @@ static void connectStored() {
   WiFi.begin(sSsid.c_str(), sPass.c_str());
   sState = NET_CONNECTING;
   sNextRetry = millis() + DASH_WIFI_RETRY_MS;
+  if (sOfflineSince == 0) sOfflineSince = millis();
 }
 
 void netBegin() {
@@ -87,6 +92,7 @@ void netStartProvisioning() {
 
   sState = NET_PROVISIONING;
   sProvisionUntil = millis() + DASH_PROVISION_TIMEOUT_MS;
+  sRetryStored = millis() + DASH_PROVISION_TIMEOUT_MS;
 }
 
 void netForgetCredentials() {
@@ -101,33 +107,46 @@ void netForgetCredentials() {
 
 void netLoop() {
   if (netOnline()) {
+    if (sState == NET_PROVISIONING) {
+      saveCredentials(WiFi.SSID(), WiFi.psk());
+      Serial.printf("[wifi] provisionado %s, reiniciando\n", WiFi.SSID().c_str());
+      delay(600);
+      ESP.restart();
+    }
     if (sState != NET_ONLINE) {
-      if (sState == NET_PROVISIONING) {
-        sSsid = WiFi.SSID();
-        sPass = WiFi.psk();
-        saveCredentials(sSsid, sPass);
-        Serial.printf("[wifi] provisionado %s\n", sSsid.c_str());
-      }
       sState = NET_ONLINE;
+      sOfflineSince = 0;
       snprintf(sIp, sizeof(sIp), "%s", WiFi.localIP().toString().c_str());
       WiFi.scanDelete();
-      Serial.printf("[wifi] online %s\n", sIp);
+      if (!sBtFreed) {
+        sBtFreed = true;
+        esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
+      }
+      Serial.printf("[wifi] online %s, heap %u\n", sIp, (unsigned)ESP.getMaxAllocHeap());
     }
     return;
   }
 
   if (sState == NET_PROVISIONING) {
-    if ((long)(millis() - sProvisionUntil) < 0) return;
-    if (sSsid.isEmpty()) {
-      sProvisionUntil = millis() + DASH_PROVISION_TIMEOUT_MS;
-      return;
+    if ((long)(millis() - sRetryStored) >= 0 && !sSsid.isEmpty()) {
+      sRetryStored = millis() + DASH_PROVISION_TIMEOUT_MS;
+      WiFi.begin(sSsid.c_str(), sPass.c_str());
     }
-    wifi_prov_mgr_stop_provisioning();
-    connectStored();
     return;
   }
 
   sState = NET_CONNECTING;
+  if (sOfflineSince == 0) sOfflineSince = millis();
+  if ((long)(millis() - sOfflineSince) >= (long)DASH_OFFLINE_PROV_MS) {
+    if (sBtFreed) {
+      Serial.println("[wifi] offline demais, reiniciando para liberar o BLE");
+      delay(300);
+      ESP.restart();
+    }
+    netStartProvisioning();
+    return;
+  }
+
   if ((long)(millis() - sNextRetry) < 0) return;
   sNextRetry = millis() + DASH_WIFI_RETRY_MS;
   WiFi.disconnect();
