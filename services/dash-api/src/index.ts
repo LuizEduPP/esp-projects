@@ -18,6 +18,8 @@ import {
 import { emptyDev, fetchDev } from "./sources/github.js";
 import { fetchInsight, moonPhase } from "./sources/insight.js";
 import { emptyAir, emptyWeather, fetchAir, fetchWeather } from "./sources/weather.js";
+import { hiddenPages, previewDoc, setUi, themeList, uiDoc, uiVersion } from "./ui/state.js";
+import { editorPage } from "./ui/editor.js";
 
 const MINUTE = 60_000;
 
@@ -91,6 +93,24 @@ app.get("/dash", async () => {
 app.post("/refresh", async () => {
   await Promise.all(sources.map((source) => source.refresh(true)));
   return { ok: true };
+});
+
+app.get("/ui", async () => uiDoc());
+
+app.get("/ui/version", async () => uiVersion());
+
+app.get("/ui/themes", async () => ({ themes: themeList(), hidden: hiddenPages() }));
+
+app.get<{ Params: { id: string } }>("/ui/preview/:id", async (req) => previewDoc(req.params.id));
+
+app.post<{ Body: { theme?: string; hidden?: string[] } }>("/ui", async (req) => {
+  const doc = setUi(req.body ?? {});
+  return { ok: true, version: doc.version, theme: doc.theme };
+});
+
+app.get("/", async (_req, reply) => {
+  reply.type("text/html; charset=utf-8");
+  return editorPage();
 });
 
 for (const source of sources) source.start();
