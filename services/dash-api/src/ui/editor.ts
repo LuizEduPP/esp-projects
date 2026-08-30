@@ -35,7 +35,7 @@ ${previewCss}
 </head>
 <body>
 <h1>dash</h1>
-<p class="sub">Cada tema tem estrutura propria, nao so paleta: a familia de layout muda onde o
+<p class="sub">Cada tema tem estrutura propria, nao so paleta: o layout muda onde o
 valor principal, as metricas e as listas caem. A placa aplica a escolha em ate 10 segundos, sem
 regravar nada. Clique numa tela da secao de baixo para tira-la do ciclo.</p>
 

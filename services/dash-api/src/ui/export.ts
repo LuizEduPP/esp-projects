@@ -17,7 +17,6 @@ const docs = themes.map((theme) => ({
   id: theme.id,
   name: theme.name,
   desc: theme.desc,
-  layout: theme.layout,
   pages: buildPages(theme),
 }));
 
@@ -48,7 +47,7 @@ ${previewCss}
 <body>
 <h1>dash &middot; 30 temas &times; 19 telas</h1>
 <p class="sub">Gerado pelos mesmos documentos que o servidor entrega a placa, com os dados reais
-de ${source}/dash. A familia de layout aparece a direita de cada nome: e ela que muda a
+de ${source}/dash. Cada tema tem layout proprio, transcrito do mock: muda a
 estrutura, nao so as cores. Campos que a placa gera sozinha (relogio, rede, timer) aparecem
 como traco aqui.</p>
 <div id="out"></div>
@@ -63,7 +62,7 @@ DOCS.forEach((doc, i) => {
   box.className = "theme";
   box.innerHTML = '<div class="head"><span class="num">' + String(i + 1).padStart(2, "0") +
     '</span><span class="name">' + doc.name + '</span><span class="desc">' + doc.desc +
-    '</span><span class="fam">familia ' + doc.layout + '</span></div>';
+    '</span></div>';
   const row = document.createElement("div");
   row.className = "row";
   for (const page of doc.pages) {
