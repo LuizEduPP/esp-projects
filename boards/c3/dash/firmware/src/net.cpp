@@ -6,6 +6,7 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <esp_wifi.h>
 
 #include <time.h>
 
@@ -46,8 +47,30 @@ static void connectStored() {
   sNextRetry = millis() + DASH_WIFI_RETRY_MS;
 }
 
-void netBegin() {
+static void shrinkWifiBuffers() {
   WiFi.mode(WIFI_STA);
+  if (esp_wifi_stop() != ESP_OK) return;
+  if (esp_wifi_deinit() != ESP_OK) return;
+
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  cfg.static_rx_buf_num = 4;
+  cfg.dynamic_rx_buf_num = 8;
+  cfg.tx_buf_type = 1;
+  cfg.static_tx_buf_num = 0;
+  cfg.dynamic_tx_buf_num = 8;
+  cfg.rx_mgmt_buf_num = 2;
+  cfg.ampdu_rx_enable = 0;
+  cfg.ampdu_tx_enable = 0;
+  cfg.rx_ba_win = 0;
+
+  if (esp_wifi_init(&cfg) != ESP_OK) return;
+  esp_wifi_set_storage(WIFI_STORAGE_RAM);
+  esp_wifi_set_mode(WIFI_MODE_STA);
+  esp_wifi_start();
+}
+
+void netBegin() {
+  shrinkWifiBuffers();
   WiFi.setSleep(true);
   WiFi.setAutoReconnect(true);
   loadCredentials();
@@ -177,7 +200,13 @@ int netOpen(HTTPClient &http, WiFiClient *&client, const char *url) {
   http.useHTTP10(true);
   if (!http.begin(*client, url)) return -1;
 
-  return http.GET();
+  const int status = http.GET();
+  if (status <= 0) {
+    Serial.printf("[net] %s falhou (%d) heap %u maior bloco %u\n", url, status,
+                  (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+    if (secure) sTls.stop();
+  }
+  return status;
 }
 
 bool netGetJson(const char *url, JsonDocument &out) {
