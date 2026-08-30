@@ -94,7 +94,18 @@ void uiBegin() {
 
 void uiTask() { displayTask(); }
 
+static lv_obj_t *sQr = nullptr;
+
+static void overlayText() {
+  if (sQr) lv_obj_add_flag(sQr, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_style_bg_color(sOverlay, lv_color_hex(0x080B14), 0);
+  lv_obj_set_style_text_color(sOverlaySub, lv_color_hex(0x9FB0CC), 0);
+  lv_obj_remove_flag(sOverlayText, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_y(sOverlaySub, 70);
+}
+
 void uiSplash(const char *line1, const char *line2) {
+  overlayText();
   lv_label_set_text(sOverlayText, line1);
   lv_label_set_text(sOverlaySub, line2);
   lv_obj_remove_flag(sOverlay, LV_OBJ_FLAG_HIDDEN);
@@ -108,8 +119,34 @@ void uiStatus(const char *text) {
 }
 
 void uiShowProvisioning(bool armed) {
-  lv_label_set_text(sOverlayText, "WiFi");
-  lv_label_set_text(sOverlaySub, armed ? netProvName() : "conectando");
+  if (!armed) {
+    overlayText();
+    lv_label_set_text(sOverlayText, "WiFi");
+    lv_label_set_text(sOverlaySub, "conectando");
+  } else {
+    char payload[112];
+    const int len = snprintf(payload, sizeof(payload),
+                             "{\"ver\":\"v1\",\"name\":\"%s\",\"pop\":\"%s\",\"transport\":\"ble\"}",
+                             netProvName(), DASH_PROV_POP);
+
+    if (!sQr) {
+      sQr = lv_qrcode_create(sOverlay);
+      lv_qrcode_set_size(sQr, 104);
+      lv_qrcode_set_dark_color(sQr, lv_color_hex(0x000000));
+      lv_qrcode_set_light_color(sQr, lv_color_hex(0xFFFFFF));
+      lv_qrcode_set_quiet_zone(sQr, false);
+    }
+
+    lv_qrcode_update(sQr, payload, len);
+    lv_obj_set_pos(sQr, 12, 6);
+    lv_obj_remove_flag(sQr, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_bg_color(sOverlay, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_add_flag(sOverlayText, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_text_color(sOverlaySub, lv_color_hex(0x333333), 0);
+    lv_obj_set_y(sOverlaySub, 113);
+    lv_label_set_text(sOverlaySub, netProvName());
+  }
+
   lv_obj_remove_flag(sOverlay, LV_OBJ_FLAG_HIDDEN);
   lv_obj_move_foreground(sOverlay);
 }
