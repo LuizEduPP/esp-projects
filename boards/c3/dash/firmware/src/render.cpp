@@ -27,8 +27,16 @@ static int sSeriesCount = 0;
 
 static const lv_font_t *fontOf(int size) {
   switch (size) {
+    case 48:
+      return &lv_font_montserrat_48;
+    case 40:
+      return &lv_font_montserrat_40;
+    case 34:
+      return &lv_font_montserrat_34;
     case 28:
       return &lv_font_montserrat_28;
+    case 24:
+      return &lv_font_montserrat_24;
     case 20:
       return &lv_font_montserrat_20;
     case 16:

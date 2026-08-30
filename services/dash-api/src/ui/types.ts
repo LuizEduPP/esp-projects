@@ -125,6 +125,7 @@ export type Theme = {
   id: string;
   name: string;
   desc: string;
+  layout: string;
   bg: Background;
   fg: string;
   muted: string;
