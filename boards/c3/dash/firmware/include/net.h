@@ -14,6 +14,7 @@ bool netOnline();
 void netLoop();
 
 void netStartProvisioning();
+const char *netProvName();
 void netForgetCredentials();
 const char *netSsid();
 int netRssiBars();

@@ -4,6 +4,7 @@
 
 #include "dash_config.h"
 #include "data.h"
+#include "net.h"
 #include "render.h"
 #include "uidoc.h"
 
@@ -108,7 +109,7 @@ void uiStatus(const char *text) {
 
 void uiShowProvisioning(bool armed) {
   lv_label_set_text(sOverlayText, "WiFi");
-  lv_label_set_text(sOverlaySub, armed ? "abra o ESP-Touch" : "conectando");
+  lv_label_set_text(sOverlaySub, armed ? netProvName() : "conectando");
   lv_obj_remove_flag(sOverlay, LV_OBJ_FLAG_HIDDEN);
   lv_obj_move_foreground(sOverlay);
 }

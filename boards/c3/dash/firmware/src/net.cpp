@@ -6,6 +6,7 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <WiFiProv.h>
 
 #include <time.h>
 
@@ -19,6 +20,7 @@ static unsigned long sProvisionUntil = 0;
 static String sSsid;
 static String sPass;
 static char sIp[16] = "0.0.0.0";
+static char sProvName[16] = "";
 
 static void loadCredentials() {
   if (sPrefs.begin("dash", false)) sPrefs.end();
@@ -71,11 +73,18 @@ int netRssiBars() {
   return 0;
 }
 
+const char *netProvName() { return sProvName; }
+
 void netStartProvisioning() {
-  Serial.println("[wifi] smartconfig");
+  const uint32_t id = (uint32_t)(ESP.getEfuseMac() >> 24);
+  snprintf(sProvName, sizeof(sProvName), "DASH-%04X", (uint16_t)(id & 0xFFFF));
+
+  Serial.printf("[wifi] provisionamento BLE em %s\n", sProvName);
   WiFi.disconnect(true);
   WiFi.mode(WIFI_STA);
-  WiFi.beginSmartConfig();
+  WiFiProv.beginProvision(WIFI_PROV_SCHEME_BLE, WIFI_PROV_SCHEME_HANDLER_FREE_BTDM,
+                          WIFI_PROV_SECURITY_1, DASH_PROV_POP, sProvName);
+
   sState = NET_PROVISIONING;
   sProvisionUntil = millis() + DASH_PROVISION_TIMEOUT_MS;
 }
@@ -93,6 +102,12 @@ void netForgetCredentials() {
 void netLoop() {
   if (netOnline()) {
     if (sState != NET_ONLINE) {
+      if (sState == NET_PROVISIONING) {
+        sSsid = WiFi.SSID();
+        sPass = WiFi.psk();
+        saveCredentials(sSsid, sPass);
+        Serial.printf("[wifi] provisionado %s\n", sSsid.c_str());
+      }
       sState = NET_ONLINE;
       snprintf(sIp, sizeof(sIp), "%s", WiFi.localIP().toString().c_str());
       WiFi.scanDelete();
@@ -102,17 +117,13 @@ void netLoop() {
   }
 
   if (sState == NET_PROVISIONING) {
-    if (WiFi.smartConfigDone()) {
-      sSsid = WiFi.SSID();
-      sPass = WiFi.psk();
-      saveCredentials(sSsid, sPass);
-      WiFi.stopSmartConfig();
-      Serial.printf("[wifi] provisioned %s\n", sSsid.c_str());
-      connectStored();
-    } else if ((long)(millis() - sProvisionUntil) >= 0) {
-      WiFi.stopSmartConfig();
-      connectStored();
+    if ((long)(millis() - sProvisionUntil) < 0) return;
+    if (sSsid.isEmpty()) {
+      sProvisionUntil = millis() + DASH_PROVISION_TIMEOUT_MS;
+      return;
     }
+    wifi_prov_mgr_stop_provisioning();
+    connectStored();
     return;
   }
 
