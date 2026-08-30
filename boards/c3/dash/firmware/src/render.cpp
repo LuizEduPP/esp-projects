@@ -56,8 +56,14 @@ static uint32_t colorOf(const char *hex, uint32_t fallback = 0xFFFFFF) {
   return (uint32_t)strtoul(hex + 1, nullptr, 16);
 }
 
+static void upperAscii(char *s) {
+  for (; *s; ++s) {
+    if (*s >= 'a' && *s <= 'z') *s -= 32;
+  }
+}
+
 static void addBind(lv_obj_t *obj, BindKind kind, const char *path, const char *fmt, float min,
-                    float max) {
+                    float max, bool up = false) {
   if (!path || !path[0] || sBindCount >= MAX_BINDS) return;
   Bind &b = sBinds[sBindCount++];
   b.obj = obj;
@@ -66,6 +72,7 @@ static void addBind(lv_obj_t *obj, BindKind kind, const char *path, const char *
   snprintf(b.fmt, sizeof(b.fmt), "%s", fmt ? fmt : "");
   b.min = min;
   b.max = max;
+  b.up = up;
 }
 
 static void driftY(void *obj, int32_t v) { lv_obj_set_y((lv_obj_t *)obj, v); }
@@ -191,10 +198,16 @@ static void buildLabel(lv_obj_t *par, JsonObjectConst it) {
     lv_obj_set_pos(l, x, y);
   }
 
+  const bool up = it["up"] | false;
   const char *bind = it["bind"] | "";
   if (bind[0]) {
     lv_label_set_text(l, "--");
-    addBind(l, BIND_LABEL, bind, it["fmt"] | "", 0, 0);
+    addBind(l, BIND_LABEL, bind, it["fmt"] | "", 0, 0, up);
+  } else if (up) {
+    char buf[96];
+    snprintf(buf, sizeof(buf), "%s", it["text"] | "");
+    upperAscii(buf);
+    lv_label_set_text(l, buf);
   } else {
     lv_label_set_text(l, it["text"] | "");
   }
@@ -438,6 +451,7 @@ void renderRefresh() {
       case BIND_LABEL: {
         char buf[160];
         dataFormat(b.path, b.fmt, buf, sizeof(buf));
+        if (b.up) upperAscii(buf);
         lv_label_set_text(b.obj, buf);
         if (lv_label_get_long_mode(b.obj) == LV_LABEL_LONG_WRAP) scrollWrapped(b.obj);
         break;
