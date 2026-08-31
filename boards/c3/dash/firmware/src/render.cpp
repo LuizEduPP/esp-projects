@@ -116,6 +116,10 @@ static lv_obj_t *bare(lv_obj_t *par, int x, int y, int w, int h) {
   return o;
 }
 
+static constexpr int TILE_MAX = 32;
+static lv_image_dsc_t sTile;
+static uint8_t sTileBuf[TILE_MAX * TILE_MAX * 2];
+
 static void buildBackground(lv_obj_t *par, JsonObjectConst bg) {
   const char *kind = bg["kind"] | "solid";
   const uint32_t from = colorOf(bg["from"] | "#000000", 0x000000);
@@ -131,24 +135,35 @@ static void buildBackground(lv_obj_t *par, JsonObjectConst bg) {
   }
 
   if (strcmp(kind, "grid") == 0 || strcmp(kind, "dots") == 0) {
-    const int step = bg["step"] | 8;
+    int step = bg["step"] | 8;
+    if (step < 2) step = 2;
+    if (step > TILE_MAX) step = TILE_MAX;
     const uint32_t line = colorOf(bg["line"] | "#222222", 0x222222);
     const bool dots = strcmp(kind, "dots") == 0;
 
-    for (int y = step; y < H; y += step) {
-      for (int x = dots ? step : 0; x < W; x += dots ? step : W) {
-        lv_obj_t *o = bare(par, x, y, dots ? 1 : W, 1);
-        lv_obj_set_style_bg_color(o, lv_color_hex(line), 0);
-        lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
+    const uint16_t base = lv_color_to_u16(lv_color_hex(from));
+    const uint16_t mark = lv_color_to_u16(lv_color_hex(line));
+    uint16_t *px = (uint16_t *)sTileBuf;
+    for (int y = 0; y < step; ++y) {
+      for (int x = 0; x < step; ++x) {
+        const bool on = dots ? (x == 0 && y == 0) : (x == 0 || y == 0);
+        px[y * step + x] = on ? mark : base;
       }
     }
-    if (!dots) {
-      for (int x = step; x < W; x += step) {
-        lv_obj_t *o = bare(par, x, 0, 1, H);
-        lv_obj_set_style_bg_color(o, lv_color_hex(line), 0);
-        lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
-      }
-    }
+
+    sTile.header.magic = LV_IMAGE_HEADER_MAGIC;
+    sTile.header.cf = LV_COLOR_FORMAT_RGB565;
+    sTile.header.flags = 0;
+    sTile.header.w = step;
+    sTile.header.h = step;
+    sTile.header.stride = step * 2;
+    sTile.data = sTileBuf;
+    sTile.data_size = step * step * 2;
+
+    lv_obj_set_style_bg_image_src(par, &sTile, 0);
+    lv_obj_set_style_bg_image_tiled(par, true, 0);
+  } else {
+    lv_obj_set_style_bg_image_src(par, nullptr, 0);
   }
 
   for (JsonObjectConst b : bg["blobs"].as<JsonArrayConst>()) {
