@@ -1,6 +1,7 @@
 node_modules/
 .pio/
 platformio.local.ini
+.env
 .vscode/.ropeproject
 *.pyc
 __pycache__/
