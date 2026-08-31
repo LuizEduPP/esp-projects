@@ -126,34 +126,33 @@ export const fetchInsight = async (ctx: InsightContext): Promise<string> => {
     "comentando um desses dados de um jeito util ou bem-humorado, como um amigo comentaria. " +
     "Responda so a frase, sem aspas, sem emojis e sem repetir estas instrucoes.";
 
-  const body = await fetchJson<{ message?: { content?: string } }>(
-    config.aiUrl,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(config.aiToken
-          ? { authorization: `Bearer ${config.aiToken}` }
-          : {}),
+  const ask = async (): Promise<string> => {
+    const body = await fetchJson<{ message?: { content?: string } }>(
+      config.aiUrl,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(config.aiToken ? { authorization: `Bearer ${config.aiToken}` } : {}),
+        },
+        body: JSON.stringify({
+          model: config.aiModel,
+          stream: false,
+          options: { num_predict: 4000, temperature: 0.7 },
+          messages: [{ role: "user", content: prompt }],
+        }),
       },
-      body: JSON.stringify({
-        model: config.aiModel,
-        stream: false,
-        think: false,
-        options: { num_predict: 900, temperature: 0.7 },
-        messages: [{ role: "user", content: prompt }],
-      }),
-    },
-    60_000,
-  );
+      120_000,
+    );
 
-  const raw = body.message?.content ?? "";
-  const text = raw
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .replace(/<think>[\s\S]*$/i, "")
-    .replace(/^["']|["']$/g, "")
-    .trim();
+    return (body.message?.content ?? "")
+      .replace(/<think>[\s\S]*?<\/think>/gi, "")
+      .replace(/<think>[\s\S]*$/i, "")
+      .replace(/^["']|["']$/g, "")
+      .trim();
+  };
 
+  const text = (await ask()) || (await ask());
   if (!text || /<\/?think>/i.test(text)) throw new Error("resposta invalida");
   return clamp(text, 180);
 };
