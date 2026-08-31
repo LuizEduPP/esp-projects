@@ -7,18 +7,13 @@ services:
     restart: unless-stopped
     ports:
       - ${PORT:-8090}:8090
+    env_file:
+      - path: .env
+        required: false
+      - path: services/dash-api/.env
+        required: false
     environment:
       PORT: 8090
-      DASH_CITY: ${DASH_CITY:-Cesario Lange}
-      DASH_LAT: ${DASH_LAT:--23.2267}
-      DASH_LON: ${DASH_LON:--47.9531}
-      DASH_TIMEZONE: ${DASH_TIMEZONE:-America/Sao_Paulo}
-      DASH_GITHUB_USER: ${DASH_GITHUB_USER:-LuizEduPP}
-      DASH_GITHUB_TOKEN: ${DASH_GITHUB_TOKEN:-}
-      DASH_AI_URL: ${DASH_AI_URL:-https://ai-gateway.kmali.online/api/chat}
-      DASH_AI_MODEL: ${DASH_AI_MODEL:-lfm2.5-thinking:latest}
-      DASH_AI_TOKEN: ${DASH_AI_TOKEN:-}
-      DASH_OTA_TOKEN: ${DASH_OTA_TOKEN:-}
       DASH_DATA_DIR: /data
     volumes:
       - dash-data:/data
