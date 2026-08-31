@@ -1,6 +1,8 @@
 services:
   dash-api:
-    build: .
+    build:
+      context: ./services/dash-api
+      dockerfile: Dockerfile
     container_name: dash-api
     restart: unless-stopped
     ports:
