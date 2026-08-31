@@ -40,7 +40,7 @@
     "dash:monitor": "yarn workspace c3-dash fw:monitor",
     "dash:publish": "yarn workspace c3-dash fw:publish",
     "dash-api:dev": "yarn workspace dash-api dev",
-    "dash-api:up": "docker compose -f services/dash-api/docker-compose.yml up -d --build",
-    "dash-api:logs": "docker compose -f services/dash-api/docker-compose.yml logs -f"
+    "dash-api:up": "docker compose --project-directory . -f services/dash-api/docker-compose.yml up -d --build",
+    "dash-api:logs": "docker compose --project-directory . -f services/dash-api/docker-compose.yml logs -f"
   }
 }
